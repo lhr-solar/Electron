@@ -1,0 +1,8 @@
+flask
+flask-socketio
+flask-cors
+python-can
+pyserial
+eventlet
+argparse-addons
+cantools==40.2.1
