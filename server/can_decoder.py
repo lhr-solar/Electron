@@ -8,7 +8,7 @@ class CANDecoder:
         self.db = cantools.database.Database()
 
     def find_add_dbc_files(self):
-        dbc_list = glob.glob("./dbc_files/*.dbc")
+        dbc_list = glob.glob("../Embedded-Sharepoint/can/dbc/*.dbc")
         for i in dbc_list:
             self.db.add_dbc_file(i)
 
