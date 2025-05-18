@@ -54,6 +54,7 @@ function App() {
         motor_controller: false,
         driver_controls: false,
         contactor_driver: false,
+        supplemental_battery: false,
     });
 
     const [batteryData, setBatteryData] = useState({
@@ -116,6 +117,7 @@ function App() {
                         {label: "Prohelion WaveSculptor22", status: [connectionState.motor_controller]},
                         {label: "Driver Controls", status: [connectionState.driver_controls]},
                         {label: "HV Controls", status: [connectionState.contactor_driver]},
+                        {label: "Supplemental Battery", status: [connectionState.supplemental_battery]},
                     ]
                 }
                           activeTab={activeTab}
