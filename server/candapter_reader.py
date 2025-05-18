@@ -26,13 +26,13 @@ class CandapterReader:
                     self.message_queue.append(message)
                 else:
                     print("No CAN message received.")
+
         except KeyboardInterrupt:
-            print("Stopping CAN message reading.")
-            self.candapter_connected = False
+            print("1Stopping CAN message reading.")
         finally:
             self.close()
 
-    def read_message(self):
+    def read_from_queue(self):
         if len(self.message_queue) > 0:
             return self.message_queue.pop(0)
         else:

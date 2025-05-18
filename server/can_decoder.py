@@ -1,6 +1,7 @@
 import cantools
 import can
 import glob
+import os
 
 
 class CANDecoder:
@@ -8,14 +9,23 @@ class CANDecoder:
         self.db = cantools.database.Database()
 
     def find_add_dbc_files(self):
-        dbc_list = glob.glob("../Embedded-Sharepoint/can/dbc/*.dbc")
+        abs_path = os.path.abspath("./Embedded-Sharepoint/can/dbc/*.dbc")
+        dbc_list = glob.glob(abs_path)
         for i in dbc_list:
             self.db.add_dbc_file(i)
 
-    def device_data_readable(self, arbitration_id, data) -> str:
+    def device_data_readable(self, arbitration_id, data) -> {
+        "id": hex,
+        "msg": str
+    }:
         try:
-            decoded_message = self.db.decode_message(arbitration_id, data)  # decode message using dbc
+            decoded_message = {
+                "id": hex(arbitration_id),
+                "msg": self.db.decode_message(arbitration_id, data)
+            }
         except Exception as e:
-            print(e)
-            decoded_message = None
+            decoded_message = {
+                "id": e,
+                "msg": None
+            }
         return decoded_message

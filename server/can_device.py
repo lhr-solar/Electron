@@ -1,18 +1,26 @@
 class CANDevice:
-    send_ids = []
+    devices = {}
+    all_valid_ids = []
 
-    def __init__(self, send_ids):
+    def __init__(self, name, send_ids):
         self.send_ids = send_ids
-        self.device = None
+        for send_id in send_ids:
+            if send_id not in CANDevice.all_valid_ids:
+                CANDevice.all_valid_ids.append(send_id)
+        self.name = name
+        CANDevice.devices[name] = self
 
-    def send_message(self, message):
-        # Code to send a message over the CAN bus
-        pass
+    def get_ids(self):
+        return self.send_ids
 
-    def receive_message(self):
-        # Code to receive a message from the CAN bus
-        pass
+    @staticmethod
+    def get_device_by_name(name):
+        return CANDevice.devices.get(name)
 
-    def close(self):
-        # Code to close the CAN device connection
-        pass
+    @staticmethod
+    def device_has_send_id(name, send_id):
+        device = CANDevice.get_device_by_name(name)
+        if device:
+            return send_id in device.send_ids
+
+        return False
