@@ -22,8 +22,6 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 can_decoder = CANDecoder()
 can_decoder.find_add_dbc_files()
 
-init_can_devices()
-
 default_data = {
     "BATTERY": {
         "BPS_Trip": False,
@@ -104,6 +102,7 @@ def process_raw_message(raw_message):
     decoded_message = can_decoder.device_data_readable(raw_message.arbitration_id, raw_message.data)
     if decoded_message is not None and decoded_message["msg"] is not None:
         device_name = CANDevice.get_device_name_by_send_id(raw_message.arbitration_id)
+        CANDevice.get_device_by_name(device_name).received_message()
         for key, value in decoded_message['msg'].items():
             if key in master_data[device_name]:
                 if type(master_data[device_name][key]) == bool:
@@ -114,7 +113,6 @@ def process_raw_message(raw_message):
                 master_data[device_name]["Voltage_Array"][value] = decoded_message['msg']["Voltage_Value"]
             elif key == "Temperature_idx":
                 master_data[device_name]["Temperature_Array"][value] = decoded_message['msg']["Temperature_Value"]
-
 
 emit_thread = None
 emit_thread_lock = threading.Lock()
@@ -128,6 +126,15 @@ def emit_can_data():
                 break
 
             socketio.emit('can_update', master_data)
+            socketio.emit('connection_state', {
+                "BATTERY": CANDevice.get_device_by_name("BATTERY").is_connected,
+                "MPPT_A": CANDevice.get_device_by_name("MPPT_A").is_connected,
+                "MPPT_B": CANDevice.get_device_by_name("MPPT_B").is_connected,
+                "MOTOR_CONTROLLER": CANDevice.get_device_by_name("MOTOR_CONTROLLER").is_connected
+            })
+
+
+init_can_devices()
 
 can_reader_thread = threading.Thread(target=can_reader_task)
 can_reader_thread.daemon = True

@@ -41,7 +41,6 @@ function App() {
     const [activeTab, setActiveTab] = useState(0);
 
     const [connectionState, setConnectionStatus] = useState({
-        server: false,
         candapter: false,
         battery: false,
         mppt_a: false,
@@ -112,6 +111,16 @@ function App() {
             });
         });
 
+        socket.on('connection_state', (data) => {
+            setConnectionStatus({
+                ...connectionState,
+                battery: data["BATTERY"],
+                mppt_a: data["MPPT_A"],
+                mppt_b: data["MPPT_B"],
+                motor_controller: data["MOTOR_CONTROLLER"],
+            })
+        })
+
 
         return () => {
             socket.off('connect');
@@ -163,7 +172,7 @@ function App() {
                 }
                           activeTab={activeTab}
                           handleTabChange={handleTabChange}
-                          serverStatus={connectionState.server}
+                          serverStatus={isConnected}
                           candapterStatus={connectionState.candapter}
                 />
 
