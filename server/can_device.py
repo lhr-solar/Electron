@@ -1,13 +1,18 @@
 import asyncio
 import threading
+import can
+
+from can_decoder import CANDecoder
 
 
 class CANDevice:
     devices = {}
-    all_valid_ids = []
     id_map = {}
+    can_decoder: CANDecoder = None
 
-    def __init__(self, name, send_ids, timeout=1):
+    def __init__(self, name, send_ids=None, default_data=None, timeout=1):
+        if send_ids is None:
+            send_ids = []
         self.name = name
         self.send_ids = send_ids
         self.timeout = timeout
@@ -17,9 +22,14 @@ class CANDevice:
 
         self.is_connected = False
 
+        self.default_data = default_data
+        self.master_data = self.default_data
+
+        self.custom_message_processor = None
+        self.reset = None
+
         for send_id in send_ids:
-            if send_id not in CANDevice.all_valid_ids:
-                CANDevice.all_valid_ids.append(send_id)
+            if send_id not in CANDevice.id_map:
                 CANDevice.id_map[send_id] = name
             else:
                 raise ValueError(f"Duplicate send ID {send_id} found in device {name}")
@@ -36,7 +46,11 @@ class CANDevice:
 
     def received_message(self):
         self._timer_event.set()
-        self.is_connected = True
+        if self.is_connected is False:
+            self.is_connected = True
+            if self.reset is not None:
+                self.reset()
+
 
     async def async_timer(self):
         while True:
@@ -46,6 +60,7 @@ class CANDevice:
             except:
                 # print(f"Device {self.name} timed out")
                 self.is_connected = False
+
 
     @staticmethod
     def get_device_by_name(name):
@@ -62,3 +77,27 @@ class CANDevice:
     @staticmethod
     def get_device_name_by_send_id(send_id):
         return CANDevice.id_map.get(send_id)
+
+    @staticmethod
+    def get_device_by_send_id(send_id):
+        return CANDevice.get_device_by_name(CANDevice.get_device_name_by_send_id(send_id))
+
+    @staticmethod
+    def process_can_message(raw_message: can.Message):
+        decoded_message = CANDevice.can_decoder.device_data_readable(raw_message.arbitration_id, raw_message.data)
+
+        if decoded_message is not None and decoded_message["msg"] is not None:
+            device = CANDevice.get_device_by_send_id(raw_message.arbitration_id)
+            if device is None:
+                return decoded_message
+            device.received_message()
+            for key, value in decoded_message['msg'].items():
+                if key in device.master_data:
+                    if type(device.master_data[key]) == bool:
+                        device.master_data[key] = bool(value)
+                    else:
+                        device.master_data[key] = value
+                if device.custom_message_processor is not None:
+                    device.custom_message_processor(decoded_message)
+
+        return decoded_message

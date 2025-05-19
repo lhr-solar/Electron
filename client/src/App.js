@@ -114,6 +114,7 @@ function App() {
         socket.on('connection_state', (data) => {
             setConnectionStatus({
                 ...connectionState,
+                candapter: data["CANDAPTER"],
                 battery: data["BATTERY"],
                 mppt_a: data["MPPT_A"],
                 mppt_b: data["MPPT_B"],
@@ -149,8 +150,9 @@ function App() {
         socket.emit('bps_reset');
         setBatteryData({
             ...batteryData,
-            BPS_Trip: true,
+            BPS_Trip: false,
             BPS_Fault_State: 0,
+            Boost_Enable: false,
         })
     }
 
@@ -185,7 +187,7 @@ function App() {
                         activeTab === 0 && <Overview/>
                     }
                     {
-                        activeTab === 1 && <Battery data={batteryData} />
+                        activeTab === 1 && <Battery data={batteryData} handleReset={handleBatteryReset}/>
                     }
                     {
                         activeTab === 2 && <MPPT data = {mpptData} />

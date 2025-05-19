@@ -45,7 +45,7 @@ const TitleBar = ({ tabs, activeTab, handleTabChange, serverStatus, candapterSta
                                                 {tab.status?.map((status, index) => (
                                                     <StatusDot
                                                         key={index}
-                                                        active={status}
+                                                        active={serverStatus && candapterStatus && status}
                                                     />
                                                 ))}
                                             </Box>
@@ -64,7 +64,7 @@ const TitleBar = ({ tabs, activeTab, handleTabChange, serverStatus, candapterSta
                         </Box>
                         <Box display="flex" alignItems="center" gap={1}>
                             <Typography variant="body2">CANdapter</Typography>
-                            <BlinkingStatusDot connected={candapterStatus} label="CANdapter" />
+                            <BlinkingStatusDot connected={serverStatus && candapterStatus} label="CANdapter" />
                         </Box>
                     </Box>
                 </Box>

@@ -85,7 +85,7 @@ const BatteryStatusPanel = ({
                     color: "#f44336",
                     fontWeight: "bold",
                 }}>
-                    {data.BPS_Fault_Status !== 0 ? batteryFaultReadable(data.BPS_Fault_State) : "⠀"}
+                    {data.BPS_Fault_State !== 0 ? batteryFaultReadable(data.BPS_Fault_State) : "⠀"}
                 </Typography>
             </Grid>
 
@@ -154,7 +154,7 @@ const BatteryStatusPanel = ({
     </Paper>
 );
 
-const Battery = ({data}) => {
+const Battery = ({data, handleReset}) => {
     const snakingGrid = getSnakingGrid();
 
     return (
@@ -164,9 +164,7 @@ const Battery = ({data}) => {
             }}>
                 <BatteryStatusPanel
                     data={data}
-                    onReset={() => {
-                        //socket.emit('trip_reset');
-                    }}
+                    onReset={handleReset}
                 />
 
                 <Grid container direction="column" spacing={2} width="100%">
