@@ -1,5 +1,7 @@
 import can
-
+import threading
+import queue
+import time
 from pyCandapter import pyCandapter
 
 
@@ -9,7 +11,10 @@ class CandapterReader:
         self.serial_baudrate = serial_baudrate
         self.can_baudrate = can_baudrate
         self.adapter = None
-        self.message_queue = []
+        self.callback = None
+
+    def set_callback(self, func):
+        self.callback = func
 
     def connect(self):
         print(f"Connecting to CAN adapter on {self.com_port} at {self.serial_baudrate} baud...")
@@ -18,25 +23,22 @@ class CandapterReader:
             print(f"CAN bus opened at {self.can_baudrate} bps.")
             self.candapter_connected = True
 
+    def read(self):
+        message: can.Message = self.adapter.readCANMessage()
+        return message
+
     def start_reading(self):
         try:
             while self.candapter_connected:
                 message: can.Message = self.adapter.readCANMessage()
                 if message is not None:
-                    self.message_queue.append(message)
+                    self.callback(message.arbitration_id, message.data)
                 else:
                     print("No CAN message received.")
-
         except KeyboardInterrupt:
-            print("1Stopping CAN message reading.")
+            print("Stopping CAN message reading.")
         finally:
             self.close()
-
-    def read_from_queue(self):
-        if len(self.message_queue) > 0:
-            return self.message_queue.pop(0)
-        else:
-            return None
 
     def close(self):
         if self.adapter is not None:

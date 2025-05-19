@@ -1,5 +1,6 @@
 import React from "react";
 import { AppBar, Toolbar, Typography, Box, Tabs, Tab, useTheme } from "@mui/material";
+import {FaHome} from "react-icons/fa";
 import StatusDot from "./StatusDot";
 import BlinkingStatusDot from "./BlinkingStatusDot";
 
@@ -9,51 +10,62 @@ const TitleBar = ({ tabs, activeTab, handleTabChange, serverStatus, candapterSta
     return (
         <AppBar position="static" color="default" elevation={1}>
             <Toolbar sx={{ bgcolor: theme.palette.background.paper, px: 2 }}>
-                <Box display="flex" alignItems="center" mr={4}>
-                    <img
-                        src="/logo.png"
-                        alt="Team Logo"
-                        style={{ height: 32, marginRight: 8 }}
-                    />
-                    <Typography variant="h6" noWrap fontWeight="bold">
-                        Electron
-                    </Typography>
-                </Box>
-
-                <Box flexGrow={1}>
-                    <Tabs
-                        value={activeTab}
-                        onChange={handleTabChange}
-                        textColor="primary"
-                        indicatorColor="primary"
-                    >
-                        {tabs.map((tab, index) => (
-                            <Tab
-                                key={index}
-                                label={
-                                    <Box display="flex" alignItems="center">
-                                        {tab.label}
-                                        {tab.status?.map((status, index) => (
-                                            <StatusDot
-                                                key={index}
-                                                active={status}
-                                            />
-                                        ))}
-                                    </Box>
-                                }
+                <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+                    {/* Left side: Logo and Tabs */}
+                    <Box display="flex" alignItems="center">
+                        <Box display="flex" alignItems="center">
+                            <img
+                                src="/logo.png"
+                                alt="Team Logo"
+                                style={{ height: 32, marginRight: 8 }}
                             />
-                        ))}
-                    </Tabs>
-                </Box>
+                            <Typography variant="h6" noWrap fontWeight="bold">
+                                Electron
+                            </Typography>
+                        </Box>
 
-                <Box display="flex" alignItems="center" gap={2}>
-                    <Box display="flex" alignItems="center" gap={1}>
-                        <Typography variant="body2">Server</Typography>
-                        <BlinkingStatusDot connected={serverStatus} label="Server" />
+                        <Box sx={{ width: "90%" }}>
+                            <Tabs
+                                value={activeTab}
+                                onChange={handleTabChange}
+                                textColor="primary"
+                                indicatorColor="primary"
+                                variant="scrollable"
+                                scrollButtons="auto"
+                            >
+                                {tabs.map((tab, index) => (
+                                    <Tab
+                                        key={index}
+                                        label={
+                                            <Box display="flex" alignItems="center">
+                                                {tab.icon && <FaHome style={{
+                                                    marginRight: 4,
+                                                }}/>}
+                                                {tab.label}
+                                                {tab.status?.map((status, index) => (
+                                                    <StatusDot
+                                                        key={index}
+                                                        active={status}
+                                                    />
+                                                ))}
+                                            </Box>
+                                        }
+                                    />
+                                ))}
+                            </Tabs>
+                        </Box>
                     </Box>
-                    <Box display="flex" alignItems="center" gap={1}>
-                        <Typography variant="body2">CANdapter</Typography>
-                        <BlinkingStatusDot connected={candapterStatus} label="CANdapter" />
+
+                    {/* Right side: Status indicators */}
+                    <Box display="flex" alignItems="center" gap={2}>
+                        <Box display="flex" alignItems="center" gap={1}>
+                            <Typography variant="body2">Server</Typography>
+                            <BlinkingStatusDot connected={serverStatus} label="Server" />
+                        </Box>
+                        <Box display="flex" alignItems="center" gap={1}>
+                            <Typography variant="body2">CANdapter</Typography>
+                            <BlinkingStatusDot connected={candapterStatus} label="CANdapter" />
+                        </Box>
                     </Box>
                 </Box>
             </Toolbar>

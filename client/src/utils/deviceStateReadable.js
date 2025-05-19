@@ -22,6 +22,8 @@ const batteryFaultReadable = (faultCode) => {
             return "CRC (IsoSPI) Fault";
         case 10:
             return "E-STOP/Contactor Fault";
+        case 11:
+            return "MPPT Fault";
         default:
             return "Unknown Fault";
     }

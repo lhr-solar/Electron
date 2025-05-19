@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React from 'react';
 import {Divider, Grid, Paper, Typography, Button, Container} from "@mui/material";
 
 import StatusDot from "../StatusDot";
@@ -85,21 +85,21 @@ const BatteryStatusPanel = ({
                     color: "#f44336",
                     fontWeight: "bold",
                 }}>
-                    {data.BPS_Fault_Status !== 0 ? batteryFaultReadable(data.BPS_Fault_Status) : "⠀"}
+                    {data.BPS_Fault_Status !== 0 ? batteryFaultReadable(data.BPS_Fault_State) : "⠀"}
                 </Typography>
             </Grid>
 
             <Grid item xs={12} md={6} width={"200px"}>
                 <Typography variant="body2" mb={1}>
-                    Current: {data.Current?.toFixed(2)} A
+                    Current: {(data.Current / 1000)?.toFixed(2)} A
                 </Typography>
 
                 <Typography variant="body2" mb={1}>
-                    Pack Voltage: {data.Pack_Voltage?.toFixed(2)} V
+                    Pack Voltage: {(data.Pack_Voltage / 1000)?.toFixed(2)} V
                 </Typography>
 
                 <Typography variant="body2" mb={1}>
-                    Average Temp: {data.Average_Temp?.toFixed(1)} °C
+                    Average Temp: {(data.Average_Temp / 1000)?.toFixed(1)} °C
                 </Typography>
 
                 <Typography variant="body2" mb={1}>
@@ -112,7 +112,7 @@ const BatteryStatusPanel = ({
 
             <Grid item xs={12} md={6} width={"200px"}>
                 <Typography variant="body2" mb={1}>
-                    +/- Contactor: <StatusDot active={data.HV_Positive_Contactor}/> {" "}
+                    +/- Contactor: <StatusDot active={data.HV_Contactor}/> {" "}
                     {data.HV_Positive_Contactor ? "Closed" : "Open"}
                 </Typography>
 

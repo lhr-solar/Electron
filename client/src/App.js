@@ -3,12 +3,6 @@ import {
     ThemeProvider,
     createTheme,
     CssBaseline,
-    Box,
-    Grid,
-    Paper,
-    Typography,
-    Container,
-    Divider, Button,
 } from "@mui/material";
 import io from 'socket.io-client';
 import TitleBar from "./components/TitleBar";
@@ -43,6 +37,7 @@ const socket = io('http://localhost:5000', {
 });
 
 function App() {
+    const [isConnected, setIsConnected] = useState(false);
     const [activeTab, setActiveTab] = useState(0);
 
     const [connectionState, setConnectionStatus] = useState({
@@ -59,50 +54,96 @@ function App() {
 
     const [batteryData, setBatteryData] = useState({
         BPS_Trip: true,
-        Array_Contactor: false,
-        HV_Positive_Contactor: false,
-        Charge_Enable: false,
         BPS_All_Clear: false,
+        HV_Contactor: false,
+        Array_Contactor: false,
+        Current: 0,
         Voltage_Array: Array(32).fill(6900),
-        SOC: 0,
-        Pack_Voltage: 0,
         Temperature_Array: Array(32).fill(4200),
+        SoC: 0,
+        Charge_Enable: false,
+        Pack_Voltage: 0,
         Voltage_Range: 0,
         Average_Temp: 0,
-        Current: 0,
-        BPS_Fault_Status: 0,
+        Temperature_Range: 0,
+        BPS_Fault_State: 0,
         Boost_Enable: false,
     })
 
     const [mpptData, setMPPTData] = useState({
         MPPT_A: {
-            Voltage_Input: 0,
-            Voltage_Output: 0,
-            Current_Input: 0,
-            Current_Output: 0,
-            Mode: 0,
-            Fault: 0,
-            Enabled: false,
-            Ambient_Temp: 0,
-            Heatsink_Temp: 0,
-
+            MPPT_Enabled: false,
+            MPPT_HeatsinkTemperature: 0,
+            MPPT_AmbientTemperature: 0,
+            MPPT_Fault: 0,
+            MPPT_Mode: 0,
+            MPPT_Iout: 0,
+            MPPT_Vout: 0,
+            MPPT_Iin: 0,
+            MPPT_Vin: 0,
         },
         MPPT_B: {
-            Voltage_Input: 0,
-            Voltage_Output: 0,
-            Current_Input: 0,
-            Current_Output: 0,
-            Mode: 0,
-            Fault: 0,
-            Enabled: false,
-            Ambient_Temp: 0,
-            Heatsink_Temp: 0,
+            MPPT_Enabled: false,
+            MPPT_HeatsinkTemperature: 0,
+            MPPT_AmbientTemperature: 0,
+            MPPT_Fault: 0,
+            MPPT_Mode: 0,
+            MPPT_Iout: 0,
+            MPPT_Vout: 0,
+            MPPT_Iin: 0,
+            MPPT_Vin: 0,
         }
     })
+
+    useEffect(() => {
+        socket.on('connect', () => {
+            setIsConnected(true);
+        });
+
+        socket.on('disconnect', () => {
+            setIsConnected(false);
+        });
+
+        socket.on('can_update', (data) => {
+            setBatteryData(data["BATTERY"]);
+            setMPPTData({
+                MPPT_A: data["MPPT_A"],
+                MPPT_B: data["MPPT_B"]
+            });
+        });
+
+
+        return () => {
+            socket.off('connect');
+            socket.off('disconnect');
+            socket.off('can_update');
+        };
+    }, []);
+
+    useEffect(() => {
+        if (isConnected) {
+            console.log('Connected to server');
+        } else {
+            console.log('Disconnected from server');
+        }
+    }, [isConnected]);
+
+    useEffect(() => {
+        console.log(mpptData)
+    }, [mpptData])
 
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);
     };
+
+    const handleBatteryReset = () => {
+        socket.emit('bps_reset');
+        setBatteryData({
+            ...batteryData,
+            BPS_Trip: true,
+            BPS_Fault_State: 0,
+        })
+    }
 
     return (
         <div className={"App"}>
@@ -111,12 +152,12 @@ function App() {
 
                 <TitleBar tabs={
                     [
-                        {label: "Overview"},
+                        {label: "Home", icon: "home"},
                         {label: "Battery", status: [connectionState.battery]},
                         {label: "TPEE MPPT", status: [connectionState.mppt_a, connectionState.mppt_b]},
                         {label: "Prohelion WaveSculptor22", status: [connectionState.motor_controller]},
                         {label: "Driver Controls", status: [connectionState.driver_controls]},
-                        {label: "HV Controls", status: [connectionState.contactor_driver]},
+                        {label: "HV Control", status: [connectionState.contactor_driver]},
                         {label: "Supplemental Battery", status: [connectionState.supplemental_battery]},
                     ]
                 }

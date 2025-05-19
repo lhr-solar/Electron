@@ -18,6 +18,7 @@ class CANDecoder:
         "id": hex,
         "msg": str
     }:
+        decoded_message = None
         try:
             decoded_message = {
                 "id": hex(arbitration_id),

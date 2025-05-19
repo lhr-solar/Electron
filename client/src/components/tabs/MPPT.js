@@ -28,31 +28,31 @@ const MPPTStatusPanel = ({label, data}) => (
         }}>
             <Grid item xs={12} md={6} width={"250px"}>
                 <Typography variant="body2" mb={1}>
-                    Input Voltage: {data.Voltage_Input?.toFixed(2)} V
+                    Input Voltage: {data.MPPT_Vin?.toFixed(2)} V
                 </Typography>
                 <Typography variant="body2" mb={1}>
-                    Output Voltage: {data.Voltage_Output?.toFixed(2)} V
+                    Output Voltage: {data.MPPT_Vout?.toFixed(2)} V
                 </Typography>
                 <Typography variant="body2" mb={1}>
-                    Input Current: {data.Current_Input?.toFixed(2)} A
+                    Input Current: {data.MPPT_Iin?.toFixed(2)} A
                 </Typography>
                 <Typography variant="body2" mb={1}>
-                    Output Current: {data.Current_Output?.toFixed(2)} A
+                    Output Current: {data.MPPT_Iout?.toFixed(2)} A
                 </Typography>
             </Grid>
 
             <Grid item xs={12} md={6} width={"250px"}>
                 <Typography variant="body2" mb={1}>
-                    Enabled: <StatusDot active={data.Enabled}/>
+                    Enabled: <StatusDot active={data.MPPT_Enabled}/>
                 </Typography>
                 <Typography variant="body2" mb={1}>
                     Mode: {mpptModeReadable(data.Mode)}
                 </Typography>
                 <Typography variant="body2" mb={1}>
-                    Ambient Temp: {data.Ambient_Temp?.toFixed(1)} °C
+                    Ambient Temp: {data.MPPT_AmbientTemperature?.toFixed(1)} °C
                 </Typography>
                 <Typography variant="body2" mb={1}>
-                    Heatsink Temp: {data.Heatsink_Temp?.toFixed(1)} °C
+                    Heatsink Temp: {data. MPPT_HeatsinkTemperature?.toFixed(1)} °C
                 </Typography>
                 {data.Fault !== 0 && (
                     <Typography
@@ -60,7 +60,7 @@ const MPPTStatusPanel = ({label, data}) => (
                         mb={1}
                         sx={{color: "#f44336", fontWeight: "bold"}}
                     >
-                        {mpptFaultReadable(data.Fault)}
+                        {mpptFaultReadable(data.MPPT_Fault)}
                     </Typography>
                 )}
             </Grid>
