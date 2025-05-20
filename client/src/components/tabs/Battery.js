@@ -103,7 +103,7 @@ const BatteryStatusPanel = ({
                 </Typography>
 
                 <Typography variant="body2" mb={1}>
-                    SoC: {data.SOC?.toFixed(1)}%
+                    SoC: {(data.SoC / 1000000)?.toFixed(1)}%
                 </Typography>
                 <Typography variant="body2" mb={1}>
                     Charging: <StatusDot active={data.Charge_Enable}/>
@@ -113,7 +113,7 @@ const BatteryStatusPanel = ({
             <Grid item xs={12} md={6} width={"200px"}>
                 <Typography variant="body2" mb={1}>
                     +/- Contactor: <StatusDot active={data.HV_Contactor}/> {" "}
-                    {data.HV_Positive_Contactor ? "Closed" : "Open"}
+                    {data.HV_Contactor ? "Closed" : "Open"}
                 </Typography>
 
                 <Typography variant="body2" mb={1}>

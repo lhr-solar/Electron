@@ -46,7 +46,7 @@ const MPPTStatusPanel = ({label, data}) => (
                     Enabled: <StatusDot active={data.MPPT_Enabled}/>
                 </Typography>
                 <Typography variant="body2" mb={1}>
-                    Mode: {mpptModeReadable(data.Mode)}
+                    Mode: {mpptModeReadable(data.MPPT_Mode)}
                 </Typography>
                 <Typography variant="body2" mb={1}>
                     Ambient Temp: {data.MPPT_AmbientTemperature?.toFixed(1)} °C
