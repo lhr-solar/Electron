@@ -7,3 +7,5 @@ build/
 .venv
 
 *.pyc
+**/package-lock.json
+package-lock.json
