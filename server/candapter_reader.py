@@ -1,5 +1,5 @@
 import can
-from server.candapter.pyCandapter import pyCandapter
+from candapter.pyCandapter import pyCandapter
 
 
 class CandapterReader:

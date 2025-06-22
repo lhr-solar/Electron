@@ -12,7 +12,7 @@ from init_can_devices import init_can_devices
 
 app = Flask(
     __name__,
-    static_folder='../build/client',
+    static_folder='../build/',
     static_url_path='',
 )
 
@@ -23,8 +23,10 @@ can_decoder = CANDecoder()
 can_decoder.find_add_dbc_files()
 CANDevice.can_decoder = can_decoder
 
+port_name = "/dev/ttyUSB0"
+
 can_reader = CandapterReader(
-    com_port="COM4",
+    com_port=port_name,
     serial_baudrate=9600,
     can_baudrate=125000
 )
