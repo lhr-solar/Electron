@@ -50,7 +50,7 @@ const mpptFaultReadable = (faultCode) => {
         case 8:
             return "Generic Fault";
         default:
-            return "Unknown Fault";
+            return faultCode;
     }
 }
 
@@ -69,7 +69,7 @@ const mpptModeReadable = (mode) => {
         case 5:
             return "Temperature Derating";
         default:
-            return "Unknown Mode";
+            return mode;
     }
 }
 

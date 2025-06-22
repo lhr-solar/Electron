@@ -1,8 +1,5 @@
 import can
-import threading
-import queue
-import time
-from pyCandapter import pyCandapter
+from server.candapter.pyCandapter import pyCandapter
 
 
 class CandapterReader:

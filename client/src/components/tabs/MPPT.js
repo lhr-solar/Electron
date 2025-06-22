@@ -52,7 +52,7 @@ const MPPTStatusPanel = ({label, data}) => (
                     Ambient Temp: {data.MPPT_AmbientTemperature?.toFixed(1)} °C
                 </Typography>
                 <Typography variant="body2" mb={1}>
-                    Heatsink Temp: {data. MPPT_HeatsinkTemperature?.toFixed(1)} °C
+                    Heatsink Temp: {data.MPPT_HeatsinkTemperature?.toFixed(1)} °C
                 </Typography>
                 {data.Fault !== 0 && (
                     <Typography

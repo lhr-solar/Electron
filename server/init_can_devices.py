@@ -44,34 +44,34 @@ def init_can_devices():
     battery.reset = reset_battery
 
     mpptA = CANDevice("MPPT_A",
-              [0x200, 0x201],
-              default_data={
-                  "MPPT_Enabled": False,
-                  "MPPT_HeatsinkTemperature": 0,
-                  "MPPT_AmbientTemperature": 0,
-                  "MPPT_Fault": 0,
-                  "MPPT_Mode": 0,
-                  "MPPT_Iout": 0,
-                  "MPPT_Vout": 0,
-                  "MPPT_Iin": 0,
-                  "MPPT_Vin": 0,
-              },
-              timeout=0.5)
+                      [0x200, 0x201],
+                      default_data={
+                          "MPPT_Enabled": False,
+                          "MPPT_HeatsinkTemperature": 0,
+                          "MPPT_AmbientTemperature": 0,
+                          "MPPT_Fault": 0,
+                          "MPPT_Mode": 0,
+                          "MPPT_Iout": 0,
+                          "MPPT_Vout": 0,
+                          "MPPT_Iin": 0,
+                          "MPPT_Vin": 0,
+                      },
+                      timeout=0.5)
 
     mpptB = CANDevice("MPPT_B",
-              [0x210, 0x211],
-              default_data={
-                  "MPPT_Enabled": False,
-                  "MPPT_HeatsinkTemperature": 0,
-                  "MPPT_AmbientTemperature": 0,
-                  "MPPT_Fault": 0,
-                  "MPPT_Mode": 0,
-                  "MPPT_Iout": 0,
-                  "MPPT_Vout": 0,
-                  "MPPT_Iin": 0,
-                  "MPPT_Vin": 0,
-              },
-              timeout=0.5)
+                      [0x210, 0x211],
+                      default_data={
+                          "MPPT_Enabled": False,
+                          "MPPT_HeatsinkTemperature": 0,
+                          "MPPT_AmbientTemperature": 0,
+                          "MPPT_Fault": "",
+                          "MPPT_Mode": "",
+                          "MPPT_Iout": 0,
+                          "MPPT_Vout": 0,
+                          "MPPT_Iin": 0,
+                          "MPPT_Vin": 0,
+                      },
+                      timeout=0.5)
 
     def reset_MPPT(mppt):
         mppt.master_data["MPPT_Enabled"] = False
@@ -81,8 +81,19 @@ def init_can_devices():
     mpptA.reset = lambda: reset_MPPT(mpptA)
     mpptB.reset = lambda: reset_MPPT(mpptB)
 
-
     CANDevice("MOTOR_CONTROLLER", [])
     CANDevice("CONTROLS", [])
-    CANDevice("CONTACTOR_DRIVER", [])
-    CANDevice("SUPPLEMENTAL_BATTERY", [0x10B])
+
+    CANDevice("CONTACTOR_DRIVER",
+              [0x400, 0x401],
+              default_data={
+
+              },
+              timeout=1)
+
+    CANDevice("SUPPLEMENTAL_BATTERY",
+              [0x10B],
+              default_data={
+                  "Supplemental_Voltage": 0
+              },
+              timeout=1)

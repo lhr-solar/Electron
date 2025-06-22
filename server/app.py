@@ -3,6 +3,8 @@ from flask_socketio import SocketIO
 from flask_cors import CORS
 import threading
 import queue
+import json
+
 from candapter_reader import CandapterReader
 from can_decoder import CANDecoder
 from can_device import CANDevice
@@ -74,6 +76,7 @@ def emit_can_data():
             if emit_thread is None:
                 break
 
+            data = CANDevice.get_device_by_name("MPPT_A").master_data
             socketio.emit('can_update', {
                 "BATTERY": CANDevice.get_device_by_name("BATTERY").master_data,
                 "MPPT_A": CANDevice.get_device_by_name("MPPT_A").master_data,
