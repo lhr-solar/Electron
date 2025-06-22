@@ -25,7 +25,7 @@ const SuppStatusPanel = ({data}) => (
         }}>
             <Grid item xs={12} md={6} width={"250px"}>
                 <Typography variant="body2" mb={1}>
-                    Voltage: {data.Supplemental_Voltage}V
+                    Voltage: {data.Supplemental_Voltage / 1000}V
                 </Typography>
             </Grid>
         </Grid>

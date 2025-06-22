@@ -96,4 +96,4 @@ def init_can_devices():
               default_data={
                   "Supplemental_Voltage": 0
               },
-              timeout=1)
+              timeout=1.6)
