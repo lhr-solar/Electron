@@ -3,7 +3,6 @@ from flask_socketio import SocketIO
 from flask_cors import CORS
 import threading
 import queue
-import json
 
 import platform
 import os
@@ -43,6 +42,7 @@ can_reader.connect()
 
 can_queue = queue.Queue(maxsize=500)
 data_available = threading.Event()
+
 
 def can_reader_task():
     try:
@@ -109,7 +109,6 @@ can_reader_thread.daemon = True
 
 can_processor_thread = threading.Thread(target=can_processor_task)
 can_processor_thread.daemon = True
-
 
 can_reader_thread.start()
 can_processor_thread.start()
