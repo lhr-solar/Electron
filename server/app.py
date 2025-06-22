@@ -5,6 +5,9 @@ import threading
 import queue
 import json
 
+import platform
+import os
+
 from candapter_reader import CandapterReader
 from can_decoder import CANDecoder
 from can_device import CANDevice
@@ -23,7 +26,13 @@ can_decoder = CANDecoder()
 can_decoder.find_add_dbc_files()
 CANDevice.can_decoder = can_decoder
 
-port_name = "/dev/ttyUSB0"
+# Detect platform and set default port_name
+if 'microsoft' in platform.uname().release.lower() or 'WSL_DISTRO_NAME' in os.environ:
+    port_name = "/dev/ttyUSB0"  # WSL
+elif platform.system() == "Windows":
+    port_name = "COM4"
+else:
+    port_name = "/dev/ttyUSB0"  # Linux
 
 can_reader = CandapterReader(
     com_port=port_name,
