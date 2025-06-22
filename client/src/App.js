@@ -12,6 +12,7 @@ import MPPT from "./components/tabs/MPPT";
 import MotorController from "./components/tabs/MotorController";
 import Controls from "./components/tabs/Controls";
 import ContactorDriver from "./components/tabs/ContactorDriver";
+import SupplementalBattery from "./components/tabs/SupplementalBattery";
 
 import "./styles/App.css";
 
@@ -94,6 +95,10 @@ function App() {
         }
     })
 
+    const [suppData, setSuppData] = useState({
+        Supplemental_Voltage: 0
+    })
+
     useEffect(() => {
         socket.on('connect', () => {
             setIsConnected(true);
@@ -109,6 +114,7 @@ function App() {
                 MPPT_A: data["MPPT_A"],
                 MPPT_B: data["MPPT_B"]
             });
+            setSuppData(data["SUPPLEMENTAL_BATTERY"])
         });
 
         socket.on('connection_state', (data) => {
@@ -118,7 +124,7 @@ function App() {
                 battery: data["BATTERY"],
                 mppt_a: data["MPPT_A"],
                 mppt_b: data["MPPT_B"],
-                motor_controller: data["MOTOR_CONTROLLER"],
+                supplemental_battery: data["SUPPLEMENTAL_BATTERY"],
             })
         })
 
@@ -200,6 +206,9 @@ function App() {
                     }
                     {
                         activeTab === 5 && <ContactorDriver/>
+                    }
+                    {
+                        activeTab === 6 && <SupplementalBattery data={suppData} />
                     }
                 </div>
             </ThemeProvider>

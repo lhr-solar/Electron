@@ -87,18 +87,18 @@ def emit_can_data():
             if emit_thread is None:
                 break
 
-            data = CANDevice.get_device_by_name("MPPT_A").master_data
             socketio.emit('can_update', {
                 "BATTERY": CANDevice.get_device_by_name("BATTERY").master_data,
                 "MPPT_A": CANDevice.get_device_by_name("MPPT_A").master_data,
                 "MPPT_B": CANDevice.get_device_by_name("MPPT_B").master_data,
+                "SUPPLEMENTAL_BATTERY": CANDevice.get_device_by_name("SUPPLEMENTAL_BATTERY").master_data
             })
             socketio.emit('connection_state', {
                 "CANDAPTER": can_reader.candapter_connected,
                 "BATTERY": CANDevice.get_device_by_name("BATTERY").is_connected,
                 "MPPT_A": CANDevice.get_device_by_name("MPPT_A").is_connected,
                 "MPPT_B": CANDevice.get_device_by_name("MPPT_B").is_connected,
-                "MOTOR_CONTROLLER": CANDevice.get_device_by_name("MOTOR_CONTROLLER").is_connected
+                "SUPPLEMENTAL_BATTERY": CANDevice.get_device_by_name("SUPPLEMENTAL_BATTERY").is_connected
             })
 
 
