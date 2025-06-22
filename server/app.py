@@ -12,7 +12,7 @@ from init_can_devices import init_can_devices
 
 app = Flask(
     __name__,
-    static_folder='../build/',
+    static_folder='../build/client',
     static_url_path='',
 )
 
