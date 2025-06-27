@@ -1,6 +1,5 @@
 import React from 'react';
 import { Box, Divider, Paper, Typography, Grid, Container } from "@mui/material";
-import StatusDot from "../StatusDot";
 
 // Utility function to convert motor controller faults/limits to readable strings
 const motorControllerFaultReadable = (mocoData) => {

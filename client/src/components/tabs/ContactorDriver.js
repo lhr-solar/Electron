@@ -1,5 +1,5 @@
 import React from 'react';
-import {Box, Container, Divider, Grid, Paper, Typography} from "@mui/material";
+import {Container, Divider, Grid, Paper, Typography} from "@mui/material";
 import StatusDot from "../StatusDot";
 import {contactorFaultReadable} from "../../utils/deviceStateReadable";
 
