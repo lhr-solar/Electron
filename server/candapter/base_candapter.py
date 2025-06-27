@@ -23,3 +23,5 @@ class BaseCandapter:
     def is_connected(self) -> bool:
         return self._connected
 
+    def set_connected(self, connected):
+        self._connected = connected

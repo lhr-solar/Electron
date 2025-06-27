@@ -7,10 +7,10 @@ import queue
 import platform
 import os
 
-from candapter_reader import CandapterReader
 from can_decoder import CANDecoder
 from can_device import CANDevice
 from init_can_devices import init_can_devices
+from candapter.ewert_candapter import EwertCandapter
 
 app = Flask(
     __name__,
@@ -33,7 +33,7 @@ elif platform.system() == "Windows":
 else:
     port_name = "/dev/ttyUSB0"  # Linux
 
-can_reader = CandapterReader(
+can_reader = EwertCandapter(
     com_port=port_name,
     serial_baudrate=9600,
     can_baudrate=125000
@@ -48,8 +48,9 @@ def can_reader_task():
     try:
         while True:
             try:
-                if can_reader.candapter_connected:
-                    can_queue.put(can_reader.read(), timeout=0)
+                if can_reader.is_connected():
+                    x = can_reader.read()
+                    can_queue.put(x, timeout=0)
                     data_available.set()
             except queue.Full:
                 print("Queue is full")
@@ -57,9 +58,8 @@ def can_reader_task():
     except KeyboardInterrupt:
         print("\nStopping CAN message reader.")
     finally:
-        can_reader.adapter.closeCANBus()
-        can_reader.adapter.closeDevice()
-        can_reader.candapter_connected = False
+        can_reader.close()
+        can_reader.set_connected(False)
         print("CAN bus and device closed.")
 
 
@@ -71,7 +71,7 @@ def can_processor_task():
             if raw_message is None:
                 continue
             dm = CANDevice.process_can_message(raw_message)
-            # print(dm)
+            # print(hex(raw_message.arbitration_id), dm)
         except queue.Empty:
             data_available.clear()
 
@@ -91,14 +91,20 @@ def emit_can_data():
                 "BATTERY": CANDevice.get_device_by_name("BATTERY").master_data,
                 "MPPT_A": CANDevice.get_device_by_name("MPPT_A").master_data,
                 "MPPT_B": CANDevice.get_device_by_name("MPPT_B").master_data,
-                "SUPPLEMENTAL_BATTERY": CANDevice.get_device_by_name("SUPPLEMENTAL_BATTERY").master_data
+                "SUPPLEMENTAL_BATTERY": CANDevice.get_device_by_name("SUPPLEMENTAL_BATTERY").master_data,
+                "CONTACTOR_DRIVER": CANDevice.get_device_by_name("CONTACTOR_DRIVER").master_data,
+                "CONTROLS": CANDevice.get_device_by_name("CONTROLS").master_data,
+                "MOTOR_CONTROLLER": CANDevice.get_device_by_name("MOTOR_CONTROLLER").master_data
             })
             socketio.emit('connection_state', {
-                "CANDAPTER": can_reader.candapter_connected,
+                "CANDAPTER": can_reader.is_connected(),
                 "BATTERY": CANDevice.get_device_by_name("BATTERY").is_connected,
                 "MPPT_A": CANDevice.get_device_by_name("MPPT_A").is_connected,
                 "MPPT_B": CANDevice.get_device_by_name("MPPT_B").is_connected,
-                "SUPPLEMENTAL_BATTERY": CANDevice.get_device_by_name("SUPPLEMENTAL_BATTERY").is_connected
+                "SUPPLEMENTAL_BATTERY": CANDevice.get_device_by_name("SUPPLEMENTAL_BATTERY").is_connected,
+                "CONTACTOR_DRIVER": CANDevice.get_device_by_name("CONTACTOR_DRIVER").is_connected,
+                "CONTROLS": CANDevice.get_device_by_name("CONTROLS").is_connected,
+                "MOTOR_CONTROLLER": CANDevice.get_device_by_name("MOTOR_CONTROLLER").is_connected
             })
 
 

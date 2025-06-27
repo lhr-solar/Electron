@@ -1,15 +1,59 @@
 import React from 'react';
-import { Box, Divider, Paper, Typography } from "@mui/material";
+import {Box, Container, Divider, Grid, Paper, Typography} from "@mui/material";
+import StatusDot from "../StatusDot";
+import {contactorFaultReadable} from "../../utils/deviceStateReadable";
 
-const ContactorDriver = () => {
+const ContactorDriver = ({ data }) => {
     return (
-        <Paper sx={{padding: 2, backgroundColor: "#1e1e1e"}}>
-            <Typography variant="h6">Battery</Typography>
-            <Divider/>
-            <Box sx={{marginTop: 2}}>
-                <Typography variant="body1">Contactor Status</Typography>
+        <Paper sx={{padding: 2, background: "none", height: "100%", width: "100%"}}>
+            <Container sx={{
+                py: 4,
+                display: "flex",
+                flexDirection: "column",
+                gap: "20px",
+                width: "100%",
+                justifyContent: "center",
+                alignItems: "center",
+            }}>
+                <Paper
+                    elevation={3}
+                    sx={{
+                        p: 2,
+                        mb: 3,
+                        borderRadius: 2,
+                        border: "1px solid #333",
+                        width: "100%",
+                    }}
+                >
+                    <Typography variant="h6" gutterBottom>Contactor Driver/Precharge</Typography>
+                    <Divider sx={{mb: 2, backgroundColor: "#333"}}/>
 
-            </Box>
+                    <Grid container spacing={3} sx={{
+                        display: "flex",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        height: "100%",
+                    }}>
+                        <Grid item xs={12} md={6} width={"250px"}>
+                            <Typography variant="body2" mb={1}>
+                                Motor Contactor: <StatusDot active={data.Actual_Motor_Sense}/> {data.Actual_Motor_Sense ? "Closed" : "Open"}
+                            </Typography>
+                            <Typography variant="body2" mb={1}>
+                                Motor Precharge Contactor: <StatusDot active={data.Motor_Precharge_Sense}/> {data.Motor_Precharge_Sense ? "Closed" : "Open"}
+                            </Typography>
+                            <Typography variant="body2" mb={1}>
+                                Array Precharge Contactor: <StatusDot active={data.Array_Precharge_Sense}/> {data.Array_Precharge_Sense ? "Closed" : "Open"}
+                            </Typography>
+                            {
+                                (data.Motor_Precharge_Timeout || data.Array_Precharge_Timeout || data.Motor_Sense_Fault || data.Motor_Precharge_Sense_Fault || data.Array_Precharge_Sense_Fault) &&
+                                <Typography variant="body2" mb={1} color={"red"}>
+                                    Fault: { contactorFaultReadable(data) }                             </Typography>
+                            }
+                        </Grid>
+                    </Grid>
+                </Paper>
+            </Container>
         </Paper>
     );
 }

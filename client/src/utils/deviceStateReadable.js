@@ -73,8 +73,25 @@ const mpptModeReadable = (mode) => {
     }
 }
 
+const contactorFaultReadable = (data) => {
+    if (data.Motor_Precharge_Timeout) {
+        return "Motor Precharge Timeout"
+    } else if (data. Array_Precharge_Timeout) {
+        return "Array Precharge Timeout"
+    } else if (data.Motor_Sense_Fault) {
+        return "Motor Contactor Sense Fault"
+    } else if (data.Motor_Precharge_Sense_Fault) {
+        return "Motor Precharge Contactor Sense Fault"
+    } else if (data.Array_Precharge_Sense_Fault) {
+        return "Array Precharge Contactor Sense Fault"
+    } else {
+        return "No Fault"
+    }
+}
+
 export {
     batteryFaultReadable,
     mpptFaultReadable,
-    mpptModeReadable
+    mpptModeReadable,
+    contactorFaultReadable
 }

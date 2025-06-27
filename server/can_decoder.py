@@ -1,5 +1,4 @@
 import cantools
-import can
 import glob
 import os
 

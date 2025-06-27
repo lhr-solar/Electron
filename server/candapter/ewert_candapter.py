@@ -13,11 +13,15 @@ class EwertCandapter(BaseCandapter):
         self._can_baudrate = can_baudrate
 
     def connect(self):
-        print(f"Connecting to Ewert CAN adapter on {self._com_port} at {self._serial_baudrate} baud...")
-        self._adapter = pyCandapter(self._com_port, self._serial_baudrate)
-        if self._adapter.openCANBus(self._can_baudrate):
-            print(f"Ewert CAN bus opened at {self._can_baudrate} bps.")
-            self._connected = True
+        try:
+            print(f"Connecting to Ewert CAN adapter on {self._com_port} at {self._serial_baudrate} baud...")
+            self._adapter = pyCandapter(self._com_port, self._serial_baudrate)
+            if self._adapter.openCANBus(self._can_baudrate):
+                print(f"Ewert CAN bus opened at {self._can_baudrate} bps.")
+                self._connected = True
+        except:
+            self.connected = False
+            print("Could not find device")
 
     def read(self) -> Message | None:
         if not self._connected:
@@ -25,6 +29,7 @@ class EwertCandapter(BaseCandapter):
 
         try:
             message: can.Message = self._adapter.readCANMessage()
+            # print(hex(message.arbitration_id))
             if message is None:
                 return None
             return message

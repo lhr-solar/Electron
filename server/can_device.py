@@ -49,6 +49,7 @@ class CANDevice:
         self._timer_event.set()
         if self.is_connected is False:
             self.is_connected = True
+            self.master_data = self.default_data
             if self.reset is not None:
                 self.reset()
 
@@ -87,11 +88,12 @@ class CANDevice:
     def process_can_message(raw_message: can.Message):
         decoded_message = CANDevice.can_decoder.device_data_readable(raw_message.arbitration_id, raw_message.data)
 
+        device = CANDevice.get_device_by_send_id(raw_message.arbitration_id)
+        if device is None:
+            return decoded_message
+        device.received_message()
+
         if decoded_message is not None and decoded_message["msg"] is not None:
-            device = CANDevice.get_device_by_send_id(raw_message.arbitration_id)
-            if device is None:
-                return decoded_message
-            device.received_message()
             for key, value in decoded_message['msg'].items():
                 if key in device.master_data:
                     if type(device.master_data[key]) == bool:
