@@ -7,11 +7,11 @@ import queue
 import platform
 import os
 
-from can_decoder import CANDecoder
-from can_device import CANDevice
-from init_can_devices import init_can_devices
-from candapter.ewert_candapter import EwertCandapter
-from candapter.xbee_adapter import XBeeAdapter
+from server.can_decoder import CANDecoder
+from server.can_device import CANDevice
+from server.init_can_devices import init_can_devices
+from server.candapter.ewert_candapter import EwertCandapter
+from server.candapter.xbee_adapter import XBeeAdapter
 
 app = Flask(
     __name__,
