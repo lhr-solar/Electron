@@ -150,7 +150,7 @@ def init_can_devices():
               },
               timeout=1)
 
-    CANDevice("CONTACTOR_DRIVER",
+    contactor = CANDevice("CONTACTOR_DRIVER",
               [0x400, 0x401],
               default_data={
                   "Motor_Precharge_Timeout": False,
@@ -164,9 +164,10 @@ def init_can_devices():
               },
               timeout=1)
 
+
     CANDevice("SUPPLEMENTAL_BATTERY",
               [0x10B],
               default_data={
                   "Supplemental_Voltage": 0
               },
-              timeout=1.6)
+              timeout=2)

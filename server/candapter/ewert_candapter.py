@@ -1,5 +1,4 @@
 import can
-from can import Message
 
 from server.candapter.base_candapter import BaseCandapter
 from server.candapter.pyCandapter import pyCandapter
@@ -11,6 +10,8 @@ class EwertCandapter(BaseCandapter):
         self._com_port = com_port
         self._serial_baudrate = serial_baudrate
         self._can_baudrate = can_baudrate
+        self._adapter = None
+        self.nickname = "CANdapter"
 
     def connect(self):
         try:
@@ -20,10 +21,10 @@ class EwertCandapter(BaseCandapter):
                 print(f"Ewert CAN bus opened at {self._can_baudrate} bps.")
                 self._connected = True
         except:
-            self.connected = False
+            self._connected = False
             print("Could not find device")
 
-    def read(self) -> Message | None:
+    def read(self) -> can.Message | None:
         if not self._connected:
             return None
 

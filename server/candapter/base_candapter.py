@@ -7,7 +7,8 @@ class BaseCandapter:
 
     def __init__(self):
         self._connected = False
-        self._adapter = None
+        self.nickname = "Unknown"
+
     @abstractmethod
     def connect(self):
         pass

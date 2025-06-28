@@ -11,6 +11,7 @@ from can_decoder import CANDecoder
 from can_device import CANDevice
 from init_can_devices import init_can_devices
 from candapter.ewert_candapter import EwertCandapter
+from candapter.xbee_adapter import XBeeAdapter
 
 app = Flask(
     __name__,
@@ -29,15 +30,22 @@ CANDevice.can_decoder = can_decoder
 if 'microsoft' in platform.uname().release.lower() or 'WSL_DISTRO_NAME' in os.environ:
     port_name = "/dev/ttyUSB0"  # WSL
 elif platform.system() == "Windows":
-    port_name = "COM4"
+    port_name = "COM3"
 else:
     port_name = "/dev/ttyUSB0"  # Linux
 
-can_reader = EwertCandapter(
+
+# can_reader = EwertCandapter(
+#     com_port=port_name,
+#     serial_baudrate=9600,
+#     can_baudrate=125000
+# )
+
+can_reader = XBeeAdapter(
     com_port=port_name,
-    serial_baudrate=9600,
-    can_baudrate=125000
+    bitrate=125000
 )
+
 can_reader.connect()
 
 can_queue = queue.Queue(maxsize=500)
@@ -104,7 +112,8 @@ def emit_can_data():
                 "SUPPLEMENTAL_BATTERY": CANDevice.get_device_by_name("SUPPLEMENTAL_BATTERY").is_connected,
                 "CONTACTOR_DRIVER": CANDevice.get_device_by_name("CONTACTOR_DRIVER").is_connected,
                 "CONTROLS": CANDevice.get_device_by_name("CONTROLS").is_connected,
-                "MOTOR_CONTROLLER": CANDevice.get_device_by_name("MOTOR_CONTROLLER").is_connected
+                "MOTOR_CONTROLLER": CANDevice.get_device_by_name("MOTOR_CONTROLLER").is_connected,
+                "dev_nick": can_reader.nickname
             })
 
 

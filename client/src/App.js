@@ -172,6 +172,8 @@ function App() {
         DCBusAh: 0
     })
 
+    const [adapterNick, setAdapterNick] = useState("Unknown")
+
     useEffect(() => {
         socket.on('connect', () => {
             setIsConnected(true);
@@ -206,6 +208,7 @@ function App() {
                 motor_controller: data["MOTOR_CONTROLLER"],
                 contactor_driver: data["CONTACTOR_DRIVER"],
             })
+            setAdapterNick(data["dev_nick"])
         })
 
 
@@ -258,6 +261,7 @@ function App() {
                           handleTabChange={handleTabChange}
                           serverStatus={isConnected}
                           candapterStatus={connectionState.candapter}
+                          candapterNickname={adapterNick}
                 />
 
                 <div style={{

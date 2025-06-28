@@ -48,7 +48,8 @@ const ContactorDriver = ({ data }) => {
                             {
                                 (data.Motor_Precharge_Timeout || data.Array_Precharge_Timeout || data.Motor_Sense_Fault || data.Motor_Precharge_Sense_Fault || data.Array_Precharge_Sense_Fault) &&
                                 <Typography variant="body2" mb={1} color={"red"}>
-                                    Fault: { contactorFaultReadable(data) }                             </Typography>
+                                    Fault: { contactorFaultReadable(data) }
+                                </Typography>
                             }
                         </Grid>
                     </Grid>
