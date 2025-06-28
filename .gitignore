@@ -9,3 +9,5 @@ build/
 *.pyc
 **/package-lock.json
 package-lock.json
+
+logs

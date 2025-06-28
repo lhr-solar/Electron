@@ -3,12 +3,13 @@ from flask_socketio import SocketIO
 from flask_cors import CORS
 import threading
 import queue
-
 import platform
 import os
 
+
 from server.can_decoder import CANDecoder
 from server.can_device import CANDevice
+from server.can_logger import CANLogger
 from server.init_can_devices import init_can_devices
 from server.candapter.ewert_candapter import EwertCandapter
 from server.candapter.xbee_adapter import XBeeAdapter
@@ -25,6 +26,8 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 can_decoder = CANDecoder()
 can_decoder.find_add_dbc_files()
 CANDevice.can_decoder = can_decoder
+
+can_logger = CANLogger(log_dir="./logs")
 
 # Detect platform and set default port_name
 if 'microsoft' in platform.uname().release.lower() or 'WSL_DISTRO_NAME' in os.environ:
@@ -79,6 +82,9 @@ def can_processor_task():
             if raw_message is None:
                 continue
             dm = CANDevice.process_can_message(raw_message)
+            can_logger.log_raw(raw_message.arbitration_id, raw_message.data)
+            can_logger.log_decoded(raw_message.arbitration_id, dm["msg"])
+
             # print(hex(raw_message.arbitration_id), dm)
         except queue.Empty:
             data_available.clear()
