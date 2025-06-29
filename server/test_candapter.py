@@ -1,6 +1,6 @@
 import threading
 
-from server.adapter.candapter_reader import CandapterReader
+from server.adapter.ewert_candapter import EwertCandapter
 from can_decoder import CANDecoder
 from can_device import CANDevice
 
@@ -13,7 +13,7 @@ if __name__ == '__main__':
     decoder = CANDecoder()
     decoder.find_add_dbc_files()
 
-    candapter_reader = CandapterReader()
+    candapter_reader = EwertCandapter()
     candapter_reader.connect()
 
     #start reading in a separate thread
