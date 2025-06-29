@@ -2,11 +2,11 @@ import socket
 import threading
 import queue
 import can
-from server.adapter.utils.base_adapter import BaseAdapter
+from server.adapter.utils.adapter_abc import AdapterABC
 from server.adapter.utils.slcan_parser import SLCANParser
 
 
-class NetworkAdapter(BaseAdapter):
+class NetworkAdapterABC(AdapterABC):
     def __init__(self, server_ip='3.141.38.115', port=5700):
         super().__init__()
         self._server_ip = server_ip

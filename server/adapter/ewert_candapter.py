@@ -1,10 +1,10 @@
 import can
 
-from server.adapter.utils.base_adapter import BaseAdapter
+from server.adapter.utils.adapter_abc import AdapterABC
 from server.adapter.utils.pyCandapter import pyCandapter
 
 
-class EwertCandapter(BaseAdapter):
+class EwertCandapter(AdapterABC):
     def __init__(self, com_port="COM4", serial_baudrate=9600, can_baudrate=125000):
         super().__init__()
         self._com_port = com_port

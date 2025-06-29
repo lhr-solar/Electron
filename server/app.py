@@ -6,13 +6,13 @@ import queue
 import platform
 import os
 
-from server.adapter.network_adapter import NetworkAdapter
+from server.adapter.network_adapter import NetworkAdapterABC
 from server.can_decoder import CANDecoder
 from server.can_device import CANDevice
 from server.can_logger import CANLogger
 from server.init_can_devices import init_can_devices
 from server.adapter.ewert_candapter import EwertCandapter
-from server.adapter.xbee_rf_adapter import XBeeRFAdapter
+from server.adapter.xbee_rf_adapter import XBeeRFAdapterABC
 
 LOG = False  # Set to True to enable debug logging
 
@@ -53,7 +53,7 @@ else:
 #     bitrate=125000
 # )
 
-can_reader = NetworkAdapter(
+can_reader = NetworkAdapterABC(
     server_ip="3.141.38.115",
     port=5700
 )

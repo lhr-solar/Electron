@@ -1,7 +1,7 @@
-from server.adapter.utils.base_adapter import BaseAdapter
+from server.adapter.utils.adapter_abc import AdapterABC
 
 
-class PeakPCanAdapter(BaseAdapter):
+class PeakPCanAdapterABC(AdapterABC):
     def __init__(self, channel: int, can_baudrate: int = PCAN_BAUD_125K):
         super().__init__()
         self._baudrate = can_baudrate
