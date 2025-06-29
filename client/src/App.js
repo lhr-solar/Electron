@@ -10,8 +10,9 @@ import Battery from "./components/tabs/Battery";
 import Overview from "./components/tabs/Overview";
 import MPPT from "./components/tabs/MPPT";
 import MotorController from "./components/tabs/MotorController";
-import Controls from "./components/tabs/Controls";
+import DriverControls from "./components/tabs/Controls";
 import ContactorDriver from "./components/tabs/ContactorDriver";
+import SupplementalBattery from "./components/tabs/SupplementalBattery";
 
 import "./styles/App.css";
 
@@ -94,6 +95,85 @@ function App() {
         }
     })
 
+    const [suppData, setSuppData] = useState({
+        Supplemental_Voltage: 0
+    })
+
+    const [controlsData, setControlsData] = useState({
+        Acceleration_Percentage: 0,
+        Brake_Percentage: 0,
+        IGN_Array: false,
+        IGN_Motor: false,
+        Forward_Gear: false,
+        Reverse_Gear: false,
+        Brake_Light: false,
+        Motor_Controller_Fault: false,
+        BPS_Fault: false,
+        Controls_Fault: false,
+        Motor_Safe: false,
+        Motor_Current_Setpoint: 0,
+        Motor_Velocity_Setpoint: 0,
+        Motor_Power_Setpoint: 0
+    })
+
+    const [contactorData, setContactorData] = useState({
+        Motor_Precharge_Timeout: false,
+        Array_Precharge_Timeout: false,
+        Actual_Motor_Sense: false,
+        Motor_Sense_Fault: false,
+        Motor_Precharge_Sense: false,
+        Motor_Precharge_Sense_Fault: false,
+        Array_Precharge_Sense: false,
+        Array_Precharge_Sense_Fault: false
+    })
+
+    const [mocoData, setMocoData] = useState({
+        TritiumID: "",
+        SerialNumber: "",
+        LimitIpmOrMotorTemp: false,
+        LimitBusVoltageLower: false,
+        LimitBusVoltageUpper: false,
+        LimitBusCurrent: false,
+        LimitVelocity: false,
+        LimitMotorCurrent: false,
+        LimitOutputVoltagePWM: false,
+        ErrorMotorOverSpeed: false,
+        ErrorDesaturationFault: false,
+        Error15vRailUnderVoltage: false,
+        ErrorConfigRead: false,
+        ErrorWatchdogCausedLastReset: false,
+        ErrorBadMotorPositionHallSeq: false,
+        ErrorDcBusOverVoltage: false,
+        ErrorSoftwareOverCurrent: false,
+        ErrorHardwareOverCurrent: false,
+        ActiveMotor: 0,
+        TxErrorCount: 0,
+        RxErrorCount: 0,
+        BusVoltage: 0,
+        BusCurrent: 0,
+        MotorVelocity: 0,
+        VehicleVelocity: 0,
+        PhaseCurrentB: 0,
+        PhaseCurrentC: 0,
+        Vq: 0,
+        Vd: 0,
+        Iq: 0,
+        Id: 0,
+        BEMFq: 0,
+        BEMFd: 0,
+        Supply15V: 0,
+        ReservedSupply15V: 0,
+        Supply1V9: 0,
+        Supply3V3: 0,
+        MotorTemp: 0,
+        HeatsinkTemp: 0,
+        DspBoardTemp: 0,
+        Odometer: 0,
+        DCBusAh: 0
+    })
+
+    const [adapterNick, setAdapterNick] = useState("Unknown")
+
     useEffect(() => {
         socket.on('connect', () => {
             setIsConnected(true);
@@ -109,6 +189,11 @@ function App() {
                 MPPT_A: data["MPPT_A"],
                 MPPT_B: data["MPPT_B"]
             });
+            setSuppData(data["SUPPLEMENTAL_BATTERY"])
+            setControlsData(data["CONTROLS"])
+            setMocoData(data["MOTOR_CONTROLLER"])
+            setContactorData(data["CONTACTOR_DRIVER"])
+            console.log(data["CONTROLS"])
         });
 
         socket.on('connection_state', (data) => {
@@ -118,8 +203,12 @@ function App() {
                 battery: data["BATTERY"],
                 mppt_a: data["MPPT_A"],
                 mppt_b: data["MPPT_B"],
+                supplemental_battery: data["SUPPLEMENTAL_BATTERY"],
+                controls: data["CONTROLS"],
                 motor_controller: data["MOTOR_CONTROLLER"],
+                contactor_driver: data["CONTACTOR_DRIVER"],
             })
+            setAdapterNick(data["dev_nick"])
         })
 
 
@@ -137,10 +226,6 @@ function App() {
             console.log('Disconnected from server');
         }
     }, [isConnected]);
-
-    useEffect(() => {
-        console.log(mpptData)
-    }, [mpptData])
 
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);
@@ -167,7 +252,7 @@ function App() {
                         {label: "Battery", status: [connectionState.battery]},
                         {label: "TPEE MPPT", status: [connectionState.mppt_a, connectionState.mppt_b]},
                         {label: "Prohelion WaveSculptor22", status: [connectionState.motor_controller]},
-                        {label: "Driver Controls", status: [connectionState.driver_controls]},
+                        {label: "Driver Controls", status: [connectionState.controls]},
                         {label: "HV Control", status: [connectionState.contactor_driver]},
                         {label: "Supplemental Battery", status: [connectionState.supplemental_battery]},
                     ]
@@ -176,6 +261,7 @@ function App() {
                           handleTabChange={handleTabChange}
                           serverStatus={isConnected}
                           candapterStatus={connectionState.candapter}
+                          candapterNickname={adapterNick}
                 />
 
                 <div style={{
@@ -193,13 +279,16 @@ function App() {
                         activeTab === 2 && <MPPT data = {mpptData} />
                     }
                     {
-                        activeTab === 3 && <MotorController/>
+                        activeTab === 3 && <MotorController data={mocoData} />
                     }
                     {
-                        activeTab === 4 && <Controls/>
+                        activeTab === 4 && <DriverControls data={controlsData} />
                     }
                     {
-                        activeTab === 5 && <ContactorDriver/>
+                        activeTab === 5 && <ContactorDriver data={contactorData} />
+                    }
+                    {
+                        activeTab === 6 && <SupplementalBattery data={suppData} />
                     }
                 </div>
             </ThemeProvider>

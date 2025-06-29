@@ -4,7 +4,7 @@ import {FaHome} from "react-icons/fa";
 import StatusDot from "./StatusDot";
 import BlinkingStatusDot from "./BlinkingStatusDot";
 
-const TitleBar = ({ tabs, activeTab, handleTabChange, serverStatus, candapterStatus }) => {
+const TitleBar = ({ tabs, activeTab, handleTabChange, serverStatus, candapterStatus, candapterNickname }) => {
     const theme = useTheme();
 
     return (
@@ -63,7 +63,7 @@ const TitleBar = ({ tabs, activeTab, handleTabChange, serverStatus, candapterSta
                             <BlinkingStatusDot connected={serverStatus} label="Server" />
                         </Box>
                         <Box display="flex" alignItems="center" gap={1}>
-                            <Typography variant="body2">CANdapter</Typography>
+                            <Typography variant="body2">{candapterNickname}</Typography>
                             <BlinkingStatusDot connected={serverStatus && candapterStatus} label="CANdapter" />
                         </Box>
                     </Box>

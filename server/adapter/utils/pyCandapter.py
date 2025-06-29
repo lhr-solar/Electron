@@ -40,7 +40,7 @@ class pyCandapter:
         for i in range(messageLength):
             messageDataArr.append(int(message[5 + 2*i :5 + 2*i + 2], 16))
         timeStamp = time.time()
-        return (can.Message(arbitration_id=messageID, data=messageDataArr, is_extended_id=False, timestamp=timeStamp))
+        return can.Message(arbitration_id=messageID, data=messageDataArr, is_extended_id=False, timestamp=timeStamp)
 
     def sendCANMessage(self, message):
         dataString = ''
