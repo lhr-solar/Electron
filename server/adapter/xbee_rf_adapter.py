@@ -1,14 +1,13 @@
 import can
-from server.candapter.base_candapter import BaseCandapter
+from server.adapter.base_candapter import BaseCandapter
 
 
-class XBeeAdapter(BaseCandapter):
+class XBeeRFAdapter(BaseCandapter):
     def __init__(self, com_port="COM4", bitrate=125000):
         super().__init__()
         self._com_port = com_port
         self._bitrate = bitrate
         self._bus = None
-        self._connected = False
         self.nickname = "XBee"
 
     def connect(self):

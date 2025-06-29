@@ -1,6 +1,6 @@
 import threading
 
-from server.candapter.candapter_reader import CandapterReader
+from server.adapter.candapter_reader import CandapterReader
 from can_decoder import CANDecoder
 from can_device import CANDevice
 

@@ -6,13 +6,15 @@ import queue
 import platform
 import os
 
-
+from server.adapter.network_adapter import NetworkAdapter
 from server.can_decoder import CANDecoder
 from server.can_device import CANDevice
 from server.can_logger import CANLogger
 from server.init_can_devices import init_can_devices
-from server.candapter.ewert_candapter import EwertCandapter
-from server.candapter.xbee_adapter import XBeeAdapter
+from server.adapter.ewert_candapter import EwertCandapter
+from server.adapter.xbee_rf_adapter import XBeeRFAdapter
+
+LOG = False  # Set to True to enable debug logging
 
 app = Flask(
     __name__,
@@ -27,7 +29,9 @@ can_decoder = CANDecoder()
 can_decoder.find_add_dbc_files()
 CANDevice.can_decoder = can_decoder
 
-can_logger = CANLogger(log_dir="./logs")
+can_logger = None
+if LOG:
+    can_logger = CANLogger(log_dir="./logs")
 
 # Detect platform and set default port_name
 if 'microsoft' in platform.uname().release.lower() or 'WSL_DISTRO_NAME' in os.environ:
@@ -44,14 +48,19 @@ else:
 #     can_baudrate=125000
 # )
 
-can_reader = XBeeAdapter(
-    com_port=port_name,
-    bitrate=125000
+# can_reader = XBeeRFAdapter(
+#     com_port=port_name,
+#     bitrate=125000
+# )
+
+can_reader = NetworkAdapter(
+    server_ip="3.141.38.115",
+    port=5700
 )
 
 can_reader.connect()
 
-can_queue = queue.Queue(maxsize=500)
+can_queue = queue.Queue(maxsize=1024)
 data_available = threading.Event()
 
 
@@ -60,8 +69,10 @@ def can_reader_task():
         while True:
             try:
                 if can_reader.is_connected():
-                    x = can_reader.read()
-                    can_queue.put(x, timeout=0)
+                    queue_msg = can_reader.read()
+                    if queue_msg is None:
+                        continue
+                    can_queue.put(queue_msg, timeout=0)
                     data_available.set()
             except queue.Full:
                 print("Queue is full")
@@ -81,9 +92,11 @@ def can_processor_task():
             raw_message = can_queue.get_nowait()
             if raw_message is None:
                 continue
+            # print(raw_message)
             dm = CANDevice.process_can_message(raw_message)
-            can_logger.log_raw(raw_message.arbitration_id, raw_message.data)
-            can_logger.log_decoded(raw_message.arbitration_id, dm["msg"])
+            if LOG:
+                can_logger.log_raw(raw_message.arbitration_id, raw_message.data)
+                can_logger.log_decoded(raw_message.arbitration_id, dm["msg"])
 
             # print(hex(raw_message.arbitration_id), dm)
         except queue.Empty:

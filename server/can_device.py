@@ -101,6 +101,9 @@ class CANDevice:
                     else:
                         device.master_data[key] = value
                 if device.custom_message_processor is not None:
-                    device.custom_message_processor(decoded_message)
+                    try:
+                        device.custom_message_processor(decoded_message)
+                    except Exception as e:
+                        print(f"Error processing custom message for {device.name}: {e}")
 
         return decoded_message

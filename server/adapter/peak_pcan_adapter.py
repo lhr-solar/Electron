@@ -1,7 +1,7 @@
 import can
 
-from server.candapter.PCANBasic import *
-from server.candapter.base_candapter import BaseCandapter
+from server.adapter.PCANBasic import *
+from server.adapter.base_candapter import BaseCandapter
 
 
 class PeakPCanAdapter(BaseCandapter):

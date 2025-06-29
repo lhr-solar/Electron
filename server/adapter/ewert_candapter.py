@@ -1,7 +1,7 @@
 import can
 
-from server.candapter.base_candapter import BaseCandapter
-from server.candapter.pyCandapter import pyCandapter
+from server.adapter.base_candapter import BaseCandapter
+from server.adapter.pyCandapter import pyCandapter
 
 
 class EwertCandapter(BaseCandapter):
