@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import can
 
 
-class BaseCandapter:
+class BaseAdapter(ABC):
 
     def __init__(self):
         self._connected = False

@@ -1,8 +1,8 @@
 import can
-from server.adapter.base_candapter import BaseCandapter
+from server.adapter.utils.base_adapter import BaseAdapter
 
 
-class XBeeRFAdapter(BaseCandapter):
+class XBeeRFAdapter(BaseAdapter):
     def __init__(self, com_port="COM4", bitrate=125000):
         super().__init__()
         self._com_port = com_port
