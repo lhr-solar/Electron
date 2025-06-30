@@ -158,9 +158,9 @@ const Battery = ({data, handleReset}) => {
     const snakingGrid = getSnakingGrid();
 
     return (
-        <Paper sx={{padding: 2, background: "none", height: "100%"}}>
+        <Paper sx={{padding: 2, background: "none", height: "100%", overflow: "hidden"}}>
             <Container sx={{
-                py: 4,
+                py: 2,
             }}>
                 <BatteryStatusPanel
                     data={data}
