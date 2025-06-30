@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Divider, Paper, Typography } from "@mui/material";
 
-const Overview = () => {
+const Home = () => {
     return (
         <Paper sx={{padding: 2, backgroundColor: "#1e1e1e"}}>
 
@@ -9,4 +9,4 @@ const Overview = () => {
     );
 }
 
-export default Overview;
+export default Home;

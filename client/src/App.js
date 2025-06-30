@@ -7,7 +7,7 @@ import {
 import io from 'socket.io-client';
 import TitleBar from "./components/TitleBar";
 import Battery from "./components/tabs/Battery";
-import Overview from "./components/tabs/Overview";
+import Home from "./components/tabs/Home";
 import MPPT from "./components/tabs/MPPT";
 import MotorController from "./components/tabs/MotorController";
 import DriverControls from "./components/tabs/Controls";
@@ -270,7 +270,7 @@ function App() {
                     width: "100%",
                 }}>
                     {
-                        activeTab === 0 && <Overview/>
+                        activeTab === 0 && <Home/>
                     }
                     {
                         activeTab === 1 && <Battery data={batteryData} handleReset={handleBatteryReset}/>
