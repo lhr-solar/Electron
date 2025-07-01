@@ -193,7 +193,6 @@ function App() {
             setControlsData(data["CONTROLS"])
             setMocoData(data["MOTOR_CONTROLLER"])
             setContactorData(data["CONTACTOR_DRIVER"])
-            console.log(data["CONTROLS"])
         });
 
         socket.on('connection_state', (data) => {

@@ -3,9 +3,6 @@ import {Box, Container, Divider, Grid, Paper, Typography, LinearProgress} from "
 import StatusDot from "../StatusDot";
 
 const DriverControls = ({ data }) => {
-    useEffect(() => {
-        console.log(data)
-    }, [data])
     const getGearState = () => {
         if (data.Forward_Gear) return "Forward";
         if (data.Reverse_Gear) return "Reverse";

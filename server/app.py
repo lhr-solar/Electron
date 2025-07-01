@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 from flask_socketio import SocketIO
 from flask_cors import CORS
 import threading
@@ -6,13 +6,14 @@ import queue
 import platform
 import os
 
+from server.adapter.utils.adapter_abc import AdapterABC
 from server.can_decoder import CANDecoder
 from server.can_device import CANDevice
 from server.can_logger import CANLogger
 from server.init_can_devices import init_can_devices
 from server.adapter.ewert_candapter import EwertCandapter
-from server.adapter.xbee_rf_adapter import XBeeRFAdapterABC
-from server.adapter.network_adapter import NetworkAdapterABC
+from server.adapter.xbee_rf_adapter import XBeeRFAdapter
+from server.adapter.network_adapter import NetworkAdapter
 
 LOG = False  # Set to True to enable debug logging
 
@@ -41,7 +42,6 @@ elif platform.system() == "Windows":
 else:
     port_name = "/dev/ttyUSB0"  # Linux
 
-
 # can_reader = EwertCandapter(
 #     com_port=port_name,
 #     serial_baudrate=9600,
@@ -53,12 +53,12 @@ else:
 #     bitrate=125000
 # )
 
-can_reader = NetworkAdapterABC(
-    server_ip="3.141.38.115",
-    port=5700
-)
+# can_reader = NetworkAdapterABC(
+#     server_ip="3.141.38.115",
+#     port=5700
+# )
 
-can_reader.connect()
+can_reader: AdapterABC | None = None
 
 can_queue = queue.Queue(maxsize=1024)
 data_available = threading.Event()
@@ -124,7 +124,7 @@ def emit_can_data():
                 "MOTOR_CONTROLLER": CANDevice.get_device_by_name("MOTOR_CONTROLLER").master_data
             })
             socketio.emit('connection_state', {
-                "CANDAPTER": can_reader.is_connected(),
+                "CANDAPTER": can_reader.is_connected() if can_reader is not None else False,
                 "BATTERY": CANDevice.get_device_by_name("BATTERY").is_connected,
                 "MPPT_A": CANDevice.get_device_by_name("MPPT_A").is_connected,
                 "MPPT_B": CANDevice.get_device_by_name("MPPT_B").is_connected,
@@ -132,7 +132,7 @@ def emit_can_data():
                 "CONTACTOR_DRIVER": CANDevice.get_device_by_name("CONTACTOR_DRIVER").is_connected,
                 "CONTROLS": CANDevice.get_device_by_name("CONTROLS").is_connected,
                 "MOTOR_CONTROLLER": CANDevice.get_device_by_name("MOTOR_CONTROLLER").is_connected,
-                "dev_nick": can_reader.nickname
+                "dev_nick": can_reader.nickname if can_reader is not None else "Unknown",
             })
 
 
@@ -144,13 +144,114 @@ can_reader_thread.daemon = True
 can_processor_thread = threading.Thread(target=can_processor_task)
 can_processor_thread.daemon = True
 
-can_reader_thread.start()
-can_processor_thread.start()
+
+# function start reading, set can_reader to the desired adapter. Start read and process threads. Will take in the user selected adapter
+def start_can_reader(adapter):
+    global can_reader
+    global can_reader_thread
+    global emit_thread
+    global emit_thread_lock
+    with emit_thread_lock:
+        if emit_thread is not None:
+            emit_thread = None
+        if can_reader_thread.is_alive():
+            can_reader_thread.join()
+    if can_reader is not None:
+        can_reader.close()
+    if adapter == "CANdapter":
+        can_reader = EwertCandapter(
+            com_port=port_name,
+            serial_baudrate=9600,
+            can_baudrate=125000
+        )
+    elif adapter == "XBee RF":
+        can_reader = XBeeRFAdapter(
+            com_port=port_name,
+            bitrate=125000
+        )
+    elif adapter == "LTE":
+        can_reader = NetworkAdapter(
+            server_ip="")
 
 
 @app.route('/')
 def index():
     return app.send_static_file('index.html')
+
+
+@app.route('/api/get_available_ports')
+def get_available_ports():
+    ports = []
+    if platform.system() == "Windows":
+        import serial.tools.list_ports
+        ports = [port.device for port in serial.tools.list_ports.comports()]
+    else:
+        import glob
+        ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
+    return {"ports": ports}
+
+
+@app.route('/api/get_adapter_form_data')
+def get_adapter_form_data():
+    ports = []
+    if platform.system() == "Windows":
+        import serial.tools.list_ports
+        ports = [port.device for port in serial.tools.list_ports.comports()]
+    else:
+        import glob
+        ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
+
+    return {
+        "CANdapter": [
+            {"name": "port", "label": "Port", "type": "select", "options": ports, "required": True},
+            {"name": "dev_baudrate", "label": "UART Baudrate", "type": "number", "required": True},
+            {"name": "can_bitrate", "label": "CAN Bitrate", "type": "number", "required": True},
+        ],
+        "XBee RF": [
+            {"name": "port", "label": "Port", "type": "select", "options": ports, "required": True},
+            {"name": "can_bitrate", "label": "CAN Bitrate", "type": "number", "required": True},
+        ],
+        "LTE": [
+            {"name": "server_ip", "label": "Server IP", "type": "text", "required": True},
+            {"name": "server_port", "label": "Port", "type": "number", "required": True},
+        ]
+    }
+
+
+@app.route('/api/adapter_configure', methods=['POST'])
+def adapter_configure():
+    global can_reader
+
+    if can_reader is not None and can_reader.is_connected():
+        can_reader.close()
+
+    data = request.json
+    adapter = data.get('adapter')
+    if adapter not in ["candapter", "xbee_rf", "lte"]:
+        return {"error": "Invalid adapter"}, 400
+
+    if adapter == "candapter":
+        can_reader = EwertCandapter(
+            com_port=data.get('port', port_name),
+            serial_baudrate=int(data.get('dev_baudrate', 9600)),
+            can_baudrate=int(data.get('can_bitrate', 125000))
+        )
+    elif adapter == "xbee_rf":
+        can_reader = XBeeRFAdapter(
+            com_port=data.get('port', port_name),
+            bitrate=int(data.get('can_bitrate', 125000))
+        )
+    elif adapter == "lte":
+        can_reader = NetworkAdapter(
+            server_ip=data.get("server_ip"),
+            port=int(data.get("server_port", 5700)),
+        )
+
+    if not can_reader.is_connected():
+        can_reader.connect()
+        can_processor_thread.start()
+        can_reader_thread.start()
+    return {"success": True}, 200
 
 
 @socketio.on('connect')
