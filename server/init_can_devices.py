@@ -131,7 +131,7 @@ def init_can_devices():
               timeout=0.5)
 
     CANDevice("CONTROLS",
-              [0x221, 0x222, 0x581, 0x583, 0x584],
+              [0x221, 0x222, 0x581, 0x583, 0x584, 0x585],
               default_data={
                   "Acceleration_Percentage": 0,
                   "Brake_Percentage": 0,
@@ -146,7 +146,9 @@ def init_can_devices():
                   "Motor_Safe": False,
                   "Motor_Current_Setpoint": 0,
                   "Motor_Velocity_Setpoint": 0,
-                  "Motor_Power_Setpoint": 0
+                  "Motor_Power_Setpoint": 0,
+                  "Brake_Raw": 0,
+                  "Accel_Raw": 0
               },
               timeout=1)
 

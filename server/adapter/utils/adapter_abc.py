@@ -10,7 +10,7 @@ class AdapterABC(ABC):
         self.nickname = "Unknown"
 
     @abstractmethod
-    def connect(self):
+    def connect(self) -> bool:
         pass
 
     @abstractmethod

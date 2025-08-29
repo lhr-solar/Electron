@@ -1,27 +1,26 @@
 import React from 'react';
 import {Paper, Typography, Divider, Grid, Container, Box} from "@mui/material";
-import StatusDot from "../StatusDot";
+import StatusDot from "../StatusDot.js";
 import {mpptFaultReadable, mpptModeReadable} from "../../utils/deviceStateReadable";
 
 const MPPTStatusPanel = ({label, data}) => (
     <Paper
         elevation={3}
         sx={{
-            p: 4,
             borderRadius: 3,
             border: "1px solid #333",
             backgroundColor: "background.paper",
             mb: 3
         }}
     >
-        <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, p: 1.5 }}>
             {label}
         </Typography>
-        <Divider sx={{ mb: 4 }} />
+        <Divider sx={{ mb: 2 }} />
 
-        <Grid container spacing={4} justifyContent="center">
+        <Grid container spacing={4} justifyContent="center" height={"100%"} width={"100%"}>
             {/* Electrical Measurements */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} width={"300px"}>
                 <Box sx={{ mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 3, fontWeight: 500 }}>
                         Electrical Measurements
@@ -68,7 +67,7 @@ const MPPTStatusPanel = ({label, data}) => (
             </Grid>
 
             {/* System Status */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} width={"300px"}>
                 <Box sx={{ mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 3, fontWeight: 500 }}>
                         System Status
@@ -143,7 +142,7 @@ const MPPTStatusPanel = ({label, data}) => (
 
 const MPPT = ({data}) => {
     return (
-        <Container maxWidth="lg" sx={{ py: 3 }}>
+        <Container sx={{ py: 2, display: "flex", flexDirection: "column", maxHeight: "100%", maxWidth: "100%" }}>
             <MPPTStatusPanel label="MPPT A" data={data.MPPT_A}/>
             <MPPTStatusPanel label="MPPT B" data={data.MPPT_B}/>
         </Container>

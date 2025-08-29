@@ -20,9 +20,11 @@ class EwertCandapter(AdapterABC):
             if self._adapter.openCANBus(self._can_baudrate):
                 print(f"Ewert CAN bus opened at {self._can_baudrate} bps.")
                 self._connected = True
+                return True
         except:
             self._connected = False
             print("Could not find device")
+            return False
 
     def read(self) -> can.Message | None:
         if not self._connected:

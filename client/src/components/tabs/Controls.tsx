@@ -1,11 +1,8 @@
 import React, {useEffect} from 'react';
 import {Box, Container, Divider, Grid, Paper, Typography, LinearProgress} from "@mui/material";
-import StatusDot from "../StatusDot";
+import StatusDot from "../StatusDot.js";
 
 const DriverControls = ({ data }) => {
-    useEffect(() => {
-        console.log(data)
-    }, [data])
     const getGearState = () => {
         if (data.Forward_Gear) return "Forward";
         if (data.Reverse_Gear) return "Reverse";

@@ -49,7 +49,7 @@ const hasActiveError = (mocoData) => {
 
 const MotorController = ({ data }) => {
     // Convert KPH to MPH
-    const vehicleSpeedMph = (data.VehicleVelocity * 2.237).toFixed(1);
+    const vehicleSpeedMph = (data.VehicleVelocity * 1).toFixed(1);
     const motorRpm = data.MotorVelocity.toFixed(0);
 
     return (

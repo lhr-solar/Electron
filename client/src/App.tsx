@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react";
+import {useEffect, useState, type SetStateAction} from "react";
 import {
     ThemeProvider,
     createTheme,
@@ -7,14 +7,14 @@ import {
 import io from 'socket.io-client';
 import TitleBar from "./components/TitleBar";
 import Battery from "./components/tabs/Battery";
-import Overview from "./components/tabs/Overview";
+import Home from "./components/tabs/Home";
 import MPPT from "./components/tabs/MPPT";
 import MotorController from "./components/tabs/MotorController";
 import DriverControls from "./components/tabs/Controls";
 import ContactorDriver from "./components/tabs/ContactorDriver";
 import SupplementalBattery from "./components/tabs/SupplementalBattery";
 
-import "./styles/App.css";
+import "./App.css";
 
 const darkTheme = createTheme({
     palette: {
@@ -46,6 +46,7 @@ function App() {
         battery: false,
         mppt_a: false,
         mppt_b: false,
+        controls: false,
         motor_controller: false,
         driver_controls: false,
         contactor_driver: false,
@@ -193,7 +194,6 @@ function App() {
             setControlsData(data["CONTROLS"])
             setMocoData(data["MOTOR_CONTROLLER"])
             setContactorData(data["CONTACTOR_DRIVER"])
-            console.log(data["CONTROLS"])
         });
 
         socket.on('connection_state', (data) => {
@@ -227,7 +227,7 @@ function App() {
         }
     }, [isConnected]);
 
-    const handleTabChange = (event, newValue) => {
+    const handleTabChange = (_event: any, newValue: SetStateAction<number>) => {
         setActiveTab(newValue);
     };
 
@@ -270,7 +270,7 @@ function App() {
                     width: "100%",
                 }}>
                     {
-                        activeTab === 0 && <Overview/>
+                        activeTab === 0 && <Home/>
                     }
                     {
                         activeTab === 1 && <Battery data={batteryData} handleReset={handleBatteryReset}/>
