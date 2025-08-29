@@ -1,6 +1,6 @@
 import React from 'react';
 import {Container, Divider, Grid, Paper, Typography} from "@mui/material";
-import StatusDot from "../StatusDot";
+import StatusDot from "../StatusDot.js";
 import {contactorFaultReadable} from "../../utils/deviceStateReadable";
 
 const ContactorDriver = ({ data }) => {

@@ -93,9 +93,6 @@ class CANDevice:
             return decoded_message
         device.received_message()
 
-        if raw_message.arbitration_id == 0x585 or raw_message.arbitration_id == "0x585":
-            print(decoded_message)
-
         if decoded_message is not None and decoded_message["msg"] is not None:
             for key, value in decoded_message['msg'].items():
                 if key in device.master_data:

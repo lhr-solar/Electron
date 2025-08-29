@@ -178,19 +178,6 @@ def start_can_reader(adapter):
 def index():
     return app.send_static_file('index.html')
 
-
-@app.route('/api/get_available_ports')
-def get_available_ports():
-    ports = []
-    if platform.system() == "Windows":
-        import serial.tools.list_ports
-        ports = [port.device for port in serial.tools.list_ports.comports()]
-    else:
-        import glob
-        ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
-    return {"ports": ports}
-
-
 @app.route('/api/get_adapter_form_data')
 def get_adapter_form_data():
     ports = []

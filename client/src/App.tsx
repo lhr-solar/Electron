@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react";
+import {useEffect, useState, type SetStateAction} from "react";
 import {
     ThemeProvider,
     createTheme,
@@ -14,7 +14,7 @@ import DriverControls from "./components/tabs/Controls";
 import ContactorDriver from "./components/tabs/ContactorDriver";
 import SupplementalBattery from "./components/tabs/SupplementalBattery";
 
-import "./styles/App.css";
+import "./App.css";
 
 const darkTheme = createTheme({
     palette: {
@@ -46,6 +46,7 @@ function App() {
         battery: false,
         mppt_a: false,
         mppt_b: false,
+        controls: false,
         motor_controller: false,
         driver_controls: false,
         contactor_driver: false,
@@ -226,7 +227,7 @@ function App() {
         }
     }, [isConnected]);
 
-    const handleTabChange = (event, newValue) => {
+    const handleTabChange = (_event: any, newValue: SetStateAction<number>) => {
         setActiveTab(newValue);
     };
 

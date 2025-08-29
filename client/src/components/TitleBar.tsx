@@ -1,8 +1,9 @@
-import React from "react";
 import { AppBar, Toolbar, Typography, Box, Tabs, Tab, useTheme } from "@mui/material";
 import {FaHome} from "react-icons/fa";
 import StatusDot from "./StatusDot";
 import BlinkingStatusDot from "./BlinkingStatusDot";
+
+import logo from "@/assets/logo.png";
 
 const TitleBar = ({ tabs, activeTab, handleTabChange, serverStatus, candapterStatus, candapterNickname }) => {
     const theme = useTheme();
@@ -15,7 +16,7 @@ const TitleBar = ({ tabs, activeTab, handleTabChange, serverStatus, candapterSta
                     <Box display="flex" alignItems="center">
                         <Box display="flex" alignItems="center">
                             <img
-                                src="/logo.png"
+                                src={logo}
                                 alt="Team Logo"
                                 style={{ height: 32, marginRight: 8 }}
                             />
