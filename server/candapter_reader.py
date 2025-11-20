@@ -2,7 +2,7 @@ import can
 import threading
 import queue
 import time
-from pyCandapter import pyCandapter
+from server.pyCandapter import pyCandapter
 
 
 class CandapterReader:

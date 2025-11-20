@@ -2,7 +2,7 @@ import asyncio
 import threading
 import can
 
-from can_decoder import CANDecoder
+from server.can_decoder import CANDecoder
 
 
 class CANDevice:
@@ -92,11 +92,14 @@ class CANDevice:
                 return decoded_message
             device.received_message()
             for key, value in decoded_message['msg'].items():
-                if key in device.master_data:
-                    if type(device.master_data[key]) == bool:
-                        device.master_data[key] = bool(value)
-                    else:
-                        device.master_data[key] = value
+                try:
+                    if key in device.master_data:
+                        if type(device.master_data[key]) == bool:
+                            device.master_data[key] = bool(value)
+                        else:
+                            device.master_data[key] = value
+                except Exception as e:
+                    print(f"Error updating {device.name} data for key {key}: {e}")
                 if device.custom_message_processor is not None:
                     device.custom_message_processor(decoded_message)
 

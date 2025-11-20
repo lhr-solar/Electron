@@ -1,4 +1,4 @@
-from can_device import CANDevice
+from server.can_device import CANDevice
 
 
 def init_can_devices():

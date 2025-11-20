@@ -3,10 +3,10 @@ from flask_socketio import SocketIO
 from flask_cors import CORS
 import threading
 import queue
-from candapter_reader import CandapterReader
-from can_decoder import CANDecoder
-from can_device import CANDevice
-from init_can_devices import init_can_devices
+from server.candapter_reader import CandapterReader
+from server.can_decoder import CANDecoder
+from server.can_device import CANDevice
+from server.init_can_devices import init_can_devices
 
 app = Flask(
     __name__,
@@ -21,11 +21,22 @@ can_decoder = CANDecoder()
 can_decoder.find_add_dbc_files()
 CANDevice.can_decoder = can_decoder
 
-can_reader = CandapterReader(
-    com_port="COM4",
-    serial_baudrate=9600,
-    can_baudrate=125000
-)
+USE_SIMULATOR = True
+
+if USE_SIMULATOR:
+    from server.candapter_simulator import CandapterSimulator
+    can_reader = CandapterSimulator(
+        filepath="server/data/volt.txt",  # your file
+        interval_ms=200
+    )
+else:
+    from server.candapter_reader import CandapterReader
+    can_reader = CandapterReader(
+        com_port="COM3",
+        serial_baudrate=9600,
+        can_baudrate=125000
+    )
+
 can_reader.connect()
 
 can_queue = queue.Queue(maxsize=500)
