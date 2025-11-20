@@ -19,7 +19,7 @@ class FileParser(Parser):
                     line = line.strip()
                     if line:
                         self.packet_queue.put(line)
-            print(f"[{self.__class__.__name__}] End of file reached.")
+            # print(f"[{self.__class__.__name__}] End of file reached.")
             read_ok = True
 
         except FileNotFoundError:
@@ -29,5 +29,6 @@ class FileParser(Parser):
 
             if not read_ok:
                 self.stop_event.set()
-        
-        print(f"[{self.__class__.__name__}] Thread finished.")
+
+        if not read_ok:
+            print(f"[{self.__class__.__name__}] Thread finished.")

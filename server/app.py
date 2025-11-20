@@ -1,4 +1,3 @@
-import sys
 import threading
 import queue
 from flask import Flask
@@ -23,19 +22,19 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # Configuration
 config = {
     "DBC_FILE_PATH": "./dbc/Daybreak-Telemetry.dbc",
-    "INPUT_MODE": "file",
+    "INPUT_MODE": "tcp",
     "TCP_IP": "3.141.38.115",
     "TCP_PORT": 8187,
     "SERIAL_PORT": "COM3",
     "SERIAL_BAUDRATE": 125000,
-    "REPLAY_FILE": "./logs/log_2025-11-19_21-41-32.txt",
+    "REPLAY_FILE": "./data/578_log.txt",
     "LOG_ENABLED": True,
     "PRINT_CAN_INFO": True
 }
 
 # Global Variables
 PACKET_QUEUE = queue.Queue()
-LOG_QUEUE = queue.Queue() if config["LOG_ENABLED"] else None
+LOG_QUEUE = queue.Queue() if config["LOG_ENABLED"] and config['INPUT_MODE'] != "file" else None
 STOP_EVENT = threading.Event()
 
 # Initialize CAN Decoder and Device Manager

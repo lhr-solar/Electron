@@ -5,4 +5,4 @@ python-can
 pyserial
 eventlet
 argparse-addons
-cantools==40.2.1
+cantools
