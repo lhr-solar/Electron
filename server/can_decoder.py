@@ -1,32 +1,29 @@
 import cantools
-import can
-import glob
 import os
-
 
 class CANDecoder:
     def __init__(self):
         self.db = cantools.database.Database()
 
-    def find_add_dbc_files(self):
-        abs_path = os.path.abspath("./Embedded-Sharepoint/can/dbc/*.dbc")
-        dbc_list = glob.glob(abs_path)
-        for i in dbc_list:
-            self.db.add_dbc_file(i)
-
-    def device_data_readable(self, arbitration_id, data) -> {
-        "id": hex,
-        "msg": str
-    }:
-        decoded_message = None
+    def add_dbc_file(self, dbc_file):
+        """
+        Adds a DBC file to the database.
+        """
+        if not os.path.exists(dbc_file):
+            print(f"[CANDecoder] DBC file not found at: {dbc_file}")
+            return
         try:
-            decoded_message = {
-                "id": hex(arbitration_id),
-                "msg": self.db.decode_message(arbitration_id, data)
-            }
+            self.db.add_dbc_file(dbc_file)
+            print(f"[CANDecoder] Successfully loaded DBC file: {dbc_file}")
         except Exception as e:
-            decoded_message = {
-                "id": e,
-                "msg": None
-            }
-        return decoded_message
+            print(f"[CANDecoder] Error loading DBC file {dbc_file}: {e}")
+
+    def decode_message(self, arbitration_id, data):
+        """
+        Decodes a CAN message and returns the decoded data.
+        Returns None if it cannot be decoded.
+        """
+        try:
+            return self.db.decode_message(arbitration_id, data)
+        except Exception:
+            return None

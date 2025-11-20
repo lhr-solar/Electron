@@ -1,0 +1,72 @@
+import socket
+import time
+from ..util.logger import Logger
+from .parser_abc import Parser
+
+class TCPParser(Parser, Logger):
+    def __init__(self, packet_queue, stop_event, ip, port, log_queue=None):
+        Parser.__init__(self, packet_queue, stop_event)
+        Logger.__init__(self, log_queue)
+        self.source = (ip, port)
+    def run(self):
+        ip, port = self.source
+        buffer = ""
+
+        while not self.stop_event.is_set():
+            sock = None
+            try:
+                print(f"[{self.__class__.__name__}] Connecting to {ip}:{port}...")
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2.0)
+                sock.connect((ip, port))
+                print(f"[{self.__class__.__name__}] Connected!")
+                self.connected = True
+
+                while not self.stop_event.is_set():
+                    try:
+                        data = sock.recv(4096)
+                        if not data:
+                            print(f"[{self.__class__.__name__}] Server closed connection.")
+                            break
+
+                        buffer += data.decode('ascii', errors='ignore')
+
+                        # Process buffer line by line, handling incomplete packets
+                        while True:
+                            if '\r' not in buffer:
+                                break
+
+                            end_index = buffer.index('\r')
+                            potential_frame = buffer[:end_index + 1]
+
+                            # Find the start of the last valid SLCAN message in the chunk
+                            t_index = potential_frame.rfind('t')
+                            T_index = potential_frame.rfind('T') # Handle extended frames
+                            start_index = max(t_index, T_index)
+
+                            if start_index != -1:
+                                # Extract the valid frame
+                                valid_frame = potential_frame[start_index:].strip()
+                                if valid_frame:
+                                    self.log_packet(valid_frame)
+                                    self.packet_queue.put(valid_frame)
+
+                            # Move past the processed part of the buffer
+                            buffer = buffer[end_index + 1:]
+
+                    except socket.timeout:
+                        continue
+                    except Exception as e:
+                        print(f"[{self.__class__.__name__}] Socket Error: {e}")
+                        break
+            
+            except Exception as e:
+                print(f"[{self.__class__.__name__}] Connection Error: {e}. Retrying in 1s...")
+                time.sleep(1)
+            finally:
+                if sock:
+                    sock.close()
+                self.connected = False
+
+        self.connected = False
+        print(f"[{self.__class__.__name__}] Thread finished.")
