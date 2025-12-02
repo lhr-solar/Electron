@@ -23,12 +23,12 @@ class SerialParser(Parser, Logger):
         try:
             ser = serial.Serial(port=port, baudrate=9600, timeout=1)
             if baudrate in baudrate_codes:
-                cmd = f'S{baudrate_codes[baudrate]}\\r'.encode()
+                cmd = f'S{baudrate_codes[baudrate]}\r'.encode()
                 ser.write(cmd)
                 time.sleep(0.1)
                 ser.read_all()
             
-            ser.write(b'O\\r')
+            ser.write(b'O\r')
             time.sleep(0.1)
             ser.read_all()
             print(f"[{self.__class__.__name__}] Serial Open. Listening...")
@@ -37,7 +37,7 @@ class SerialParser(Parser, Logger):
 
             while not self.stop_event.is_set():
                 try:
-                    raw_line = ser.read_until(b'\\r')
+                    raw_line = ser.read_until(b'\r')
                     if raw_line:
                         line_str = raw_line.decode('utf-8', errors='ignore').strip()
                         if line_str and (line_str.startswith('t') or line_str.startswith('T')):
@@ -52,7 +52,7 @@ class SerialParser(Parser, Logger):
         finally:
             if ser and ser.is_open:
                 print(f"[{self.__class__.__name__}] Closing Serial...")
-                ser.write(b'C\\r')
+                ser.write(b'C\r')
                 ser.close()
             self.connected = False
         

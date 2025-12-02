@@ -122,9 +122,9 @@ class DeviceManager:
             message_def = self.can_decoder.db.get_message_by_frame_id(raw_message.arbitration_id)
             sender = message_def.senders[0] if message_def.senders else "Unknown"
             
-            print(f"SENDER: {sender} | MSG: {message_def.name} | ID: 0x{raw_message.arbitration_id:X}")
+            # print(f"SENDER: {sender} | MSG: {message_def.name} | ID: 0x{raw_message.arbitration_id:X}")
             for sig, val in decoded_msg.items():
                 unit = message_def.get_signal_by_name(sig).unit
-                print(f"  {sig}: {val} {unit if unit else ''}")
+                # print(f"  {sig}: {val} {unit if unit else ''}")
         except Exception:
             pass

@@ -15,33 +15,22 @@ class EmitterThread:
         states["parser"] = self.parser_thread.connected if self.parser_thread else False
         return states
 
-    def send_full_state(self, sid):
+    def get_full_state_snapshot(self):
         """
-        Sends the initial state to a client. Array signals are sent as empty
-        lists, to be populated by subsequent delta updates.
+        Gathers and returns a complete snapshot of the current application state.
+        This method does NOT emit.
         """
-        initial_state = self.device_manager.get_all_device_data()
-        
-        # Sanitize the initial state to send empty lists for arrays
-        sanitized_state = {}
-        for device_name, device_data in initial_state.items():
-            sanitized_state[device_name] = {}
-            for signal_key, value in device_data.items():
-                if isinstance(value, list):
-                    sanitized_state[device_name][signal_key] = []
-                else:
-                    sanitized_state[device_name][signal_key] = value
-        
-        emit('can_update', sanitized_state, room=sid)
-        
-        # Send full connection state
+        full_data = self.device_manager.get_all_device_data()
         connection_states = self._get_current_connection_states()
-        emit('connection_state', connection_states, room=sid)
+        return {
+            "full_data_state": full_data,
+            "connection_states": connection_states
+        }
 
     def run(self):
         """
         Periodically checks for changes and broadcasts delta updates for both
-        CAN data and connection states, using the new array update format.
+        CAN data and connection states.
         """
         while not self.stop_event.is_set():
             self.socketio.sleep(0.1)
@@ -53,13 +42,11 @@ class EmitterThread:
             if changes:
                 delta_update = defaultdict(dict)
                 for device_name, signal_key, value in changes:
-                    if isinstance(value, dict) and 'index' in value:  # Array change
-                        # Initialize as a list if not already present
+                    if isinstance(value, dict) and 'index' in value:
                         if signal_key not in delta_update[device_name]:
                             delta_update[device_name][signal_key] = []
-                        # Append the object {idx: index, value: value}
                         delta_update[device_name][signal_key].append({'idx': value['index'], 'value': value['value']})
-                    else:  # Regular signal change
+                    else:
                         delta_update[device_name][signal_key] = value
                 
                 if delta_update:

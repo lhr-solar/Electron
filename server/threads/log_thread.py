@@ -11,7 +11,7 @@ class LogThread:
         
         if self.enabled:
             try:
-                log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'logs'))
+                log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..' 'logs'))
                 os.makedirs(log_dir, exist_ok=True)
                 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 log_filename = os.path.join(log_dir, f"log_{timestamp}.txt")
@@ -28,7 +28,7 @@ class LogThread:
             try:
                 log_item = self.log_queue.get(timeout=0.1)
                 if self.log_file:
-                    self.log_file.write(f"{log_item.strip()}\\n")
+                    self.log_file.write(f"{log_item.strip()}\n")
                     self.log_file.flush()
                 self.log_queue.task_done()
             except queue.Empty:

@@ -178,7 +178,7 @@ BO_ 264 BPS_CAN_Error: 1 BPS_Leader
  SG_ BPS_CANError : 0|1@0+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 267 Supplemental_Voltage: 2 BPS_LVBatteryMonitor
- SG_ Supplemental_Voltage : 0|16@1+ (1,0) [0|65535] "mV" Vector__XXX
+ SG_ Supplemental_Voltage : 0|16@1+ (0.001,0) [0|65535] "V" Vector__XXX
 
 BO_ 268 BPS_Charge_Enabled: 1 BPS_Leader
  SG_ Battery_ChargeEnabled : 0|1@0+ (1,0) [0|1] "" Vector__XXX

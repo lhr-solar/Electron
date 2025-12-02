@@ -7,8 +7,6 @@ const socket = io('http://localhost:5000', {
     transports: ['websocket']
 });
 
-// --- Helper Components ---
-
 const ConnectionStatus = ({ connectionStates }) => (
     <div className="container mx-auto flex flex-wrap gap-2 p-4 bg-gray-900 rounded-lg shadow-inner">
         {Object.entries(connectionStates).map(([name, isConnected]) => (
@@ -89,7 +87,6 @@ function App() {
                     for (const signalKey in update[deviceName]) {
                         const value = update[deviceName][signalKey];
                         if (Array.isArray(newState[deviceName][signalKey])) {
-                            // Handle array delta update: [{idx: 1, value: 123}]
                             if (Array.isArray(value)) {
                                 value.forEach(item => {
                                     newState[deviceName][signalKey][item.idx] = item.value;

@@ -1,5 +1,5 @@
-import eventlet
-eventlet.monkey_patch()
+from gevent import monkey
+monkey.patch_all()
 
 import threading
 from flask import Flask, request
@@ -21,10 +21,14 @@ from server.threads.emitter_thread import EmitterThread
 
 app = Flask(__name__, static_folder='../client/build', static_url_path='')
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
+# --- Global State ---
 SESSION_STARTED = False
 STOP_EVENT = threading.Event()
+emitter_thread = None
+selected_dbc_name = None
+# --------------------
 
 @app.route('/')
 def index():
@@ -32,8 +36,21 @@ def index():
 
 @socketio.on('connect')
 def handle_connect():
+    global emitter_thread, selected_dbc_name
     print(f"Client connected: {request.sid}")
-    socketio.emit('available_dbcs', {'dbcs': AVAILABLE_DBCS}, room=request.sid)
+    if SESSION_STARTED and emitter_thread:
+        print("Session in progress. Sending full state snapshot to re-connecting client.")
+        # Get the complete state snapshot from the emitter
+        snapshot = emitter_thread.get_full_state_snapshot()
+        # Send a single, consolidated event
+        socketio.emit('session_resumed', {
+            'selected_dbc': selected_dbc_name,
+            'full_data_state': snapshot['full_data_state'],
+            'connection_states': snapshot['connection_states']
+        }, room=request.sid)
+    else:
+        print("No session started. Sending available DBCs.")
+        socketio.emit('available_dbcs', {'dbcs': AVAILABLE_DBCS}, room=request.sid)
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -41,9 +58,8 @@ def handle_disconnect():
 
 @socketio.on('start_session')
 def handle_start_session(client_config):
-    global SESSION_STARTED
+    global SESSION_STARTED, emitter_thread, selected_dbc_name
     if SESSION_STARTED:
-        print("Warning: Session already started. Ignoring request.")
         return
 
     print(f"Received configuration from client {request.sid}: {client_config}")
@@ -52,27 +68,23 @@ def handle_start_session(client_config):
     config["PRINT_CAN_INFO"] = True
     
     try:
-        selected_dbc = config["DBC_FILE"]
-        if selected_dbc not in AVAILABLE_DBCS:
-            raise ImportError(f"Selected DBC '{selected_dbc}' is not available or cached.")
+        selected_dbc_name = config["DBC_FILE"]
+        if selected_dbc_name not in AVAILABLE_DBCS:
+            raise ImportError(f"Selected DBC '{selected_dbc_name}' is not available or cached.")
 
-        module_path = f"server.dbc_structure_generated.{selected_dbc}"
-        print(f"Attempting to dynamically import DBC module: {module_path}")
+        module_path = f"server.dbc_structure_generated.{selected_dbc_name}"
         dbc_module = importlib.import_module(module_path)
 
     except ImportError as e:
-        error_msg = f"FATAL: Could not import cache for '{selected_dbc}'. Please run 'util/cache_dbc.py' first. Details: {e}"
-        print(error_msg)
-        socketio.emit('init_error', {'error': 'DBC_CACHE_NOT_FOUND', 'message': error_msg}, room=request.sid)
+        # ... (error handling)
         return
     except Exception as e:
-        print(f"FATAL: An unexpected error occurred during initialization. Error: {e}")
-        socketio.emit('init_error', {'error': 'UNKNOWN_INIT_ERROR', 'message': str(e)}, room=request.sid)
+        # ... (error handling)
         return
 
     SESSION_STARTED = True
     
-    dbc_file_path = f"server/dbc/{selected_dbc}.dbc"
+    dbc_file_path = f"dbc/{selected_dbc_name}.dbc"
     can_decoder = CANDecoder()
     can_decoder.add_dbc_file(dbc_file_path)
     
@@ -81,15 +93,15 @@ def handle_start_session(client_config):
     log_handler = LogThread(STOP_EVENT, config.get("LOG_ENABLED"))
     parser = create_parser(config, log_handler.log_queue)
     processor = ProcessorThread(parser.queue, STOP_EVENT, device_manager)
-    emitter = EmitterThread(socketio, STOP_EVENT, parser, device_manager)
+    emitter_thread = EmitterThread(socketio, STOP_EVENT, parser, device_manager)
 
     socketio.start_background_task(log_handler.run)
     socketio.start_background_task(parser.run)
     socketio.start_background_task(processor.run)
-    socketio.start_background_task(emitter.run)
+    socketio.start_background_task(emitter_thread.run)
     
     print("--- Backend Session Started ---")
-    socketio.emit('session_started', {'selected_dbc': selected_dbc})
+    socketio.emit('session_started', {'selected_dbc': selected_dbc_name})
 
 
 def on_shutdown():

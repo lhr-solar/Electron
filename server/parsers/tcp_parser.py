@@ -32,8 +32,8 @@ class TCPParser(Parser, Logger):
 
                         buffer += data.decode('ascii', errors='ignore')
 
-                        while '\\r' in buffer:
-                            end_index = buffer.index('\\r')
+                        while '\r' in buffer:
+                            end_index = buffer.index('\r')
                             potential_frame = buffer[:end_index + 1]
                             t_index = potential_frame.rfind('t')
                             T_index = potential_frame.rfind('T')
