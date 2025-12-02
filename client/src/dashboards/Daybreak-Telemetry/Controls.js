@@ -1,6 +1,6 @@
 import React, {useEffect} from 'react';
 import {Box, Container, Divider, Grid, Paper, Typography, LinearProgress} from "@mui/material";
-import StatusDot from "../../StatusDot";
+import StatusDot from "../../components/StatusDot";
 
 const DriverControls = ({ data }) => {
     const getGearState = () => {
