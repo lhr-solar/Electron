@@ -1,29 +1,25 @@
 import eventlet
 eventlet.monkey_patch()
 
-import sys
 import threading
-import queue
 from flask import Flask, request
 from flask_socketio import SocketIO
 from flask_cors import CORS
 import importlib
-from pathlib import Path
 
-# Import the manifest of available DBCs
 try:
     from server.dbc_structure_generated import AVAILABLE_DBCS
 except ImportError:
     AVAILABLE_DBCS = []
 
-from server.can_decoder import CANDecoder
-from server.can_manager import DeviceManager
+from server.util.can_decoder import CANDecoder
+from server.util.can_manager import DeviceManager
 from server.threads.log_thread import LogThread
 from server.threads.parser_thread import create_parser
 from server.threads.processor_thread import ProcessorThread
 from server.threads.emitter_thread import EmitterThread
 
-app = Flask(__name__, static_folder='../client/public', static_url_path='')
+app = Flask(__name__, static_folder='../client/build', static_url_path='')
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 

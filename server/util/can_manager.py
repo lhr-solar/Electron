@@ -1,6 +1,6 @@
 from cantools.database.namedsignalvalue import NamedSignalValue
-from server.can_decoder import CANDecoder
-from server.can_device import CANDevice
+from server.util.can_decoder import CANDecoder
+from server.util.can_device import CANDevice
 import queue
 import can
 
