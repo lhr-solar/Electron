@@ -5,3 +5,9 @@ logs
 */__pycache__
 */venv
 data/
+
+# Vite
+.vite
+dist
+.env.local
+.env.*.local

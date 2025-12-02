@@ -1,60 +1,34 @@
+import eventlet
+eventlet.monkey_patch()
+
+import sys
 import threading
 import queue
-from flask import Flask
+from flask import Flask, request
 from flask_socketio import SocketIO
 from flask_cors import CORS
+import importlib
+from pathlib import Path
+
+# Import the manifest of available DBCs
+try:
+    from server.dbc_structure_generated import AVAILABLE_DBCS
+except ImportError:
+    AVAILABLE_DBCS = []
 
 from server.can_decoder import CANDecoder
 from server.can_manager import DeviceManager
 from server.threads.log_thread import LogThread
-from server.threads.parser_thread import start_parser_thread
+from server.threads.parser_thread import create_parser
 from server.threads.processor_thread import ProcessorThread
 from server.threads.emitter_thread import EmitterThread
 
-app = Flask(
-    __name__,
-    static_folder='../build/client',
-    static_url_path='',
-)
+app = Flask(__name__, static_folder='../client/public', static_url_path='')
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
-# Configuration
-config = {
-    "DBC_FILE_PATH": "./dbc/Daybreak-Telemetry.dbc",
-    "INPUT_MODE": "tcp",
-    "TCP_IP": "3.141.38.115",
-    "TCP_PORT": 8187,
-    "SERIAL_PORT": "COM3",
-    "SERIAL_BAUDRATE": 125000,
-    "REPLAY_FILE": "./data/578_log.txt",
-    "LOG_ENABLED": True,
-    "PRINT_CAN_INFO": True
-}
-
-# Global Variables
-PACKET_QUEUE = queue.Queue()
-LOG_QUEUE = queue.Queue() if config["LOG_ENABLED"] and config['INPUT_MODE'] != "file" else None
+SESSION_STARTED = False
 STOP_EVENT = threading.Event()
-
-# Initialize CAN Decoder and Device Manager
-can_decoder = CANDecoder()
-can_decoder.add_dbc_file(config["DBC_FILE_PATH"])
-device_manager = DeviceManager(can_decoder, config)
-
-# Start Threads
-log_thread = LogThread(LOG_QUEUE, STOP_EVENT) if LOG_QUEUE else None
-parser_thread = start_parser_thread(config, PACKET_QUEUE, STOP_EVENT, LOG_QUEUE)
-processor_thread = ProcessorThread(PACKET_QUEUE, STOP_EVENT, device_manager)
-emitter_thread = EmitterThread(socketio, STOP_EVENT, parser_thread, device_manager)
-
-if log_thread:
-    log_thread.daemon = True
-    log_thread.start()
-processor_thread.daemon = True
-emitter_thread.daemon = True
-processor_thread.start()
-emitter_thread.start()
 
 @app.route('/')
 def index():
@@ -62,29 +36,69 @@ def index():
 
 @socketio.on('connect')
 def handle_connect():
-    print('Client connected')
+    print(f"Client connected: {request.sid}")
+    socketio.emit('available_dbcs', {'dbcs': AVAILABLE_DBCS}, room=request.sid)
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    print('Client disconnected')
+    print(f"Client disconnected: {request.sid}")
 
-@socketio.on('bps_reset')
-def handle_trip_reset():
-    print('BPS RESET command received')
-    bps_device = device_manager.get_device("BPS_Leader")
-    if bps_device:
-        bps_device.reset()
+@socketio.on('start_session')
+def handle_start_session(client_config):
+    global SESSION_STARTED
+    if SESSION_STARTED:
+        print("Warning: Session already started. Ignoring request.")
+        return
+
+    print(f"Received configuration from client {request.sid}: {client_config}")
+    
+    config = client_config
+    config["PRINT_CAN_INFO"] = True
+    
+    try:
+        selected_dbc = config["DBC_FILE"]
+        if selected_dbc not in AVAILABLE_DBCS:
+            raise ImportError(f"Selected DBC '{selected_dbc}' is not available or cached.")
+
+        module_path = f"server.dbc_structure_generated.{selected_dbc}"
+        print(f"Attempting to dynamically import DBC module: {module_path}")
+        dbc_module = importlib.import_module(module_path)
+
+    except ImportError as e:
+        error_msg = f"FATAL: Could not import cache for '{selected_dbc}'. Please run 'util/cache_dbc.py' first. Details: {e}"
+        print(error_msg)
+        socketio.emit('init_error', {'error': 'DBC_CACHE_NOT_FOUND', 'message': error_msg}, room=request.sid)
+        return
+    except Exception as e:
+        print(f"FATAL: An unexpected error occurred during initialization. Error: {e}")
+        socketio.emit('init_error', {'error': 'UNKNOWN_INIT_ERROR', 'message': str(e)}, room=request.sid)
+        return
+
+    SESSION_STARTED = True
+    
+    dbc_file_path = f"server/dbc/{selected_dbc}.dbc"
+    can_decoder = CANDecoder()
+    can_decoder.add_dbc_file(dbc_file_path)
+    
+    device_manager = DeviceManager(can_decoder, dbc_module, config)
+
+    log_handler = LogThread(STOP_EVENT, config.get("LOG_ENABLED"))
+    parser = create_parser(config, log_handler.log_queue)
+    processor = ProcessorThread(parser.queue, STOP_EVENT, device_manager)
+    emitter = EmitterThread(socketio, STOP_EVENT, parser, device_manager)
+
+    socketio.start_background_task(log_handler.run)
+    socketio.start_background_task(parser.run)
+    socketio.start_background_task(processor.run)
+    socketio.start_background_task(emitter.run)
+    
+    print("--- Backend Session Started ---")
+    socketio.emit('session_started', {'selected_dbc': selected_dbc})
+
 
 def on_shutdown():
     print("[Main] Stopping threads...")
     STOP_EVENT.set()
-    if parser_thread:
-        parser_thread.join()
-    processor_thread.join()
-    emitter_thread.join()
-    if log_thread:
-        log_thread.join()
-    print("[Main] Exited.")
 
 if __name__ == '__main__':
     try:

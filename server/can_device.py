@@ -1,9 +1,9 @@
-import asyncio
-import threading
+import time
 
 class CANDevice:
     """
     Represents a single device on the CAN bus, tracking its state and data.
+    Timeout is now managed externally.
     """
     def __init__(self, name, send_ids=None, default_data=None, timeout=1):
         if send_ids is None: send_ids = []
@@ -17,36 +17,20 @@ class CANDevice:
         
         self.custom_message_processor = None
         self.reset_function = None
-
-        self._timer_event = asyncio.Event()
-        self._timer_thread = threading.Thread(target=self._run_async_timer, daemon=True)
-        self._timer_thread.start()
-
-    def _run_async_timer(self):
-        """Runs the asyncio event loop for the timer in a separate thread."""
-        asyncio.run(self.async_timer())
-
-    async def async_timer(self):
-        """Waits for a message event, timing out if none is received."""
-        while True:
-            try:
-                await asyncio.wait_for(self._timer_event.wait(), timeout=self.timeout)
-                self._timer_event.clear()
-            except asyncio.TimeoutError:
-                self.is_connected = False
+        self.last_message_time = 0
 
     def received_message(self):
         """
         Called when a message for this device is received. Marks the device as
-        connected and resets its timeout timer.
+        connected and updates its message timestamp.
         """
         if not self.is_connected:
             self.is_connected = True
-            if self.reset_function:
-                self.reset_function()
-        self._timer_event.set()
+        self.last_message_time = time.time()
 
-    def reset(self):
-        """Executes the custom reset logic for the device, if defined."""
-        if self.reset_function:
-            self.reset_function()
+    def check_connection_status(self):
+        """
+        Checks if the device has timed out based on its last message time.
+        """
+        if self.is_connected and (time.time() - self.last_message_time > self.timeout):
+            self.is_connected = False

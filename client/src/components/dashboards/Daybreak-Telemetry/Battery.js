@@ -1,8 +1,8 @@
 import React from 'react';
 import {Divider, Grid, Paper, Typography, Button, Container} from "@mui/material";
 
-import StatusDot from "../StatusDot";
-import {batteryFaultReadable} from "../../utils/deviceStateReadable";
+import StatusDot from "../../StatusDot";
+import {batteryFaultReadable} from "../../../utils/deviceStateReadable";
 
 const getSnakingGrid = () => {
     const rows = [];

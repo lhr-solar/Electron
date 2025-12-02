@@ -1,55 +1,52 @@
-import can
-
+from cantools.database.namedsignalvalue import NamedSignalValue
 from server.can_decoder import CANDecoder
 from server.can_device import CANDevice
-import server.dbc_structure as dbc
+import queue
+import can
 
 class DeviceManager:
-    def __init__(self, can_decoder: CANDecoder, config=None):
+    def __init__(self, can_decoder: CANDecoder, dbc_module, config=None):
         self.devices = {}
         self.id_map = {}
+        self.ecu_list = []
         self.can_decoder = can_decoder
+        self.dbc_module = dbc_module # The dynamically imported DBC module
         self.config = config if config else {}
         self.print_can_info = self.config.get("PRINT_CAN_INFO", False)
+        self.changes_queue = queue.Queue()
         
-        self._init_devices_from_dbc()
-        self._apply_custom_logic()
+        self._init_devices_from_dbc_module()
 
-    def _init_devices_from_dbc(self):
-        """Dynamically create devices and their data structures from the DBC."""
-        for ecu_name in dir(dbc):
-            ecu_class = getattr(dbc, ecu_name)
-            if not isinstance(ecu_class, type) or not hasattr(ecu_class, 'SEND_IDS'):
+    def _init_devices_from_dbc_module(self):
+        """
+        Initializes devices using the dynamically loaded DBC module.
+        """
+        for ecu_name in dir(self.dbc_module):
+            if ecu_name.startswith('__'): continue
+            
+            ecu_class = getattr(self.dbc_module, ecu_name)
+            if not (isinstance(ecu_class, type) and hasattr(ecu_class, 'SEND_IDS')):
                 continue
-
+            
+            self.ecu_list.append(ecu_name)
             default_data = {}
-            for msg_name in dir(ecu_class):
-                msg_class = getattr(ecu_class, msg_name)
-                if isinstance(msg_class, type) and hasattr(msg_class, 'Signals'):
-                    for sig_name in dir(msg_class.Signals):
-                        if not sig_name.startswith('__'):
-                            original_sig_name = getattr(msg_class.Signals, sig_name)
-                            default_data[original_sig_name] = 0
+            
+            for attr_name in dir(ecu_class):
+                attr = getattr(ecu_class, attr_name)
+                if isinstance(attr, type) and hasattr(attr, 'ID'):
+                    if getattr(attr, 'IS_ARRAY_MESSAGE', False):
+                        for key in getattr(attr, 'DATA_SIGNAL_KEYS', []):
+                            default_data[key] = []
+                    else:
+                        # This assumes non-array messages have signals defined elsewhere
+                        # in the DBC, which is handled by the decoder. We just need keys.
+                        msg_from_db = self.can_decoder.db.get_message_by_frame_id(attr.ID)
+                        for sig in msg_from_db.signals:
+                            default_data[sig.name] = 0
 
             self._create_device(ecu_name, ecu_class.SEND_IDS, default_data)
-
-    def _apply_custom_logic(self):
-        """Apply device-specific logic after dynamic initialization."""
-        battery = self.get_device("BPS_Leader")
-        if battery:
-            battery.master_data["Voltage_Array"] = [0] * 32
-            battery.master_data["Temperature_Array"] = [0] * 32
-            
-            def process_battery(msg):
-                if "Voltage_idx" in msg:
-                    idx = int(msg["Voltage_idx"])
-                    if 0 <= idx < 32:
-                        battery.master_data["Voltage_Array"][idx] = msg.get("Voltage_Value", 0)
-                if "Temperature_idx" in msg:
-                    idx = int(msg["Temperature_idx"])
-                    if 0 <= idx < 32:
-                        battery.master_data["Temperature_Array"][idx] = msg.get("Temperature_Value", 0)
-            battery.custom_message_processor = process_battery
+        
+        self.ecu_list.sort()
 
     def _create_device(self, name, send_ids, default_data=None, timeout=1):
         device = CANDevice(name, send_ids, default_data, timeout)
@@ -63,47 +60,71 @@ class DeviceManager:
     def get_device(self, name):
         return self.devices.get(name)
 
+    def get_all_device_data(self):
+        return {name: dev.master_data for name, dev in self.devices.items()}
+
+    def get_and_clear_changes(self):
+        changes = []
+        while not self.changes_queue.empty():
+            try:
+                changes.append(self.changes_queue.get_nowait())
+            except queue.Empty:
+                break
+        return changes
+
     def process_message(self, raw_message: can.Message, slcan_packet: str):
         device_name = self.id_map.get(raw_message.arbitration_id)
-        if not device_name:
-            return
+        if not device_name: return
 
         device = self.get_device(device_name)
-        if not device:
-            return
+        if not device: return
 
         decoded_msg = self.can_decoder.decode_message(raw_message.arbitration_id, raw_message.data)
         if decoded_msg:
+            serializable_decoded = {
+                k: str(v) if isinstance(v, NamedSignalValue) else v
+                for k, v in decoded_msg.items()
+            }
+
             device.received_message()
             
             if self.print_can_info:
-                self._print_message_info(raw_message, decoded_msg, slcan_packet)
-
-            for key, value in decoded_msg.items():
-                if key in device.master_data:
-                    if isinstance(device.master_data[key], bool):
-                        device.master_data[key] = bool(value)
-                    else:
-                        device.master_data[key] = value
+                self._print_message_info(raw_message, serializable_decoded, slcan_packet)
             
-            if device.custom_message_processor:
-                device.custom_message_processor(decoded_msg)
+            self._update_device_data(device, serializable_decoded)
+
+    def _update_device_data(self, device, decoded_msg):
+        for key, value in decoded_msg.items():
+            if key not in device.master_data: continue
+
+            if isinstance(device.master_data[key], list):
+                idx_val = None
+                for sig_name in decoded_msg:
+                    if "idx" in sig_name.lower() or "index" in sig_name.lower():
+                        idx_val = int(decoded_msg[sig_name])
+                        break
+                
+                if idx_val is not None:
+                    while len(device.master_data[key]) <= idx_val:
+                        device.master_data[key].append(None)
+                    
+                    if device.master_data[key][idx_val] != value:
+                        device.master_data[key][idx_val] = value
+                        change = {'index': idx_val, 'value': value}
+                        self.changes_queue.put((device.name, key, change))
+            
+            elif device.master_data[key] != value:
+                device.master_data[key] = value
+                self.changes_queue.put((device.name, key, value))
 
     def _print_message_info(self, raw_message, decoded_msg, slcan_packet):
-        """Prints detailed information about a CAN message."""
         try:
             message_def = self.can_decoder.db.get_message_by_frame_id(raw_message.arbitration_id)
             sender = message_def.senders[0] if message_def.senders else "Unknown"
             
-            print("-" * 50)
-            print(f"SENDER: {sender:<15} | MSG: {message_def.name:<25} | ID: 0x{raw_message.arbitration_id:X}")
-            print(f"SLCAN: {slcan_packet}")
+            print(f"SENDER: {sender} | MSG: {message_def.name} | ID: 0x{raw_message.arbitration_id:X}")
             for sig, val in decoded_msg.items():
-                try:
-                    unit = message_def.get_signal_by_name(sig).unit
-                    unit_str = f" {unit}" if unit else ""
-                except:
-                    unit_str = ""
-                print(f"  {sig:25}: {val}{unit_str}")
-        except Exception as e:
-            print(f"Error printing message info: {e}")
+                unit = message_def.get_signal_by_name(sig).unit
+                print(f"  {sig}: {val} {unit if unit else ''}")
+        except Exception:
+            pass

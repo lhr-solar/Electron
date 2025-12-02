@@ -4,10 +4,11 @@ from ..util.logger import Logger
 from .parser_abc import Parser
 
 class TCPParser(Parser, Logger):
-    def __init__(self, packet_queue, stop_event, ip, port, log_queue=None):
-        Parser.__init__(self, packet_queue, stop_event)
+    def __init__(self, ip, port, log_queue=None):
+        Parser.__init__(self)
         Logger.__init__(self, log_queue)
         self.source = (ip, port)
+
     def run(self):
         ip, port = self.source
         buffer = ""
@@ -31,27 +32,19 @@ class TCPParser(Parser, Logger):
 
                         buffer += data.decode('ascii', errors='ignore')
 
-                        # Process buffer line by line, handling incomplete packets
-                        while True:
-                            if '\r' not in buffer:
-                                break
-
-                            end_index = buffer.index('\r')
+                        while '\\r' in buffer:
+                            end_index = buffer.index('\\r')
                             potential_frame = buffer[:end_index + 1]
-
-                            # Find the start of the last valid SLCAN message in the chunk
                             t_index = potential_frame.rfind('t')
-                            T_index = potential_frame.rfind('T') # Handle extended frames
+                            T_index = potential_frame.rfind('T')
                             start_index = max(t_index, T_index)
 
                             if start_index != -1:
-                                # Extract the valid frame
                                 valid_frame = potential_frame[start_index:].strip()
                                 if valid_frame:
                                     self.log_packet(valid_frame)
-                                    self.packet_queue.put(valid_frame)
-
-                            # Move past the processed part of the buffer
+                                    self.queue.put(valid_frame)
+                            
                             buffer = buffer[end_index + 1:]
 
                     except socket.timeout:

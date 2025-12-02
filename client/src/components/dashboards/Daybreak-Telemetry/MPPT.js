@@ -1,7 +1,7 @@
 import React from 'react';
 import {Paper, Typography, Divider, Grid, Container} from "@mui/material";
-import StatusDot from "../StatusDot";
-import {mpptFaultReadable, mpptModeReadable} from "../../utils/deviceStateReadable";
+import StatusDot from "../../StatusDot";
+import {mpptFaultReadable, mpptModeReadable} from "../../../utils/deviceStateReadable";
 
 const MPPTStatusPanel = ({label, data}) => (
     <Paper

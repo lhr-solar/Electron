@@ -1,11 +1,11 @@
-import threading
 from abc import ABC, abstractmethod
+import queue
+import threading
 
-class Parser(ABC, threading.Thread):
-    def __init__(self, packet_queue, stop_event):
-        super().__init__()
-        self.packet_queue = packet_queue
-        self.stop_event = stop_event
+class Parser(ABC):
+    def __init__(self):
+        self.queue = queue.Queue()
+        self.stop_event = threading.Event()
         self.connected = False
 
     @abstractmethod
