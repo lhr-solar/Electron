@@ -10,7 +10,7 @@ class DeviceManager:
         self.id_map = {}
         self.ecu_list = []
         self.can_decoder = can_decoder
-        self.dbc_module = dbc_module # The dynamically imported DBC module
+        self.dbc_module = dbc_module
         self.config = config if config else {}
         self.print_can_info = self.config.get("PRINT_CAN_INFO", False)
         self.changes_queue = queue.Queue()
@@ -18,9 +18,6 @@ class DeviceManager:
         self._init_devices_from_dbc_module()
 
     def _init_devices_from_dbc_module(self):
-        """
-        Initializes devices using the dynamically loaded DBC module.
-        """
         for ecu_name in dir(self.dbc_module):
             if ecu_name.startswith('__'): continue
             
@@ -29,27 +26,25 @@ class DeviceManager:
                 continue
             
             self.ecu_list.append(ecu_name)
-            default_data = {}
+            initial_data = {}
             
             for attr_name in dir(ecu_class):
                 attr = getattr(ecu_class, attr_name)
                 if isinstance(attr, type) and hasattr(attr, 'ID'):
                     if getattr(attr, 'IS_ARRAY_MESSAGE', False):
                         for key in getattr(attr, 'DATA_SIGNAL_KEYS', []):
-                            default_data[key] = []
+                            initial_data[key] = []
                     else:
-                        # This assumes non-array messages have signals defined elsewhere
-                        # in the DBC, which is handled by the decoder. We just need keys.
                         msg_from_db = self.can_decoder.db.get_message_by_frame_id(attr.ID)
                         for sig in msg_from_db.signals:
-                            default_data[sig.name] = 0
+                            initial_data[sig.name] = 0
 
-            self._create_device(ecu_name, ecu_class.SEND_IDS, default_data)
+            self._create_device(ecu_name, ecu_class.SEND_IDS, initial_data)
         
         self.ecu_list.sort()
 
-    def _create_device(self, name, send_ids, default_data=None, timeout=1):
-        device = CANDevice(name, send_ids, default_data, timeout)
+    def _create_device(self, name, send_ids, initial_data=None, timeout=1):
+        device = CANDevice(name, send_ids, initial_data, timeout)
         self.devices[name] = device
         for sid in send_ids:
             if sid in self.id_map:
@@ -61,7 +56,7 @@ class DeviceManager:
         return self.devices.get(name)
 
     def get_all_device_data(self):
-        return {name: dev.master_data for name, dev in self.devices.items()}
+        return {name: dev.data for name, dev in self.devices.items()}
 
     def get_and_clear_changes(self):
         changes = []
@@ -95,9 +90,9 @@ class DeviceManager:
 
     def _update_device_data(self, device, decoded_msg):
         for key, value in decoded_msg.items():
-            if key not in device.master_data: continue
+            if key not in device.data: continue
 
-            if isinstance(device.master_data[key], list):
+            if isinstance(device.data[key], list):
                 idx_val = None
                 for sig_name in decoded_msg:
                     if "idx" in sig_name.lower() or "index" in sig_name.lower():
@@ -105,16 +100,16 @@ class DeviceManager:
                         break
                 
                 if idx_val is not None:
-                    while len(device.master_data[key]) <= idx_val:
-                        device.master_data[key].append(None)
+                    while len(device.data[key]) <= idx_val:
+                        device.data[key].append(None)
                     
-                    if device.master_data[key][idx_val] != value:
-                        device.master_data[key][idx_val] = value
+                    if device.data[key][idx_val] != value:
+                        device.data[key][idx_val] = value
                         change = {'index': idx_val, 'value': value}
                         self.changes_queue.put((device.name, key, change))
             
-            elif device.master_data[key] != value:
-                device.master_data[key] = value
+            elif device.data[key] != value:
+                device.data[key] = value
                 self.changes_queue.put((device.name, key, value))
 
     def _print_message_info(self, raw_message, decoded_msg, slcan_packet):
@@ -122,9 +117,7 @@ class DeviceManager:
             message_def = self.can_decoder.db.get_message_by_frame_id(raw_message.arbitration_id)
             sender = message_def.senders[0] if message_def.senders else "Unknown"
             
-            # print(f"SENDER: {sender} | MSG: {message_def.name} | ID: 0x{raw_message.arbitration_id:X}")
             for sig, val in decoded_msg.items():
                 unit = message_def.get_signal_by_name(sig).unit
-                # print(f"  {sig}: {val} {unit if unit else ''}")
         except Exception:
             pass

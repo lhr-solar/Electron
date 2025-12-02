@@ -3,20 +3,15 @@ import time
 class CANDevice:
     """
     Represents a single device on the CAN bus, tracking its state and data.
-    Timeout is now managed externally.
     """
-    def __init__(self, name, send_ids=None, default_data=None, timeout=1):
+    def __init__(self, name, send_ids=None, initial_data=None, timeout=1):
         if send_ids is None: send_ids = []
         
         self.name = name
         self.send_ids = send_ids
         self.timeout = timeout
         self.is_connected = False
-        self.default_data = default_data if default_data else {}
-        self.master_data = self.default_data.copy()
-        
-        self.custom_message_processor = None
-        self.reset_function = None
+        self.data = initial_data if initial_data else {}
         self.last_message_time = 0
 
     def received_message(self):
