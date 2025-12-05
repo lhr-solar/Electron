@@ -1,12 +1,10 @@
 import socket
 import time
-from ..util.logger import Logger
 from .parser_abc import Parser
 
-class TCPParser(Parser, Logger):
-    def __init__(self, ip, port, log_queue=None):
+class TCPParser(Parser):
+    def __init__(self, ip, port):
         Parser.__init__(self)
-        Logger.__init__(self, log_queue)
         self.source = (ip, port)
 
     def run(self):
@@ -42,7 +40,6 @@ class TCPParser(Parser, Logger):
                             if start_index != -1:
                                 valid_frame = potential_frame[start_index:].strip()
                                 if valid_frame:
-                                    self.log_packet(valid_frame)
                                     self.queue.put(valid_frame)
                             
                             buffer = buffer[end_index + 1:]

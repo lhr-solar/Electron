@@ -1,12 +1,10 @@
 import time
 import serial
-from ..util.logger import Logger
 from .parser_abc import Parser
 
-class SerialParser(Parser, Logger):
-    def __init__(self, port, baudrate=125000, log_queue=None):
+class SerialParser(Parser):
+    def __init__(self, port, baudrate=125000):
         Parser.__init__(self)
-        Logger.__init__(self, log_queue)
         self.source = port
         self.config = {'baudrate': baudrate}
 
@@ -41,7 +39,6 @@ class SerialParser(Parser, Logger):
                     if raw_line:
                         line_str = raw_line.decode('utf-8', errors='ignore').strip()
                         if line_str and (line_str.startswith('t') or line_str.startswith('T')):
-                            self.log_packet(line_str)
                             self.queue.put(line_str)
                 except serial.SerialException as e:
                     print(f"[{self.__class__.__name__}] Serial Error: {e}")

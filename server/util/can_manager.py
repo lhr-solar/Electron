@@ -1,123 +1,103 @@
+import cantools
+import os
 from cantools.database.namedsignalvalue import NamedSignalValue
-from server.util.can_decoder import CANDecoder
-from server.util.can_device import CANDevice
-import queue
 import can
+import time
+import queue
 
-class DeviceManager:
-    def __init__(self, can_decoder: CANDecoder, dbc_module, config=None):
-        self.devices = {}
-        self.id_map = {}
+class CANManager:
+    def __init__(self, dbc_file_path, config=None, influx_queue=None):
+        self.id_map = {}  # Maps CAN ID to the primary sender ECU name
         self.ecu_list = []
-        self.can_decoder = can_decoder
-        self.dbc_module = dbc_module
         self.config = config if config else {}
         self.print_can_info = self.config.get("PRINT_CAN_INFO", False)
-        self.changes_queue = queue.Queue()
         
-        self._init_devices_from_dbc_module()
+        self.influx_queue = influx_queue
+        self.dbc_name = self.config.get("DBC_FILE", "unknown_dbc")
 
-    def _init_devices_from_dbc_module(self):
-        for ecu_name in dir(self.dbc_module):
-            if ecu_name.startswith('__'): continue
-            
-            ecu_class = getattr(self.dbc_module, ecu_name)
-            if not (isinstance(ecu_class, type) and hasattr(ecu_class, 'SEND_IDS')):
-                continue
-            
-            self.ecu_list.append(ecu_name)
-            initial_data = {}
-            
-            for attr_name in dir(ecu_class):
-                attr = getattr(ecu_class, attr_name)
-                if isinstance(attr, type) and hasattr(attr, 'ID'):
-                    if getattr(attr, 'IS_ARRAY_MESSAGE', False):
-                        for key in getattr(attr, 'DATA_SIGNAL_KEYS', []):
-                            initial_data[key] = []
-                    else:
-                        msg_from_db = self.can_decoder.db.get_message_by_frame_id(attr.ID)
-                        for sig in msg_from_db.signals:
-                            initial_data[sig.name] = 0
-
-            self._create_device(ecu_name, ecu_class.SEND_IDS, initial_data)
+        self.db = cantools.database.Database()
+        self._add_dbc_file(dbc_file_path)
         
-        self.ecu_list.sort()
+        self.array_messages = {}  # {frame_id: index_signal_name}
+        self._parse_dbc_for_ecus_and_arrays()
 
-    def _create_device(self, name, send_ids, initial_data=None, timeout=1):
-        device = CANDevice(name, send_ids, initial_data, timeout)
-        self.devices[name] = device
-        for sid in send_ids:
-            if sid in self.id_map:
-                print(f"Warning: Duplicate send ID {sid} for device {name}")
-            self.id_map[sid] = name
-        return device
+    def _add_dbc_file(self, dbc_file):
+        """Adds a DBC file to the internal database."""
+        if not os.path.exists(dbc_file):
+            print(f"[{self.__class__.__name__}] DBC file not found at: {dbc_file}")
+            return
+        try:
+            self.db.add_dbc_file(dbc_file)
+            print(f"[{self.__class__.__name__}] Successfully loaded DBC file: {dbc_file}")
+        except Exception as e:
+            print(f"[{self.__class__.__name__}] Error loading DBC file {dbc_file}: {e}")
 
-    def get_device(self, name):
-        return self.devices.get(name)
+    def decode_message(self, arbitration_id, data):
+        """Decodes a CAN message using the internal database."""
+        try:
+            return self.db.decode_message(arbitration_id, data)
+        except Exception:
+            return None
 
-    def get_all_device_data(self):
-        return {name: dev.data for name, dev in self.devices.items()}
+    def _parse_dbc_for_ecus_and_arrays(self):
+        """Parses the DBC to build an ECU map and find array messages."""
+        print("Parsing DBC for ECUs and array messages...")
+        all_senders = set()
+        for msg in self.db.messages:
+            if msg.senders:
+                sender = msg.senders[0]
+                self.id_map[msg.frame_id] = sender
+                all_senders.add(sender)
 
-    def get_and_clear_changes(self):
-        changes = []
-        while not self.changes_queue.empty():
-            try:
-                changes.append(self.changes_queue.get_nowait())
-            except queue.Empty:
-                break
-        return changes
+            index_signal = next((s.name for s in msg.signals if "idx" in s.name.lower() or "index" in s.name.lower()), None)
+            if index_signal:
+                self.array_messages[msg.frame_id] = index_signal
+                print(f"  - Found array message: {msg.name} (ID: {msg.frame_id}) with index: {index_signal}")
+
+        self.ecu_list = sorted(list(all_senders))
+        print(f"Found {len(self.ecu_list)} ECUs: {self.ecu_list}")
 
     def process_message(self, raw_message: can.Message, slcan_packet: str):
-        device_name = self.id_map.get(raw_message.arbitration_id)
-        if not device_name: return
+        """Processes a raw CAN message, decodes it, and queues it for InfluxDB."""
+        if raw_message.arbitration_id not in self.id_map:
+            return
 
-        device = self.get_device(device_name)
-        if not device: return
-
-        decoded_msg = self.can_decoder.decode_message(raw_message.arbitration_id, raw_message.data)
+        decoded_msg = self.decode_message(raw_message.arbitration_id, raw_message.data)
         if decoded_msg:
-            serializable_decoded = {
-                k: str(v) if isinstance(v, NamedSignalValue) else v
-                for k, v in decoded_msg.items()
-            }
-
-            device.received_message()
-            
+            serializable_decoded = {k: str(v) if isinstance(v, NamedSignalValue) else v for k, v in decoded_msg.items()}
             if self.print_can_info:
-                self._print_message_info(raw_message, serializable_decoded, slcan_packet)
+                self._print_message_info(raw_message, serializable_decoded)
+            self._queue_for_influx(raw_message.arbitration_id, serializable_decoded)
+
+    def _queue_for_influx(self, arbitration_id, decoded_msg):
+        """Queues a decoded message for writing to InfluxDB."""
+        if not self.influx_queue:
+            return
             
-            self._update_device_data(device, serializable_decoded)
-
-    def _update_device_data(self, device, decoded_msg):
-        for key, value in decoded_msg.items():
-            if key not in device.data: continue
-
-            if isinstance(device.data[key], list):
-                idx_val = None
-                for sig_name in decoded_msg:
-                    if "idx" in sig_name.lower() or "index" in sig_name.lower():
-                        idx_val = int(decoded_msg[sig_name])
-                        break
-                
-                if idx_val is not None:
-                    while len(device.data[key]) <= idx_val:
-                        device.data[key].append(None)
-                    
-                    if device.data[key][idx_val] != value:
-                        device.data[key][idx_val] = value
-                        change = {'index': idx_val, 'value': value}
-                        self.changes_queue.put((device.name, key, change))
-            
-            elif device.data[key] != value:
-                device.data[key] = value
-                self.changes_queue.put((device.name, key, value))
-
-    def _print_message_info(self, raw_message, decoded_msg, slcan_packet):
         try:
-            message_def = self.can_decoder.db.get_message_by_frame_id(raw_message.arbitration_id)
-            sender = message_def.senders[0] if message_def.senders else "Unknown"
-            
-            for sig, val in decoded_msg.items():
-                unit = message_def.get_signal_by_name(sig).unit
-        except Exception:
-            pass
+            sender = self.id_map.get(arbitration_id, "Unknown")
+            measurement = str(arbitration_id)
+            timestamp = int(time.time_ns())
+
+            if arbitration_id in self.array_messages:
+                index_signal_name = self.array_messages[arbitration_id]
+                idx = int(decoded_msg.get(index_signal_name, -1))
+                
+                if idx != -1:
+                    tags = {"sender": sender, "dbc_name": self.dbc_name, "idx": str(idx)}
+                    fields = {sig_name: float(sig_val) if isinstance(sig_val, (int, float)) else sig_val 
+                              for sig_name, sig_val in decoded_msg.items() if sig_name != index_signal_name}
+                    if fields:
+                        self.influx_queue.put((measurement, tags, fields, timestamp))
+            else:
+                tags = {"sender": sender, "dbc_name": self.dbc_name}
+                fields = {k: float(v) if isinstance(v, (int, float)) else v for k, v in decoded_msg.items()}
+                if fields:
+                    self.influx_queue.put((measurement, tags, fields, timestamp))
+        except Exception as e:
+            print(f"[{self.__class__.__name__}] Error queueing for InfluxDB: {e}")
+
+    def _print_message_info(self, raw_message, decoded_msg):
+        """Prints formatted information about a CAN message."""
+        sender = self.id_map.get(raw_message.arbitration_id, "Unknown")
+        print(f"CAN ID: {raw_message.arbitration_id} | Sender: {sender} | Data: {decoded_msg}")
