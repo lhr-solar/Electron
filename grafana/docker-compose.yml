@@ -1,20 +1,26 @@
 services:
   influxdb:
-    image: influxdb:2.7
+    image: influxdb:3-core
     container_name: influxdb
     ports:
-      - "8086:8086"
+      - "8181:8181"  # v3 default port
+    command:
+      - influxdb3
+      - serve
+      - --node-id=node1
+      - --object-store=file
+      - --data-dir=/var/lib/influxdb3/data
+      - --plugin-dir=/var/lib/influxdb3/plugins
     environment:
       DOCKER_INFLUXDB_INIT_MODE: setup
       DOCKER_INFLUXDB_INIT_USERNAME: admin
       DOCKER_INFLUXDB_INIT_PASSWORD: lhrs2025!
       DOCKER_INFLUXDB_INIT_ORG: LHRS
-      DOCKER_INFLUXDB_INIT_BUCKET: telemetry_main
-      DOCKER_INFLUXDB_INIT_RETENTION: 0   # keep forever
     volumes:
-      - influx_data:/var/lib/influxdb2
+      - ./influx_data:/var/lib/influxdb3/data
       - ./influxdb-init.sh:/docker-entrypoint-initdb.d/influxdb-init.sh:ro
       - ./provisions:/shared-provisioning
+      - ./plugins:/var/lib/influxdb3/plugins
     restart: unless-stopped
 
   grafana:
@@ -41,5 +47,4 @@ services:
 
 
 volumes:
-  influx_data:
   grafana_data:

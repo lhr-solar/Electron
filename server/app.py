@@ -16,18 +16,20 @@ CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # --- Hardcoded Configuration ---
-INPUT_MODE = 'tcp'
+INPUT_MODE = 'serial'
 COMMON_CONFIG = {
     "DBC_FILE": "Daybreak_Telemetry",
     "PRINT_CAN_INFO": True,
     "INFLUX_URL": "http://localhost:8086",
     "INFLUX_TOKEN": "your-token",
     "INFLUX_ORG": "your-org",
-    "INFLUX_BUCKET": "your-bucket"
+    # Bucket is now determined dynamically below
+    "CLEAR_DEBUG_BUCKET_ON_STARTUP": True, # Set to True to clear the 'debug' bucket on start
 }
 SERIAL_CONFIG = {
     "SERIAL_PORT": "/dev/tty.usbmodem14201",
     "SERIAL_BAUDRATE": 115200,
+    "CAN_BITRATE": 500000,
 }
 TCP_CONFIG = {
     "TCP_IP": "3.141.38.115",
@@ -56,19 +58,13 @@ def start_backend_session():
 
     if INPUT_MODE == 'serial':
         config.update(SERIAL_CONFIG)
-    elif INPUT_MODE == 'tcp':
-        config.update(TCP_CONFIG)
+        config["INFLUX_BUCKET"] = "debug"
     elif INPUT_MODE == 'file':
         config.update(FILE_CONFIG)
-        try:
-            with open(config["REPLAY_FILE_PATH"], 'r') as f:
-                config["REPLAY_CONTENT"] = f.read()
-        except FileNotFoundError:
-            print(f"Error: Replay file not found at {config['REPLAY_FILE_PATH']}")
-            return
-        except Exception as e:
-            print(f"Error reading replay file: {e}")
-            return
+        config["INFLUX_BUCKET"] = "debug"
+    elif INPUT_MODE == 'tcp':
+        config.update(TCP_CONFIG)
+        config["INFLUX_BUCKET"] = "telemetry_main"
     else:
         print(f"Error: Invalid INPUT_MODE '{INPUT_MODE}' selected.")
         return
@@ -79,10 +75,8 @@ def start_backend_session():
     dbc_file_path = f"dbc/{selected_dbc_name}.dbc"
     
     influx_writer_thread = InfluxWriterThread(STOP_EVENT, config)
-    # CANManager now loads the DBC file itself
     can_manager = CANManager(dbc_file_path, config, influx_writer_thread.queue)
     parser = create_parser(config)
-    # The processor thread now gets the consolidated CANManager
     processor = ProcessorThread(parser.queue, STOP_EVENT, can_manager)
 
     socketio.start_background_task(influx_writer_thread.run)
@@ -96,7 +90,7 @@ def start_backend_session():
 def index():
     return app.send_static_file('index.html')
 
-def shutdown():
+def on_shutdown():
     print("[Main] Stopping threads...")
     STOP_EVENT.set()
 
@@ -107,4 +101,4 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         pass
     finally:
-        shutdown()
+        on_shutdown()

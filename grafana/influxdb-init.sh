@@ -20,10 +20,11 @@ echo ">>> Waiting for InfluxDB..."
 sleep 5
 
 ORG="LHRS"
+NODE_ID="node1"
 
-echo ">>> Creating additional buckets..."
-influx bucket create -n debug -o "$ORG" --retention 24h
-influx bucket create -n scratch -o "$ORG" --retention 168h
+echo ">>> Creating buckets..."
+influx bucket create -n debug -o "$ORG" --retention 24h --node-id "$NODE_ID"
+influx bucket create -n scratch -o "$ORG" --retention 168h --node-id "$NODE_ID"
 
 echo ">>> Creating Grafana read-only token (buckets + queries)..."
 GRAFANA_TOKEN=$(
@@ -32,6 +33,7 @@ GRAFANA_TOKEN=$(
     --read-buckets \
     --read-telegrafs \
     --org "$ORG" \
+    --node-id "$NODE_ID" \
     --json | jq -r '.token'
 )
 
@@ -47,7 +49,7 @@ datasources:
   - name: InfluxDB
     type: influxdb
     access: proxy
-    url: http://influxdb:8086
+    url: http://influxdb:8181
     jsonData:
       version: Flux
       organization: "$ORG"
@@ -62,5 +64,6 @@ chown 472:472 "/shared-provisioning"
 chmod 644 "/shared-provisioning/datasources/influx.yml"
 chown 472:472 "/shared-provisioning/datasources/influx.yml"
 
+sudo chown -R 1000:1000 /var/lib/influxdb3/data
 
 echo ">>> InfluxDB initialization complete!"

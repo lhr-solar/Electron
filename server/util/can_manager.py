@@ -66,38 +66,52 @@ class CANManager:
         if decoded_msg:
             serializable_decoded = {k: str(v) if isinstance(v, NamedSignalValue) else v for k, v in decoded_msg.items()}
             if self.print_can_info:
-                self._print_message_info(raw_message, serializable_decoded)
-            self._queue_for_influx(raw_message.arbitration_id, serializable_decoded)
+                self._print_message_info(raw_message, serializable_decoded, slcan_packet)
+            self._queue_for_influx(raw_message.arbitration_id, decoded_msg, slcan_packet)
 
-    def _queue_for_influx(self, arbitration_id, decoded_msg):
+    def _queue_for_influx(self, arbitration_id, decoded_msg, slcan_packet):
         """Queues a decoded message for writing to InfluxDB."""
         if not self.influx_queue:
             return
             
         try:
+            message_def = self.db.get_message_by_frame_id(arbitration_id)
+            if not message_def:
+                return
+
             sender = self.id_map.get(arbitration_id, "Unknown")
             measurement = str(arbitration_id)
             timestamp = int(time.time_ns())
+
+            tags = {
+                "sender": sender,
+                "dbc_name": self.dbc_name,
+                "message_name": message_def.name,
+            }
+            
+            # Initialize fields with the raw packet
+            fields = {"raw_packet": slcan_packet}
 
             if arbitration_id in self.array_messages:
                 index_signal_name = self.array_messages[arbitration_id]
                 idx = int(decoded_msg.get(index_signal_name, -1))
                 
                 if idx != -1:
-                    tags = {"sender": sender, "dbc_name": self.dbc_name, "idx": str(idx)}
-                    fields = {sig_name: float(sig_val) if isinstance(sig_val, (int, float)) else sig_val 
-                              for sig_name, sig_val in decoded_msg.items() if sig_name != index_signal_name}
-                    if fields:
+                    tags["idx"] = str(idx)
+                    # Add decoded signals to fields, excluding the index signal
+                    fields.update({sig_name: float(sig_val) if isinstance(sig_val, (int, float)) else sig_val 
+                                   for sig_name, sig_val in decoded_msg.items() if sig_name != index_signal_name})
+                    if len(fields) > 1: # Ensure there's more than just the raw packet
                         self.influx_queue.put((measurement, tags, fields, timestamp))
             else:
-                tags = {"sender": sender, "dbc_name": self.dbc_name}
-                fields = {k: float(v) if isinstance(v, (int, float)) else v for k, v in decoded_msg.items()}
-                if fields:
+                # Add all decoded signals to fields
+                fields.update({k: float(v) if isinstance(v, (int, float)) else v for k, v in decoded_msg.items()})
+                if len(fields) > 1: # Ensure there's more than just the raw packet
                     self.influx_queue.put((measurement, tags, fields, timestamp))
         except Exception as e:
             print(f"[{self.__class__.__name__}] Error queueing for InfluxDB: {e}")
 
-    def _print_message_info(self, raw_message, decoded_msg):
+    def _print_message_info(self, raw_message, decoded_msg, slcan_packet):
         """Prints formatted information about a CAN message."""
         sender = self.id_map.get(raw_message.arbitration_id, "Unknown")
-        print(f"CAN ID: {raw_message.arbitration_id} | Sender: {sender} | Data: {decoded_msg}")
+        print(f"CAN ID: {raw_message.arbitration_id} | Sender: {sender} | Packet: {slcan_packet} | Data: {decoded_msg}")

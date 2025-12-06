@@ -2,7 +2,7 @@
 */.idea
 build/
 logs
-*/__pycache__
+**/__pycache__
 */venv
 data/
 
@@ -11,3 +11,10 @@ data/
 dist
 .env.local
 .env.*.local
+
+grafana/*/
+!grafana/*
+grafana/provisions/datasources
+!grafana/provisions
+
+test_data
