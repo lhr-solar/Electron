@@ -1,0 +1,45 @@
+services:
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: lhrs2025!
+      DOCKER_INFLUXDB_INIT_ORG: LHRS
+      DOCKER_INFLUXDB_INIT_BUCKET: telemetry_main
+      DOCKER_INFLUXDB_INIT_RETENTION: 0   # keep forever
+    volumes:
+      - influx_data:/var/lib/influxdb2
+      - ./influxdb-init.sh:/docker-entrypoint-initdb.d/influxdb-init.sh:ro
+      - ./provisions:/shared-provisioning
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: lhrs2025!
+
+      # Auto configure Grafana InfluxDB datasource
+      GF_PROVISIONING_ENABLED: "true"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./provisions:/etc/grafana/provisioning/
+    restart: unless-stopped
+    entrypoint: [ "/bin/sh", "-c" ]
+    command: >
+      "echo '>>> Waiting for Grafana provisioning files...'; \
+       while [ ! -f /etc/grafana/provisioning/datasources/influx.yml ]; do sleep 1; done; \
+       /run.sh"
+
+
+volumes:
+  influx_data:
+  grafana_data:
