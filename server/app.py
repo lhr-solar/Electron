@@ -1,42 +1,46 @@
 from gevent import monkey
 monkey.patch_all()
 
+import os
 import threading
 from flask import Flask
 from flask_socketio import SocketIO
 from flask_cors import CORS
+from dotenv import load_dotenv
+load_dotenv()
 
 from server.util.can_manager import CANManager
 from server.threads.parser_thread import create_parser
 from server.threads.processor_thread import ProcessorThread
 from server.threads.influx_writer_thread import InfluxWriterThread
 
+
+
 app = Flask(__name__, static_folder='../client/build', static_url_path='')
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # --- Hardcoded Configuration ---
-INPUT_MODE = 'serial'
+INPUT_MODE = 'file'
 COMMON_CONFIG = {
     "DBC_FILE": "Daybreak_Telemetry",
     "PRINT_CAN_INFO": True,
     "INFLUX_URL": "http://localhost:8086",
-    "INFLUX_TOKEN": "your-token",
-    "INFLUX_ORG": "your-org",
-    # Bucket is now determined dynamically below
-    "CLEAR_DEBUG_BUCKET_ON_STARTUP": True, # Set to True to clear the 'debug' bucket on start
+    "INFLUX_ORG": "LHRS",
+    "INFLUX_TOKEN": os.environ.get("INFLUX_TOKEN", "your-token-fallback"),
+    "CLEAR_DEBUG_BUCKET_ON_STARTUP": True,
 }
 SERIAL_CONFIG = {
-    "SERIAL_PORT": "/dev/tty.usbmodem14201",
-    "SERIAL_BAUDRATE": 115200,
-    "CAN_BITRATE": 500000,
+    "SERIAL_PORT": "/dev/cu.usbserial-DN8BA088", # Updated to match your device
+    "SERIAL_BAUDRATE": 9600, # Correct, standard baud rate for the serial port
+    "CAN_BITRATE": 125000,   # The desired CAN bus speed
 }
 TCP_CONFIG = {
     "TCP_IP": "3.141.38.115",
     "TCP_PORT": 8187,
 }
 FILE_CONFIG = {
-    "REPLAY_FILE_PATH": "path/to/your/replay_file.log",
+    "REPLAY_FILE_PATH": "test_data/261_log.txt",
 }
 # -----------------------------
 
@@ -69,13 +73,17 @@ def start_backend_session():
         print(f"Error: Invalid INPUT_MODE '{INPUT_MODE}' selected.")
         return
 
+    if config["INFLUX_TOKEN"] == "your-token-fallback":
+        print("\n--- WARNING: Using fallback InfluxDB token. ---")
+        print("--- Set the INFLUX_TOKEN environment variable for secure authentication. ---\n")
+
     SESSION_STARTED = True
     
     selected_dbc_name = config["DBC_FILE"]
     dbc_file_path = f"dbc/{selected_dbc_name}.dbc"
     
     influx_writer_thread = InfluxWriterThread(STOP_EVENT, config)
-    can_manager = CANManager(dbc_file_path, config, influx_writer_thread.queue)
+    can_manager = CANManager(dbc_file_path, config, influx_writer=influx_writer_thread)
     parser = create_parser(config)
     processor = ProcessorThread(parser.queue, STOP_EVENT, can_manager)
 

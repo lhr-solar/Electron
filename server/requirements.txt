@@ -8,3 +8,4 @@ gevent-websocket
 argparse-addons
 cantools
 influxdb-client
+dotenv

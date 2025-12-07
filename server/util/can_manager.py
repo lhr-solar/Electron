@@ -6,13 +6,13 @@ import time
 import queue
 
 class CANManager:
-    def __init__(self, dbc_file_path, config=None, influx_queue=None):
+    def __init__(self, dbc_file_path, config=None, influx_writer=None):
         self.id_map = {}  # Maps CAN ID to the primary sender ECU name
         self.ecu_list = []
         self.config = config if config else {}
         self.print_can_info = self.config.get("PRINT_CAN_INFO", False)
         
-        self.influx_queue = influx_queue
+        self.influx_writer = influx_writer
         self.dbc_name = self.config.get("DBC_FILE", "unknown_dbc")
 
         self.db = cantools.database.Database()
@@ -64,14 +64,13 @@ class CANManager:
 
         decoded_msg = self.decode_message(raw_message.arbitration_id, raw_message.data)
         if decoded_msg:
-            serializable_decoded = {k: str(v) if isinstance(v, NamedSignalValue) else v for k, v in decoded_msg.items()}
             if self.print_can_info:
-                self._print_message_info(raw_message, serializable_decoded, slcan_packet)
+                self._print_message_info(raw_message, decoded_msg, slcan_packet)
             self._queue_for_influx(raw_message.arbitration_id, decoded_msg, slcan_packet)
 
     def _queue_for_influx(self, arbitration_id, decoded_msg, slcan_packet):
-        """Queues a decoded message for writing to InfluxDB."""
-        if not self.influx_queue:
+        """Formats and queues a decoded message for writing to InfluxDB."""
+        if not self.influx_writer:
             return
             
         try:
@@ -80,7 +79,8 @@ class CANManager:
                 return
 
             sender = self.id_map.get(arbitration_id, "Unknown")
-            measurement = str(arbitration_id)
+            # Use uppercase hexadecimal representation for the measurement name
+            measurement = f"{arbitration_id:X}"
             timestamp = int(time.time_ns())
 
             tags = {
@@ -89,8 +89,12 @@ class CANManager:
                 "message_name": message_def.name,
             }
             
-            # Initialize fields with the raw packet
             fields = {"raw_packet": slcan_packet}
+
+            def convert_value(value):
+                if isinstance(value, (int, float)):
+                    return float(value)
+                return str(value)
 
             if arbitration_id in self.array_messages:
                 index_signal_name = self.array_messages[arbitration_id]
@@ -98,20 +102,23 @@ class CANManager:
                 
                 if idx != -1:
                     tags["idx"] = str(idx)
-                    # Add decoded signals to fields, excluding the index signal
-                    fields.update({sig_name: float(sig_val) if isinstance(sig_val, (int, float)) else sig_val 
-                                   for sig_name, sig_val in decoded_msg.items() if sig_name != index_signal_name})
-                    if len(fields) > 1: # Ensure there's more than just the raw packet
-                        self.influx_queue.put((measurement, tags, fields, timestamp))
+                    for sig_name, sig_val in decoded_msg.items():
+                        if sig_name != index_signal_name:
+                            fields[sig_name] = convert_value(sig_val)
+                    
+                    if len(fields) > 1:
+                        self.influx_writer.add_to_queue(measurement, tags, fields, timestamp)
             else:
-                # Add all decoded signals to fields
-                fields.update({k: float(v) if isinstance(v, (int, float)) else v for k, v in decoded_msg.items()})
-                if len(fields) > 1: # Ensure there's more than just the raw packet
-                    self.influx_queue.put((measurement, tags, fields, timestamp))
+                for k, v in decoded_msg.items():
+                    fields[k] = convert_value(v)
+                
+                if len(fields) > 1:
+                    self.influx_writer.add_to_queue(measurement, tags, fields, timestamp)
         except Exception as e:
             print(f"[{self.__class__.__name__}] Error queueing for InfluxDB: {e}")
 
     def _print_message_info(self, raw_message, decoded_msg, slcan_packet):
         """Prints formatted information about a CAN message."""
         sender = self.id_map.get(raw_message.arbitration_id, "Unknown")
-        print(f"CAN ID: {raw_message.arbitration_id} | Sender: {sender} | Packet: {slcan_packet} | Data: {decoded_msg}")
+        printable_data = {k: str(v) for k, v in decoded_msg.items()}
+        print(f"CAN ID: {raw_message.arbitration_id:X} | Sender: {sender} | Packet: {slcan_packet} | Data: {printable_data}")

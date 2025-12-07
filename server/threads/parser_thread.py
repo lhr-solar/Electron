@@ -18,11 +18,13 @@ def create_parser(config):
     elif input_mode == 'serial':
         parser = SerialParser(
             config.get("SERIAL_PORT"), 
-            config.get("SERIAL_BAUDRATE")
+            config.get("SERIAL_BAUDRATE"),
+            config.get("CAN_BITRATE")
         )
     elif input_mode == 'file':
+        # Pass the file path directly to the parser
         parser = FileParser(
-            config.get("REPLAY_CONTENT") # Pass content directly
+            config.get("REPLAY_FILE_PATH")
         )
     else:
         print(f"Invalid INPUT_MODE: {input_mode}")
