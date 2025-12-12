@@ -12,15 +12,16 @@ async def process_packets(packet_queue: asyncio.Queue, stop_event: asyncio.Event
     logger.info("Async Processor started.")
     while not stop_event.is_set():
         try:
-            # Wait for a packet from the queue
-            # wait_for allows us to check the stop_event periodically if the queue is empty
+            # Wait for a packet from the queue (Non-blocking)
             raw_frame = await asyncio.wait_for(packet_queue.get(), timeout=1.0)
-            
+
             msg = parse_slcan(raw_frame)
+            
             if msg:
-                # process_message is synchronous (CPU bound), which is fine.
-                # If it becomes too slow, we can wrap it in asyncio.to_thread()
-                can_manager.process_message(msg, raw_frame)
+                # CRITICAL CHANGE:
+                # Run the heavy CANManager logic (decoding, formatting) in a separate OS thread.
+                # This ensures the main event loop (Websockets, TCP reading) is NEVER blocked.
+                await asyncio.to_thread(can_manager.process_message, msg, raw_frame)
             
             packet_queue.task_done()
             

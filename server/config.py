@@ -15,17 +15,17 @@ class Configuration:
         # --- Common Configuration ---
         self.COMMON_CONFIG = {
             "DBC_FILE": "Daybreak_Telemetry",
-            "PRINT_CAN_INFO": False,
+            "PRINT_CAN_INFO": True,
             "INFLUX_URL": "http://localhost:8086",
             "INFLUX_ORG": "LHRS",
             "INFLUX_TOKEN": os.environ.get("INFLUX_TOKEN", "your-token-fallback"),
-            "CLEAR_DEBUG_BUCKET_ON_STARTUP": False,
+            "CLEAR_DEBUG_BUCKET_ON_STARTUP": True,
         }
 
         # --- Mode-Specific Configurations ---
         self.SERIAL_CONFIG = {
             "SERIAL_PORT": "/dev/tty.usbmodem14201",
-            "SERIAL_BAUDRATE": 115200,
+            "SERIAL_BAUDRATE": 9600,
             "CAN_BITRATE": 125000,
         }
 

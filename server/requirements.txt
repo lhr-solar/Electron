@@ -4,3 +4,4 @@ cantools
 influxdb-client
 dotenv
 fastapi
+uvicorn

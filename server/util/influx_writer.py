@@ -17,7 +17,7 @@ class InfluxDBWriter:
         
         write_options = WriteOptions(
             batch_size=500,
-            flush_interval=1000,
+            flush_interval=200,
             jitter_interval=0,
             retry_interval=5000,
             max_retries=5,

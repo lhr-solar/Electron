@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 import socketio
+import uvicorn
 
 from server.config import settings
 from server.services.telemetry import telemetry_service
@@ -30,7 +31,6 @@ async def lifespan(app: FastAPI):
     # Gracefully stop the telemetry service
     await telemetry_service.stop()
 
-# --- FastAPI App and Socket.IO ---
 app = FastAPI(lifespan=lifespan)
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins="*")
 asgi_app = socketio.ASGIApp(sio, other_asgi_app=app)
@@ -45,4 +45,5 @@ async def connect(sid, environ):
 async def disconnect(sid):
     logger.info(f"Client disconnected: {sid}")
 
-# To run this app: uvicorn server.app:asgi_app --reload
+if __name__ == "__main__":
+    uvicorn.run("server.app:asgi_app", host="0.0.0.0", port=4000, reload=True)
