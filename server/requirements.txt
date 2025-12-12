@@ -1,11 +1,6 @@
-flask
-flask-socketio
-flask-cors
 python-can
 pyserial
-gevent
-gevent-websocket
-argparse-addons
 cantools
 influxdb-client
 dotenv
+fastapi

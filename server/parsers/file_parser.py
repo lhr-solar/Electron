@@ -1,41 +1,44 @@
-from .parser_abc import Parser
-import time
+import asyncio
+import logging
 
-class FileParser(Parser):
-    def __init__(self, file_path):
-        super().__init__()
+logger = logging.getLogger(__name__)
+
+class FileParser:
+    def __init__(self, file_path: str, queue: asyncio.Queue, stop_event: asyncio.Event):
         self.file_path = file_path
+        self.queue = queue
+        self.stop_event = stop_event
 
-    def run(self):
-        print(f"[{self.__class__.__name__}] Starting replay from file: {self.file_path}")
+    async def run(self):
+        logger.info(f"Starting async replay from file: {self.file_path}")
         
         try:
             with open(self.file_path, 'r') as f:
                 lines = f.readlines()
             
-            print(f"[{self.__class__.__name__}] Replaying {len(lines)} lines...")
-            self.connected = True
+            logger.info(f"Replaying {len(lines)} lines...")
 
             for line in lines:
                 if self.stop_event.is_set():
-                    print(f"[{self.__class__.__name__}] Replay stopped by user.")
+                    logger.info("Replay stopped by user.")
                     break
                 line = line.strip()
                 if line:
-                    self.queue.put(line)
-                    # Optional small delay to simulate real-time playback
-                    time.sleep(0.001)
+                    await self.queue.put(line)
+                    # Use asyncio.sleep for non-blocking delays
+                    await asyncio.sleep(0.001)
             
             if not self.stop_event.is_set():
-                print(f"[{self.__class__.__name__}] End of file reached.")
+                logger.info("End of file reached.")
 
         except FileNotFoundError:
-            print(f"[{self.__class__.__name__}] Error: Replay file not found at {self.file_path}")
+            logger.error(f"Replay file not found at {self.file_path}")
+        except asyncio.CancelledError:
+            logger.info("File parser task cancelled.")
         except Exception as e:
-            print(f"[{self.__class__.__name__}] Error during replay: {e}")
+            logger.error(f"Error during replay: {e}", exc_info=True)
         finally:
-            self.connected = False
             # Signal that this parser is done so the session can clean up
             self.stop_event.set()
         
-        print(f"[{self.__class__.__name__}] Thread finished.")
+        logger.info("Async FileParser finished.")

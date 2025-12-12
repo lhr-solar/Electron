@@ -3,7 +3,9 @@ import os
 from cantools.database.namedsignalvalue import NamedSignalValue
 import can
 import time
-import queue
+import logging
+
+logger = logging.getLogger(__name__)
 
 class CANManager:
     def __init__(self, dbc_file_path, config=None, influx_writer=None):
@@ -24,13 +26,13 @@ class CANManager:
     def _add_dbc_file(self, dbc_file):
         """Adds a DBC file to the internal database."""
         if not os.path.exists(dbc_file):
-            print(f"[{self.__class__.__name__}] DBC file not found at: {dbc_file}")
+            logger.error(f"DBC file not found at: {dbc_file}")
             return
         try:
             self.db.add_dbc_file(dbc_file)
-            print(f"[{self.__class__.__name__}] Successfully loaded DBC file: {dbc_file}")
+            logger.info(f"Successfully loaded DBC file: {dbc_file}")
         except Exception as e:
-            print(f"[{self.__class__.__name__}] Error loading DBC file {dbc_file}: {e}")
+            logger.error(f"Error loading DBC file {dbc_file}: {e}")
 
     def decode_message(self, arbitration_id, data):
         """Decodes a CAN message using the internal database."""
@@ -41,7 +43,7 @@ class CANManager:
 
     def _parse_dbc_for_ecus_and_arrays(self):
         """Parses the DBC to build an ECU map and find array messages."""
-        print("Parsing DBC for ECUs and array messages...")
+        logger.info("Parsing DBC for ECUs and array messages...")
         all_senders = set()
         for msg in self.db.messages:
             if msg.senders:
@@ -52,13 +54,13 @@ class CANManager:
             index_signal = next((s.name for s in msg.signals if "idx" in s.name.lower() or "index" in s.name.lower()), None)
             if index_signal:
                 self.array_messages[msg.frame_id] = index_signal
-                print(f"  - Found array message: {msg.name} (ID: {msg.frame_id}) with index: {index_signal}")
+                logger.info(f"  - Found array message: {msg.name} (ID: {msg.frame_id:X}) with index: {index_signal}")
 
         self.ecu_list = sorted(list(all_senders))
-        print(f"Found {len(self.ecu_list)} ECUs: {self.ecu_list}")
+        logger.info(f"Found {len(self.ecu_list)} ECUs: {self.ecu_list}")
 
     def process_message(self, raw_message: can.Message, slcan_packet: str):
-        """Processes a raw CAN message, decodes it, and queues it for InfluxDB."""
+        """Processes a raw CAN message, decodes it, and writes it to InfluxDB."""
         if raw_message.arbitration_id not in self.id_map:
             return
 
@@ -66,10 +68,10 @@ class CANManager:
         if decoded_msg:
             if self.print_can_info:
                 self._print_message_info(raw_message, decoded_msg, slcan_packet)
-            self._queue_for_influx(raw_message.arbitration_id, decoded_msg, slcan_packet)
+            self._write_to_influx(raw_message.arbitration_id, decoded_msg, slcan_packet)
 
-    def _queue_for_influx(self, arbitration_id, decoded_msg, slcan_packet):
-        """Formats and queues a decoded message for writing to InfluxDB."""
+    def _write_to_influx(self, arbitration_id, decoded_msg, slcan_packet):
+        """Formats and writes a decoded message to InfluxDB via the writer."""
         if not self.influx_writer:
             return
             
@@ -79,7 +81,6 @@ class CANManager:
                 return
 
             sender = self.id_map.get(arbitration_id, "Unknown")
-            # Use uppercase hexadecimal representation for the measurement name
             measurement = f"{arbitration_id:X}"
             timestamp = int(time.time_ns())
 
@@ -107,18 +108,19 @@ class CANManager:
                             fields[sig_name] = convert_value(sig_val)
                     
                     if len(fields) > 1:
-                        self.influx_writer.add_to_queue(measurement, tags, fields, timestamp)
+                        self.influx_writer.write_data(measurement, tags, fields, timestamp)
             else:
                 for k, v in decoded_msg.items():
                     fields[k] = convert_value(v)
                 
                 if len(fields) > 1:
-                    self.influx_writer.add_to_queue(measurement, tags, fields, timestamp)
+                    self.influx_writer.write_data(measurement, tags, fields, timestamp)
         except Exception as e:
-            print(f"[{self.__class__.__name__}] Error queueing for InfluxDB: {e}")
+            logger.error(f"Error writing to InfluxDB: {e}")
 
     def _print_message_info(self, raw_message, decoded_msg, slcan_packet):
         """Prints formatted information about a CAN message."""
         sender = self.id_map.get(raw_message.arbitration_id, "Unknown")
         printable_data = {k: str(v) for k, v in decoded_msg.items()}
-        print(f"CAN ID: {raw_message.arbitration_id:X} | Sender: {sender} | Packet: {slcan_packet} | Data: {printable_data}")
+        # This uses a separate logger to allow for easy filtering of high-volume messages
+        logging.getLogger("CAN_FRAMES").info(f"ID: {raw_message.arbitration_id:X} | Sender: {sender} | Packet: {slcan_packet} | Data: {printable_data}")
