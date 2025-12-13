@@ -1,49 +1,177 @@
 import asyncio
 import logging
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-import socketio
+import os
+import shutil
 import uvicorn
+from contextlib import asynccontextmanager
+from datetime import datetime
+from fastapi import FastAPI, UploadFile, File, HTTPException, Body
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+import socketio
+from influxdb_client import InfluxDBClient
+from influxdb_client.client.exceptions import InfluxDBError
+import serial.tools.list_ports
 
 from server.config import settings
 from server.services.telemetry import telemetry_service
+from server.util.influx_writer import InfluxDBWriter
 
-# --- Logging Configuration ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+# --- Setup ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 logger = logging.getLogger(__name__)
+influx_client: InfluxDBClient | None = None
+
+# --- Pydantic Models ---
+class Bucket(BaseModel): name: str
+class ConfigUpdate(BaseModel): key: str; value: str | int
+class FileAction(BaseModel): filename: str
+
+# --- Helper Functions ---
+def move_to_trash(directory: str, filename: str):
+    trash_dir = settings.TRASH_DIR
+    dated_trash_folder = os.path.join(trash_dir, datetime.now().strftime('%Y-%m-%d'))
+    os.makedirs(dated_trash_folder, exist_ok=True)
+    source_path = os.path.join(directory, filename)
+    if os.path.exists(source_path):
+        base, ext = os.path.splitext(filename)
+        timestamp = datetime.now().strftime('%H%M%S_%f')
+        new_filename = f"{base}_{timestamp}{ext}"
+        destination_path = os.path.join(dated_trash_folder, new_filename)
+        shutil.move(source_path, destination_path)
+        logger.info(f"Moved '{source_path}' to '{destination_path}'")
+
+# --- Background Tasks & Lifespan ---
+async def send_status_updates(sio: socketio.AsyncServer):
+    while True:
+        parser_status = telemetry_service.get_parser_status()
+        influx_connected = await asyncio.to_thread(influx_client.ping) if influx_client else False
+        status = {
+            "service_running": telemetry_service.running,
+            "influx_connected": influx_connected,
+            "parser_status": parser_status.get("status", "idle") if parser_status else "idle",
+            "parser_connection_state": parser_status.get("connection_state") if parser_status else None,
+            "error_message": parser_status.get("error_message") if parser_status else None,
+        }
+        await sio.emit('status', status)
+        await asyncio.sleep(1)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    FastAPI lifespan manager to start and stop the TelemetryService.
-    """
+    global influx_client
     logger.info("Application starting up...")
-    # Start the telemetry service in the background
-    asyncio.create_task(telemetry_service.start())
-    
-    yield
-    
-    logger.info("Application shutting down...")
-    # Gracefully stop the telemetry service
-    await telemetry_service.stop()
-
-app = FastAPI(lifespan=lifespan)
-sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins="*")
-asgi_app = socketio.ASGIApp(sio, other_asgi_app=app)
-
-@sio.event
-async def connect(sid, environ):
-    logger.info(f"Client connected: {sid}")
     config = settings.get_effective_config()
-    await sio.emit('session_started', {'selected_dbc': config.get("DBC_FILE")}, to=sid)
+    try:
+        influx_client = InfluxDBClient(url=config['INFLUX_URL'], token=config['INFLUX_TOKEN'], org=config['INFLUX_ORG'])
+        if not influx_client.ping(): raise Exception("Ping failed")
+        logger.info("InfluxDB connection successful.")
+    except Exception as e:
+        logger.error(f"Failed to connect to InfluxDB on startup: {e}")
+        influx_client = None
+    status_task = asyncio.create_task(send_status_updates(sio))
+    yield
+    logger.info("Application shutting down...")
+    status_task.cancel()
+    if telemetry_service.running: await telemetry_service.stop()
+    if influx_client: influx_client.close()
+
+# --- FastAPI App ---
+app = FastAPI(lifespan=lifespan)
+
+# --- API Endpoints ---
+@app.post("/api/start")
+async def start_service():
+    if telemetry_service.running: raise HTTPException(status_code=400, detail="Service is already running.")
+    if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    config = settings.get_effective_config()
+    target_bucket = config.get("INFLUX_BUCKET", "debug")
+    writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
+    asyncio.create_task(telemetry_service.start(writer))
+    return {"message": "Telemetry service starting."}
+
+@app.post("/api/stop")
+async def stop_service():
+    if not telemetry_service.running: raise HTTPException(status_code=400, detail="Service is not running.")
+    await telemetry_service.stop()
+    return {"message": "Telemetry service stopped."}
+
+@app.get("/api/config")
+async def get_config(): return settings.get_effective_config()
+
+@app.post("/api/config")
+async def update_config(update: ConfigUpdate):
+    if telemetry_service.running: raise HTTPException(status_code=400, detail="Cannot update configuration while service is running.")
+    if not settings.update_setting(update.key, update.value):
+        raise HTTPException(status_code=404, detail=f"Setting '{update.key}' not found or invalid.")
+    return {"message": "Configuration updated successfully."}
+
+@app.get("/api/serial-ports")
+async def list_serial_ports():
+    ports = await asyncio.to_thread(serial.tools.list_ports.comports)
+    return [{"device": port.device, "description": port.description} for port in ports]
+
+@app.get("/api/files/{directory_key}")
+async def list_files(directory_key: str):
+    dir_path = getattr(settings, f"{directory_key.upper()}_DIR", None)
+    if not dir_path or not os.path.exists(dir_path): return []
+    return [f for f in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path, f))]
+
+@app.post("/api/files/{directory_key}")
+async def upload_file(directory_key: str, file: UploadFile = File(...), overwrite: bool = False):
+    dir_path = getattr(settings, f"{directory_key.upper()}_DIR", None)
+    if not dir_path: raise HTTPException(status_code=404, detail="Directory not found.")
+    os.makedirs(dir_path, exist_ok=True)
+    file_path = os.path.join(dir_path, file.filename)
+    if os.path.exists(file_path) and not overwrite:
+        raise HTTPException(status_code=409, detail=f"File '{file.filename}' already exists. Please confirm to overwrite.")
+    if os.path.exists(file_path) and overwrite:
+        move_to_trash(dir_path, file.filename)
+    with open(file_path, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
+    return {"filename": file.filename}
+
+@app.delete("/api/files/{directory_key}")
+async def delete_file_endpoint(directory_key: str, action: FileAction):
+    dir_path = getattr(settings, f"{directory_key.upper()}_DIR", None)
+    if not dir_path: raise HTTPException(status_code=404, detail="Directory not found.")
+    file_path = os.path.join(dir_path, action.filename)
+    if not os.path.exists(file_path): raise HTTPException(status_code=404, detail="File not found.")
+    move_to_trash(dir_path, action.filename)
+    return {"message": f"File '{action.filename}' moved to trash."}
+
+# --- InfluxDB Bucket Management ---
+@app.get("/api/influx/buckets")
+async def list_buckets():
+    if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    return [b.name for b in influx_client.buckets_api().find_buckets().buckets]
+
+@app.post("/api/influx/buckets")
+async def create_bucket(bucket: Bucket):
+    if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    try:
+        influx_client.buckets_api().create_bucket(bucket_name=bucket.name)
+        return {"message": f"Bucket '{bucket.name}' created successfully."}
+    except InfluxDBError as e:
+        if "already exists" in str(e.message): raise HTTPException(status_code=409, detail=f"Bucket '{bucket.name}' already exists.")
+        raise HTTPException(status_code=500, detail=str(e.message))
+
+@app.delete("/api/influx/buckets/{name}")
+async def delete_bucket(name: str):
+    if not name.startswith("debug"): raise HTTPException(status_code=403, detail="Forbidden: Only buckets starting with 'debug' can be deleted.")
+    if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    bucket_to_delete = influx_client.buckets_api().find_bucket_by_name(name)
+    if not bucket_to_delete: raise HTTPException(status_code=404, detail=f"Bucket '{name}' not found.")
+    influx_client.buckets_api().delete_bucket(bucket_to_delete)
+    return {"message": f"Bucket '{name}' deleted successfully."}
+
+# --- Socket.IO and Static Files ---
+sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins="*")
+app.mount("/", StaticFiles(directory="client/dist", html=True), name="static")
+asgi_app = socketio.ASGIApp(sio, app)
 
 @sio.event
-async def disconnect(sid):
-    logger.info(f"Client disconnected: {sid}")
+async def connect(sid, environ): logger.info(f"Client connected: {sid}")
+@sio.event
+async def disconnect(sid): logger.info(f"Client disconnected: {sid}")
 
 if __name__ == "__main__":
     uvicorn.run("server.app:asgi_app", host="0.0.0.0", port=4000, reload=True)

@@ -122,5 +122,4 @@ class CANManager:
         """Prints formatted information about a CAN message."""
         sender = self.id_map.get(raw_message.arbitration_id, "Unknown")
         printable_data = {k: str(v) for k, v in decoded_msg.items()}
-        # This uses a separate logger to allow for easy filtering of high-volume messages
         logging.getLogger("CAN_FRAMES").info(f"ID: {raw_message.arbitration_id:X} | Sender: {sender} | Packet: {slcan_packet} | Data: {printable_data}")

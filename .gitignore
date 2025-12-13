@@ -19,3 +19,4 @@ grafana/provisions/datasources
 !grafana/provisions
 
 test_data
+.trash

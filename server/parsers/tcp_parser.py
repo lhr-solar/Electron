@@ -1,34 +1,42 @@
 import asyncio
 import logging
 
+from server.config import settings
+from .parser_abc import Parser
+
 logger = logging.getLogger(__name__)
 
-class TCPParser:
+class TCPParser(Parser):
     def __init__(self, ip: str, port: int, queue: asyncio.Queue, stop_event: asyncio.Event):
+        super().__init__(queue, stop_event)
         self.source = (ip, port)
-        self.queue = queue
-        self.stop_event = stop_event
+        self.connection_state = False
+        # Get timeout from config, with a default
+        self.timeout = settings.TCP_CONFIG.get("TIMEOUT", 5.0)
 
     async def run(self):
         ip, port = self.source
         buffer = ""
+        self.status = "running"
 
         while not self.stop_event.is_set():
             reader, writer = None, None
             try:
+                self.error_message = None
                 logger.info(f"Connecting to {ip}:{port}...")
-                # Use asyncio's open_connection for non-blocking connect
+                
                 reader, writer = await asyncio.wait_for(
                     asyncio.open_connection(ip, port),
-                    timeout=5.0
+                    timeout=self.timeout
                 )
                 logger.info("TCP connection successful!")
+                self.connection_state = True
 
                 while not self.stop_event.is_set():
-                    # Use asyncio's read for non-blocking read
-                    data = await asyncio.wait_for(reader.read(4096), timeout=5.0)
+                    data = await asyncio.wait_for(reader.read(4096), timeout=self.timeout)
                     if not data:
                         logger.warning("Server closed connection.")
+                        self.connection_state = False
                         break
 
                     buffer += data.decode('ascii', errors='ignore')
@@ -48,18 +56,24 @@ class TCPParser:
                         buffer = buffer[end_index + 1:]
 
             except asyncio.TimeoutError:
-                # This can happen during connection or read, which is fine.
-                # The outer loop will handle reconnection.
-                logger.warning("Connection or read timeout. Reconnecting...")
+                logger.warning(f"Connection or read timeout after {self.timeout}s. Reconnecting...")
+                self.connection_state = False
+                self.error_message = "Connection timed out."
+                await asyncio.sleep(3) # Wait before retrying
             except asyncio.CancelledError:
                 logger.info("TCP parser task cancelled.")
+                self.status = "finished"
                 break
             except Exception as e:
                 logger.error(f"TCP Connection Error: {e}. Retrying in 5s...", exc_info=True)
+                self.connection_state = False
+                self.error_message = str(e)
                 await asyncio.sleep(5)
             finally:
                 if writer:
                     writer.close()
                     await writer.wait_closed()
+                self.connection_state = False
         
+        self.status = "finished"
         logger.info("Async TCPParser finished.")

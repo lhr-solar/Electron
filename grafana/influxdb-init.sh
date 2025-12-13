@@ -23,7 +23,6 @@ ORG="LHRS"
 
 echo ">>> Creating additional buckets..."
 influx bucket create -n debug -o "$ORG" --retention 24h
-influx bucket create -n scratch -o "$ORG" --retention 168h
 
 echo ">>> Creating Grafana read-only token (buckets + queries)..."
 GRAFANA_TOKEN=$(

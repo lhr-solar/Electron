@@ -1,36 +1,27 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import io from 'socket.io-client';
-
-const socket = io('http://localhost:5000', {
-    reconnection: true,
-    reconnectionDelay: 1000,
-    transports: ['websocket']
-});
-
-
-// --- Main App Component ---
+import React from 'react';
+import { Container, SimpleGrid } from '@mantine/core';
+import { Header } from './components/Header';
+import { ConfigDeck } from './components/ConfigDeck';
+import { DbcManagement } from './components/DbcManagement';
+import { DatabaseManagement } from './components/DatabaseManagement';
 
 function App() {
-    // --- Effects ---
-    useEffect(() => {
-        // Setup Socket.IO listeners
-        socket.on('connect', () => console.log('Connected to server.'));
-
-        // Cleanup on unmount
-        return () => {
-            socket.off('connect');
-        };
-    }, []);
-
-    const handleConnect = () => {
-
-    };
-
-    return (
-        <div className="">
-
-        </div>
-    );
+  return (
+    <div style={{ backgroundColor: 'var(--mantine-color-dark-9)' }}>
+      <Container size="xl" py="lg">
+        <Header />
+        <SimpleGrid
+          cols={{ base: 1, md: 2, lg: 3 }}
+          spacing="lg"
+          mt="lg"
+        >
+          <ConfigDeck />
+          <DbcManagement />
+          <DatabaseManagement />
+        </SimpleGrid>
+      </Container>
+    </div>
+  );
 }
 
 export default App;

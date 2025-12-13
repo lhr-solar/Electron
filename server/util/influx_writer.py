@@ -8,21 +8,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 class InfluxDBWriter:
-    def __init__(self, url, token, org, bucket):
-        self.url = url
-        self.token = token
-        self.org = org
+    def __init__(self, client: influxdb_client.InfluxDBClient, bucket: str):
+        """
+        Initializes the writer with a shared InfluxDB client and a specific target bucket.
+        """
+        self.client = client
         self.bucket = bucket
-        self.client = influxdb_client.InfluxDBClient(url=self.url, token=self.token, org=self.org)
+        self.org = client.org
         
         write_options = WriteOptions(
             batch_size=500,
-            flush_interval=200,
-            jitter_interval=0,
-            retry_interval=5000,
-            max_retries=5,
-            max_retry_delay=30000,
-            exponential_base=2
+            flush_interval=1000,
+            jitter_interval=200,
+            retry_interval=5000
         )
         
         self.write_api = self.client.write_api(write_options=write_options)
@@ -38,12 +36,13 @@ class InfluxDBWriter:
             logger.error(f"Connection check failed: {e}")
             return False
 
-    def backup_and_clear_bucket(self, backup_bucket_name):
+    def backup_and_clear_bucket(self):
         """
-        Backs up all data from a bucket to a local file and then clears the bucket.
+        Backs up all data from the writer's target bucket and then clears it.
         """
-        if self.bucket != backup_bucket_name:
-            logger.warning(f"Safety check failed: Bucket to clear '{backup_bucket_name}' does not match writer's target bucket '{self.bucket}'. Aborting clear.")
+        backup_bucket_name = self.bucket
+        if not backup_bucket_name.startswith("debug"):
+            logger.error(f"SAFETY VIOLATION: Attempted to clear a non-debug bucket ('{backup_bucket_name}'). Aborting.")
             return
 
         try:
@@ -57,9 +56,6 @@ class InfluxDBWriter:
             else:
                 logger.error(f"Error checking for bucket '{backup_bucket_name}': {e}. Aborting clear operation.")
                 return
-        except Exception as e:
-            logger.error(f"An unexpected error occurred while checking for bucket: {e}. Aborting clear operation.")
-            return
 
         log_dir = "logs"
         os.makedirs(log_dir, exist_ok=True)
@@ -89,9 +85,6 @@ class InfluxDBWriter:
             else:
                 logger.error(f"Error during backup: {e}. Aborting clear operation.")
                 return
-        except Exception as e:
-            logger.error(f"Error during backup: {e}. Aborting clear operation.")
-            return
 
         logger.info(f"Clearing bucket '{backup_bucket_name}'...")
         try:
@@ -107,7 +100,6 @@ class InfluxDBWriter:
             stop = datetime.datetime.now(datetime.UTC)
             
             for measurement in measurements:
-                logger.info(f"  - Deleting measurement: {measurement}")
                 predicate = f'_measurement="{measurement}"'
                 self.delete_api.delete(start, stop, predicate, bucket=backup_bucket_name, org=self.org)
             
@@ -116,18 +108,10 @@ class InfluxDBWriter:
             logger.error(f"Error clearing bucket: {e}")
 
     def write_data(self, measurement, tags, fields, timestamp):
-        """
-        Writes a data point to the internal buffer. The client handles batching and sending.
-        """
-        point = {
-            "measurement": measurement,
-            "tags": tags,
-            "fields": fields,
-            "time": timestamp
-        }
+        point = {"measurement": measurement, "tags": tags, "fields": fields, "time": timestamp}
         self.write_api.write(bucket=self.bucket, org=self.org, record=point)
 
     def close(self):
-        logger.info("Closing InfluxDB writer and flushing buffer.")
+        logger.info(f"Closing InfluxDB writer for bucket '{self.bucket}' and flushing buffer.")
         self.write_api.close()
-        self.client.close()
+        # Do not close the client here, as it's shared.

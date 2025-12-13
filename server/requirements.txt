@@ -5,3 +5,4 @@ influxdb-client
 dotenv
 fastapi
 uvicorn
+python-multipart
