@@ -10,8 +10,10 @@ export const DbcManagement = () => {
     }, []);
 
     const handleDbcSelect = (filename) => {
+        // The active file in the explorer includes the extension
+        setActiveDbc(filename);
+        // The config setting should not include the extension
         const newDbcName = filename.replace('.dbc', '');
-        setActiveDbc(newDbcName);
         fetch('/api/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -23,7 +25,7 @@ export const DbcManagement = () => {
         <FileExplorerCard
             title="DBC Management"
             icon={<Database />}
-            directoryKey="DBC_DIR"
+            directoryKey="dbc" // Use the key for the API endpoint
             fileExtension=".dbc"
             onFileSelect={handleDbcSelect}
             activeFile={activeDbc}

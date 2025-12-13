@@ -18,10 +18,8 @@ class SerialParser(Parser):
         if not self.device: return False
         try:
             await asyncio.to_thread(self.device.write, f'{command}\n'.encode())
-            
             start_time = asyncio.get_event_loop().time()
             while asyncio.get_event_loop().time() - start_time < timeout:
-                # Use a lambda to pass the property access as a callable to to_thread
                 if await asyncio.to_thread(lambda: self.device.in_waiting):
                     response = await asyncio.to_thread(self.device.read, 1)
                     if response == b'\x06':
@@ -30,7 +28,6 @@ class SerialParser(Parser):
                         logger.warning(f"Received unexpected response: {response}")
                         return False
                 await asyncio.sleep(0.01)
-            
             logger.error(f"Timeout waiting for ACK on command '{command}'")
             return False
         except Exception as e:
@@ -49,8 +46,9 @@ class SerialParser(Parser):
         logger.info(f"Opening serial port {self.source} @ {self.serial_baudrate} bps...")
         
         try:
+            # Set timeout=None to make read_until a blocking call that waits forever
             self.device = await asyncio.to_thread(
-                serial.Serial, port=self.source, baudrate=self.serial_baudrate, timeout=0.5
+                serial.Serial, port=self.source, baudrate=self.serial_baudrate, timeout=None
             )
             self.connection_state = True
             
@@ -69,12 +67,14 @@ class SerialParser(Parser):
             self.error_message = None
 
             while not self.stop_event.is_set():
+                # This is now a blocking call (in a separate thread), waiting for data
                 raw_line = await asyncio.to_thread(self.device.read_until, b'\r')
                 if raw_line:
                     line_str = raw_line.decode('utf-8', errors='ignore').strip()
                     if line_str and (line_str.startswith('t') or line_str.startswith('T')):
                         await self.queue.put(line_str)
                 else:
+                    # This part should not be reached if timeout is None, but is safe to keep
                     await asyncio.sleep(0.01)
 
         except (ValueError, ConnectionError, serial.SerialException) as e:

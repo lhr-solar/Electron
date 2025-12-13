@@ -11,8 +11,8 @@ class TCPParser(Parser):
         super().__init__(queue, stop_event)
         self.source = (ip, port)
         self.connection_state = False
-        # Get timeout from config, with a default
-        self.timeout = settings.TCP_CONFIG.get("TIMEOUT", 5.0)
+        # Get connection timeout from config, with a default
+        self.connection_timeout = settings.TCP_CONFIG.get("CONNECTION_TIMEOUT", 5.0)
 
     async def run(self):
         ip, port = self.source
@@ -25,15 +25,17 @@ class TCPParser(Parser):
                 self.error_message = None
                 logger.info(f"Connecting to {ip}:{port}...")
                 
+                # Use asyncio's open_connection with a timeout for the initial connection
                 reader, writer = await asyncio.wait_for(
                     asyncio.open_connection(ip, port),
-                    timeout=self.timeout
+                    timeout=self.connection_timeout
                 )
                 logger.info("TCP connection successful!")
                 self.connection_state = True
 
                 while not self.stop_event.is_set():
-                    data = await asyncio.wait_for(reader.read(4096), timeout=self.timeout)
+                    # Read without a timeout - this will wait indefinitely for data
+                    data = await reader.read(4096)
                     if not data:
                         logger.warning("Server closed connection.")
                         self.connection_state = False
@@ -56,10 +58,10 @@ class TCPParser(Parser):
                         buffer = buffer[end_index + 1:]
 
             except asyncio.TimeoutError:
-                logger.warning(f"Connection or read timeout after {self.timeout}s. Reconnecting...")
+                logger.warning(f"Connection timed out after {self.connection_timeout}s. Reconnecting...")
                 self.connection_state = False
                 self.error_message = "Connection timed out."
-                await asyncio.sleep(3) # Wait before retrying
+                await asyncio.sleep(3)
             except asyncio.CancelledError:
                 logger.info("TCP parser task cancelled.")
                 self.status = "finished"

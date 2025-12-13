@@ -40,13 +40,17 @@ class TelemetryService:
 
         self.influx_writer = influx_writer
         
-        # Bucket clearing logic, if enabled, now runs before starting the service
         if config.get("CLEAR_DEBUG_BUCKET_ON_STARTUP") and config.get("INFLUX_BUCKET") == "debug":
             logger.info(f"Startup clear requested for bucket: '{self.influx_writer.bucket}'")
-            # This is a blocking call, but it's part of the startup sequence.
             self.influx_writer.backup_and_clear_bucket()
 
-        dbc_file_path = f"dbc/{config['DBC_FILE']}.dbc"
+        # --- DBC Path Logic ---
+        dbc_filename = config['DBC_FILE']
+        if not dbc_filename.endswith('.dbc'):
+            dbc_filename += '.dbc'
+        dbc_file_path = f"dbc/{dbc_filename}"
+        # --------------------
+
         can_manager = CANManager(dbc_file_path, config, influx_writer=self.influx_writer)
         
         self.parser = create_async_parser(config, self.packet_queue, self.stop_event)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ActionCard } from './ActionCard';
-import { ScrollArea, Table, Group, ActionIcon, Text, FileInput, Tooltip, Modal, Button } from '@mantine/core';
-import { Trash2, Upload, RefreshCw } from 'lucide-react';
+import { ScrollArea, Table, Group, ActionIcon, Text, FileInput, Tooltip, Modal, Button, TextInput, Stack } from '@mantine/core';
+import { Trash2, Upload, RefreshCw, Search } from 'lucide-react';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 
@@ -12,6 +12,7 @@ export const FileExplorerCard = ({ title, icon, directoryKey, fileExtension, onF
     const [deleteModal, { open: openDelete, close: closeDelete }] = useDisclosure(false);
     const [overwriteModal, { open: openOverwrite, close: closeOverwrite }] = useDisclosure(false);
     const [fileToUpload, setFileToUpload] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const fetchFiles = useCallback(() => {
         fetch(`/api/files/${directoryKey}`).then(res => res.json()).then(setFiles);
@@ -61,10 +62,22 @@ export const FileExplorerCard = ({ title, icon, directoryKey, fileExtension, onF
         closeDelete();
     };
 
-    const rows = files.map((file) => (
-        <Table.Tr key={file} bg={file === activeFile ? 'blue.9' : undefined} onClick={() => onFileSelect(file)} style={{ cursor: 'pointer' }}>
-            <Table.Td><Text size="sm" truncate>{file}</Text></Table.Td>
-            <Table.Td>
+    const filteredFiles = files.filter(file => file.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const rows = filteredFiles.map((file) => (
+        <Table.Tr 
+            key={file} 
+            bg={file === activeFile ? 'var(--mantine-color-blue-9)' : undefined} 
+            onClick={() => onFileSelect(file)} 
+            style={{ cursor: 'pointer', transition: 'background-color 0.2s' }}
+            className="hover:bg-zinc-800"
+        >
+            <Table.Td style={{ padding: '12px 16px' }}>
+                <Text size="sm" truncate fw={file === activeFile ? 600 : 400} c={file === activeFile ? 'blue.1' : 'dimmed'}>
+                    {file}
+                </Text>
+            </Table.Td>
+            <Table.Td style={{ padding: '12px 16px', width: '50px' }}>
                 <Group gap="xs" justify="flex-end">
                     <Tooltip label="Delete">
                         <ActionIcon color="red" variant="subtle" onClick={(e) => { e.stopPropagation(); handleDelete(file); }}>
@@ -79,34 +92,50 @@ export const FileExplorerCard = ({ title, icon, directoryKey, fileExtension, onF
     return (
         <>
             <ActionCard title={title} icon={icon} rightSection={<ActionIcon variant="default" onClick={fetchFiles}><RefreshCw size={16} /></ActionIcon>}>
-                <ScrollArea h={150} mb="md">
-                    <Table verticalSpacing="xs" striped>
-                        <Table.Tbody>{rows}</Table.Tbody>
-                    </Table>
-                </ScrollArea>
-                <FileInput
-                    placeholder={`Upload ${fileExtension} file...`}
-                    onChange={handleUpload}
-                    accept={fileExtension}
-                    leftSection={<Upload size={16} />}
-                    loading={uploading || undefined}
-                    clearable
-                />
+                <Stack gap="md">
+                    <TextInput
+                        placeholder="Search files..."
+                        leftSection={<Search size={14} />}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.currentTarget.value)}
+                        size="xs"
+                        mt="sm"
+                    />
+                    
+                    <ScrollArea h={200} type="auto" offsetScrollbars>
+                        <Table verticalSpacing="sm" striped highlightOnHover withRowBorders={false}>
+                            <Table.Tbody>{rows}</Table.Tbody>
+                        </Table>
+                        {filteredFiles.length === 0 && (
+                            <Text c="dimmed" size="sm" ta="center" py="xl">No files found</Text>
+                        )}
+                    </ScrollArea>
+
+                    <FileInput
+                        placeholder={`Upload ${fileExtension} file...`}
+                        onChange={handleUpload}
+                        accept={fileExtension}
+                        leftSection={<Upload size={16} />}
+                        loading={uploading || undefined}
+                        clearable
+                        size="sm"
+                    />
+                </Stack>
             </ActionCard>
 
-            <Modal opened={deleteModal} onClose={closeDelete} title="Confirm Deletion">
-                <Text>Are you sure you want to move <Text span fw={700}>{selectedFile}</Text> to the trash?</Text>
-                <Group justify="flex-end" mt="md">
-                    <Button variant="default" onClick={closeDelete}>Cancel</Button>
-                    <Button color="red" onClick={confirmDelete}>Delete</Button>
+            <Modal opened={deleteModal} onClose={closeDelete} title="Confirm Deletion" centered>
+                <Text size="sm">Are you sure you want to move <Text span fw={700} c="white">{selectedFile}</Text> to the trash?</Text>
+                <Group justify="flex-end" mt="xl">
+                    <Button variant="default" onClick={closeDelete} size="xs">Cancel</Button>
+                    <Button color="red" onClick={confirmDelete} size="xs">Delete</Button>
                 </Group>
             </Modal>
 
-            <Modal opened={overwriteModal} onClose={closeOverwrite} title="Confirm Overwrite">
-                <Text><Text span fw={700}>{fileToUpload?.name}</Text> already exists. Do you want to move the old file to trash and overwrite it?</Text>
-                <Group justify="flex-end" mt="md">
-                    <Button variant="default" onClick={closeOverwrite}>Cancel</Button>
-                    <Button color="orange" onClick={() => { handleUpload(fileToUpload, true); closeOverwrite(); }}>Overwrite</Button>
+            <Modal opened={overwriteModal} onClose={closeOverwrite} title="Confirm Overwrite" centered>
+                <Text size="sm"><Text span fw={700} c="white">{fileToUpload?.name}</Text> already exists. Do you want to move the old file to trash and overwrite it?</Text>
+                <Group justify="flex-end" mt="xl">
+                    <Button variant="default" onClick={closeOverwrite} size="xs">Cancel</Button>
+                    <Button color="orange" onClick={() => { handleUpload(fileToUpload, true); closeOverwrite(); }} size="xs">Overwrite</Button>
                 </Group>
             </Modal>
         </>

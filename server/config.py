@@ -13,9 +13,9 @@ class Configuration:
         self.TRASH_DIR = os.environ.get("TRASH_DIR", ".trash")
 
         # --- Default Settings ---
-        self.INPUT_MODE = 'file'
+        self.INPUT_MODE = 'tcp' # Changed default to TCP
         self.COMMON_CONFIG = {
-            "DBC_FILE": "Daybreak_Telemetry.dbc", # Now includes extension
+            "DBC_FILE": "Daybreak_Telemetry", # Stored without extension
             "PRINT_CAN_INFO": False,
             "CLEAR_DEBUG_BUCKET_ON_STARTUP": False,
         }
@@ -30,7 +30,7 @@ class Configuration:
             "CAN_BITRATE": 125000,
         }
         self.TCP_CONFIG = {
-            "TCP_IP": "127.0.0.1",
+            "TCP_IP": "3.141.38.115",
             "TCP_PORT": 8187,
         }
         self.FILE_CONFIG = {
@@ -62,6 +62,12 @@ class Configuration:
                 logger.info(f"Input mode updated to '{value}'")
                 return True
             return False
+        
+        # Special handling for REPLAY_FILE_PATH to ensure full path
+        if key == "REPLAY_FILE_PATH":
+            # If the value is just a filename, prepend the LOG_DIR
+            if not os.path.isabs(value) and not os.path.dirname(value):
+                value = os.path.join(self.LOG_DIR, value)
         
         for config_dict in [self.COMMON_CONFIG, self.SERIAL_CONFIG, self.TCP_CONFIG, self.FILE_CONFIG, self.INFLUX_CONFIG]:
             if key in config_dict:

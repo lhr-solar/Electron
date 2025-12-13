@@ -59,7 +59,17 @@ async def send_status_updates(sio: socketio.AsyncServer):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global influx_client
-    logger.info("Application starting up...")
+    logger.info("--- Application starting up... ---")
+    
+    # Check and create directories
+    for dir_key in ["DBC_DIR", "LOG_DIR", "TRASH_DIR"]:
+        dir_path = getattr(settings, dir_key)
+        if not os.path.exists(dir_path):
+            logger.warning(f"Directory '{dir_path}' not found. Creating it.")
+            os.makedirs(dir_path)
+        else:
+            logger.info(f"Directory '{dir_path}' found.")
+
     config = settings.get_effective_config()
     try:
         influx_client = InfluxDBClient(url=config['INFLUX_URL'], token=config['INFLUX_TOKEN'], org=config['INFLUX_ORG'])
@@ -68,9 +78,10 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to connect to InfluxDB on startup: {e}")
         influx_client = None
+    
     status_task = asyncio.create_task(send_status_updates(sio))
     yield
-    logger.info("Application shutting down...")
+    logger.info("--- Application shutting down... ---")
     status_task.cancel()
     if telemetry_service.running: await telemetry_service.stop()
     if influx_client: influx_client.close()
@@ -112,9 +123,23 @@ async def list_serial_ports():
 
 @app.get("/api/files/{directory_key}")
 async def list_files(directory_key: str):
-    dir_path = getattr(settings, f"{directory_key.upper()}_DIR", None)
-    if not dir_path or not os.path.exists(dir_path): return []
-    return [f for f in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path, f))]
+    # Map the URL parameter to the config attribute name
+    config_attr = f"{directory_key.upper()}_DIR"
+    dir_path = getattr(settings, config_attr, None)
+    
+    logger.info(f"Listing files for key '{directory_key}' -> Config Attr: '{config_attr}' -> Path: '{dir_path}'")
+
+    if not dir_path:
+        logger.error(f"Invalid directory key: {directory_key}")
+        return []
+        
+    if not os.path.exists(dir_path):
+        logger.warning(f"Directory not found: {dir_path}")
+        return []
+        
+    files = [f for f in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path, f))]
+    logger.info(f"Found {len(files)} files in {dir_path}")
+    return files
 
 @app.post("/api/files/{directory_key}")
 async def upload_file(directory_key: str, file: UploadFile = File(...), overwrite: bool = False):
@@ -138,7 +163,6 @@ async def delete_file_endpoint(directory_key: str, action: FileAction):
     move_to_trash(dir_path, action.filename)
     return {"message": f"File '{action.filename}' moved to trash."}
 
-# --- InfluxDB Bucket Management ---
 @app.get("/api/influx/buckets")
 async def list_buckets():
     if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
