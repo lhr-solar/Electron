@@ -2,6 +2,8 @@ import asyncio
 import logging
 import os
 import shutil
+import urllib.request
+import urllib.error
 import uvicorn
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -45,14 +47,28 @@ def move_to_trash(directory: str, filename: str):
         shutil.move(source_path, destination_path)
         logger.info(f"Moved '{source_path}' to '{destination_path}'")
 
+def _check_grafana_health():
+    base = os.environ.get("GRAFANA_URL", "http://127.0.0.1:3000")
+    for path in ("/healthz", "/api/health", "/"):
+        try:
+            req = urllib.request.Request(base.rstrip("/") + path)
+            with urllib.request.urlopen(req, timeout=3) as r:
+                if 200 <= r.status < 400:
+                    return True
+        except (urllib.error.URLError, OSError):
+            pass
+    return False
+
 # --- Background Tasks & Lifespan ---
 async def send_status_updates(sio: socketio.AsyncServer):
     while True:
         parser_status = telemetry_service.get_parser_status()
         influx_connected = await asyncio.to_thread(influx_client.ping) if influx_client else False
+        grafana_active = await asyncio.to_thread(_check_grafana_health)
         status = {
             "service_running": telemetry_service.running,
             "influx_connected": influx_connected,
+            "grafana_active": grafana_active,
             "parser_status": parser_status.get("status", "idle") if parser_status else "idle",
             "parser_connection_state": parser_status.get("connection_state") if parser_status else None,
             "error_message": parser_status.get("error_message") if parser_status else None,

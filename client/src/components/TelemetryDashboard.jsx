@@ -22,16 +22,36 @@ function api(path, options = {}) {
   });
 }
 
+const CONFIG_KEYS = ['INPUT_MODE', 'DBC_VEHICLE', 'DBC_FILES', 'SERIAL_PORT', 'SERIAL_BAUDRATE', 'CAN_BITRATE', 'TCP_IP', 'TCP_PORT', 'REPLAY_FILE_PATH'];
+
+function configEquals(a, b) {
+  if (!a || !b) return !a && !b;
+  for (const k of CONFIG_KEYS) {
+    const va = a[k];
+    const vb = b[k];
+    if (Array.isArray(va) && Array.isArray(vb)) {
+      if (va.length !== vb.length) return false;
+      const sa = [...va].sort();
+      const sb = [...vb].sort();
+      if (sa.some((v, i) => v !== sb[i])) return false;
+    } else if (va !== vb) return false;
+  }
+  return true;
+}
+
 export function TelemetryDashboard() {
   const [config, setConfig] = useState(null);
+  const [savedConfig, setSavedConfig] = useState(null);
   const [serialPorts, setSerialPorts] = useState([]);
   const [logFiles, setLogFiles] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [dbcFilesForVehicle, setDbcFilesForVehicle] = useState([]);
   const hasDefaultedDbcRef = React.useRef(false);
+  const [backendConnected, setBackendConnected] = useState(socket.connected);
   const [status, setStatus] = useState({
     service_running: false,
     influx_connected: false,
+    grafana_active: false,
     parser_status: 'idle',
     parser_connection_state: null,
     error_message: null,
@@ -42,7 +62,10 @@ export function TelemetryDashboard() {
 
   const loadConfig = useCallback(() => {
     api('/api/config')
-      .then(setConfig)
+      .then((data) => {
+        setConfig(data);
+        setSavedConfig(data);
+      })
       .catch((e) => notifications.show({ title: 'Config', message: e.message, color: 'red' }));
   }, []);
 
@@ -96,6 +119,17 @@ export function TelemetryDashboard() {
     }
   }, [dbcFilesForVehicle, config?.DBC_FILES, config?.DBC_VEHICLE, status.service_running]);
 
+  useEffect(() => {
+    const onConnect = () => setBackendConnected(true);
+    const onDisconnect = () => setBackendConnected(false);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+    };
+  }, []);
+
   const lastDbcErrorsRef = React.useRef([]);
   useEffect(() => {
     const onStatus = (data) => {
@@ -148,24 +182,17 @@ export function TelemetryDashboard() {
   };
 
   const handleSave = () => {
-    if (status.service_running || !config) return;
+    if (status.service_running || !config || !hasValidDbc) return;
     setLoading((l) => ({ ...l, save: true }));
-    const keysToSave = [
-      'INPUT_MODE',
-      'DBC_VEHICLE',
-      'DBC_FILES',
-      'SERIAL_PORT',
-      'SERIAL_BAUDRATE',
-      'CAN_BITRATE',
-      'TCP_IP',
-      'TCP_PORT',
-      'REPLAY_FILE_PATH',
-    ].filter((k) => config[k] !== undefined);
+    const keysToSave = CONFIG_KEYS.filter((k) => config[k] !== undefined);
     const saveAll = keysToSave.reduce((acc, key) => acc.then(() =>
       api('/api/config', { method: 'POST', body: JSON.stringify({ key, value: config[key] }) })
     ), Promise.resolve());
     saveAll
-      .then(() => notifications.show({ title: 'Config', message: 'Saved', color: 'green' }))
+      .then(() => {
+        setSavedConfig(config);
+        notifications.show({ title: 'Config', message: 'Saved', color: 'green' });
+      })
       .catch((e) => notifications.show({ title: 'Save failed', message: e.message, color: 'red' }))
       .finally(() => setLoading((l) => ({ ...l, save: false })));
   };
@@ -312,8 +339,20 @@ export function TelemetryDashboard() {
     }
   };
 
-  const parserLabel = status.parser_status === 'running' ? 'Active' : status.parser_status === 'error' ? 'Error' : status.parser_status === 'finished' ? 'Finished' : 'Idle';
-  const parserColor = status.parser_status === 'running' ? '#22c55e' : status.parser_status === 'error' ? '#ef4444' : 'var(--text-muted)';
+  const parserLabel = status.parser_status === 'running' ? 'Active' : status.parser_status === 'error' ? 'Error' : status.parser_status === 'finished' ? 'Done' : 'Idle';
+  const parserColor = status.parser_status === 'running' ? '#22c55e' : status.parser_status === 'error' ? '#ef4444' : '#71717a';
+
+  const STATUS_GREEN = '#22c55e';
+  const STATUS_GRAY = '#71717a';
+  const BLUE_ACTIVE = '#3b82f6';
+  const STOP_RED = '#ef4444';
+
+  const hasUnsavedChanges = config && savedConfig && !configEquals(config, savedConfig);
+  const hasDbcFiles = dbcFilesForVehicle.length > 0;
+  const hasDbcSelection = Array.isArray(config?.DBC_FILES) && config.DBC_FILES.length > 0;
+  const hasValidDbc = hasDbcFiles && hasDbcSelection;
+  const saveEnabled = hasUnsavedChanges && !status.service_running && backendConnected && hasValidDbc;
+  const startEnabled = !status.service_running && hasValidDbc;
 
   return (
     <Stack gap={0} style={{ maxWidth: 420, margin: '0 auto' }} p="xl">
@@ -321,48 +360,70 @@ export function TelemetryDashboard() {
         Telemetry
       </Text>
 
-      <Group gap="xs" mb="xl">
-        <Circle size={8} fill={status.service_running ? '#22c55e' : 'var(--text-muted)'} />
-        <Text size="sm" c="dimmed">
-          {status.service_running ? 'Online' : 'Offline'}
-        </Text>
-        <Text size="sm" c="dimmed">·</Text>
-        <Text size="sm" style={{ color: parserColor }}>{parserLabel}</Text>
-        <Text size="sm" c="dimmed">·</Text>
-        <Text size="sm" c="dimmed">{status.influx_connected ? 'Influx OK' : 'Influx —'}</Text>
-      </Group>
+      <Stack gap={4} mb="xl">
+        <Group gap={6}>
+          <Circle size={8} fill={backendConnected ? STATUS_GREEN : STATUS_GRAY} />
+          <Text size="sm" c="dimmed">{backendConnected ? 'Backend' : 'Backend (disconnected)'}</Text>
+        </Group>
+        <Group gap={6}>
+          <Circle size={8} fill={status.service_running ? STATUS_GREEN : STATUS_GRAY} />
+          <Text size="sm" c="dimmed">
+            {status.service_running ? 'Service running' : 'Service stopped'}
+          </Text>
+        </Group>
+        <Group gap={6}>
+          <Circle size={8} fill={status.parser_status === 'running' ? STATUS_GREEN : status.parser_status === 'error' ? '#ef4444' : STATUS_GRAY} />
+          <Text size="sm" style={{ color: parserColor }}>
+            Parser: {parserLabel === 'Active' ? 'receiving data' : parserLabel === 'Idle' ? 'waiting' : parserLabel === 'Done' ? 'finished' : parserLabel.toLowerCase()}
+          </Text>
+        </Group>
+        <Group gap={6}>
+          <Circle size={8} fill={status.influx_connected ? STATUS_GREEN : STATUS_GRAY} />
+          <Text size="sm" c="dimmed">{status.influx_connected ? 'InfluxDB' : 'InfluxDB (disconnected)'}</Text>
+        </Group>
+        <Group gap={6}>
+          <Circle size={8} fill={status.grafana_active ? STATUS_GREEN : STATUS_GRAY} />
+          <Text size="sm" c="dimmed">{status.grafana_active ? 'Grafana' : 'Grafana (inactive)'}</Text>
+        </Group>
+      </Stack>
 
       <Group gap="sm" mb="xl">
         <Button
-          variant={status.service_running ? 'filled' : 'default'}
-          color={status.service_running ? 'red' : 'dark'}
+          variant="filled"
           size="sm"
           leftSection={<Power size={14} />}
           onClick={handleStart}
           loading={loading.start}
-          disabled={status.service_running}
-          style={!status.service_running ? { borderColor: 'var(--border)', color: 'var(--text)' } : {}}
+          disabled={!startEnabled}
+          bg={startEnabled ? BLUE_ACTIVE : STATUS_GRAY}
+          c={startEnabled ? 'white' : '#a1a1aa'}
+          style={!startEnabled ? { opacity: 0.8 } : {}}
         >
           Start
         </Button>
         <Button
-          variant="default"
+          variant="filled"
           size="sm"
           leftSection={<Power size={14} />}
           onClick={handleStop}
           loading={loading.stop}
           disabled={!status.service_running}
-          style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+          bg={status.service_running ? STOP_RED : STATUS_GRAY}
+          c={status.service_running ? 'white' : '#a1a1aa'}
+          style={!status.service_running ? { opacity: 0.8 } : {}}
         >
           Stop
         </Button>
         <Button
-          variant="subtle"
+          variant="filled"
           size="sm"
           leftSection={<RefreshCw size={14} />}
           onClick={handleRestart}
           loading={loading.restart}
-          style={{ color: 'var(--text-muted)' }}
+          disabled={!backendConnected}
+          bg={backendConnected ? BLUE_ACTIVE : STATUS_GRAY}
+          c={backendConnected ? 'white' : '#a1a1aa'}
+          style={!backendConnected ? { opacity: 0.8 } : {}}
         >
           Restart
         </Button>
@@ -382,28 +443,39 @@ export function TelemetryDashboard() {
         mb="md"
         leftSection={<Car size={14} style={{ color: 'var(--text-muted)' }} />}
       />
-      {dbcFilesForVehicle.length > 0 && (
-        <>
-          <Text size="xs" c="dimmed" mb="xs">
-            DBC files
+      {config.DBC_VEHICLE && (
+        dbcFilesForVehicle.length > 0 ? (
+          <>
+            <Text size="xs" c="dimmed" mb="xs">
+              DBC files
+            </Text>
+            <Stack gap="xs" mb={hasDbcSelection ? 'md' : 0}>
+              {dbcFilesForVehicle.map((filename) => {
+                const selected = Array.isArray(config.DBC_FILES) && config.DBC_FILES.includes(filename);
+                return (
+                  <Checkbox
+                    key={filename}
+                    label={filename}
+                    size="xs"
+                    checked={selected}
+                    onChange={(e) => toggleDbcFile(filename, e.currentTarget.checked)}
+                    disabled={status.service_running}
+                    styles={{ label: { color: 'var(--text)' } }}
+                  />
+                );
+              })}
+            </Stack>
+            {!hasDbcSelection && (
+              <Text size="xs" c="orange" mb="md">
+                Select at least one DBC file to save or start.
+              </Text>
+            )}
+          </>
+        ) : (
+          <Text size="xs" c="dimmed" mb="md">
+            No DBC files found in this vehicle folder.
           </Text>
-          <Stack gap="xs" mb="md">
-            {dbcFilesForVehicle.map((filename) => {
-              const selected = Array.isArray(config.DBC_FILES) && config.DBC_FILES.includes(filename);
-              return (
-                <Checkbox
-                  key={filename}
-                  label={filename}
-                  size="xs"
-                  checked={selected}
-                  onChange={(e) => toggleDbcFile(filename, e.currentTarget.checked)}
-                  disabled={status.service_running}
-                  styles={{ label: { color: 'var(--text)' } }}
-                />
-              );
-            })}
-          </Stack>
-        </>
+        )
       )}
 
       <Text size="xs" c="dimmed" mb="xs">
@@ -438,14 +510,16 @@ export function TelemetryDashboard() {
       </Stack>
 
       <Button
-        variant="default"
+        variant="filled"
         size="sm"
         leftSection={<Save size={14} />}
         onClick={handleSave}
         loading={loading.save}
-        disabled={status.service_running}
+        disabled={!saveEnabled}
         mt="md"
-        style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+        bg={saveEnabled ? BLUE_ACTIVE : STATUS_GRAY}
+        c={saveEnabled ? 'white' : '#a1a1aa'}
+        style={!saveEnabled ? { opacity: 0.8 } : {}}
       >
         Save
       </Button>
