@@ -1,20 +1,16 @@
 from abc import ABC, abstractmethod
 import asyncio
 
-class Parser(ABC):
-    """Abstract base class for all async parsers."""
+
+class _Parser(ABC):
+    """Abstract base class for all async parsers (not a concrete parser)."""
     def __init__(self, queue: asyncio.Queue, stop_event: asyncio.Event):
         self.queue = queue
         self.stop_event = stop_event
-        
-        # --- New Status Indicators ---
-        # Overall status of the parser task
-        self.status: str = "idle" 
-        # Connection status of the underlying device/socket (can be None if not applicable)
+
+        self.status: str = "idle"
         self.connection_state: bool | None = None
-        # Holds the latest error message
         self.error_message: str | None = None
-        # -----------------------------
 
     @abstractmethod
     async def run(self):

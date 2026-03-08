@@ -22,9 +22,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 influx_client: InfluxDBClient | None = None
 
+# Path to built static client (project root / client / dist)
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+STATIC_CLIENT_DIR = os.path.join(_PROJECT_ROOT, "client", "dist")
+
 # --- Pydantic Models ---
 class Bucket(BaseModel): name: str
-class ConfigUpdate(BaseModel): key: str; value: str | int
+class ConfigUpdate(BaseModel): key: str; value: str | int | list
 class FileAction(BaseModel): filename: str
 
 # --- Helper Functions ---
@@ -52,6 +56,7 @@ async def send_status_updates(sio: socketio.AsyncServer):
             "parser_status": parser_status.get("status", "idle") if parser_status else "idle",
             "parser_connection_state": parser_status.get("connection_state") if parser_status else None,
             "error_message": parser_status.get("error_message") if parser_status else None,
+            "dbc_errors": telemetry_service.get_dbc_errors(),
         }
         await sio.emit('status', status)
         await asyncio.sleep(1)
@@ -106,6 +111,19 @@ async def stop_service():
     await telemetry_service.stop()
     return {"message": "Telemetry service stopped."}
 
+@app.post("/api/restart")
+async def restart_service():
+    """Stop the service if running, then start with current config."""
+    if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    if telemetry_service.running:
+        await telemetry_service.stop()
+    config = settings.get_effective_config()
+    if not config: raise HTTPException(status_code=500, detail="Invalid configuration.")
+    target_bucket = config.get("INFLUX_BUCKET", "debug")
+    writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
+    asyncio.create_task(telemetry_service.start(writer))
+    return {"message": "Telemetry service restarted."}
+
 @app.get("/api/config")
 async def get_config(): return settings.get_effective_config()
 
@@ -115,6 +133,27 @@ async def update_config(update: ConfigUpdate):
     if not settings.update_setting(update.key, update.value):
         raise HTTPException(status_code=404, detail=f"Setting '{update.key}' not found or invalid.")
     return {"message": "Configuration updated successfully."}
+
+@app.get("/api/dbc/vehicles")
+async def list_dbc_vehicles():
+    """List vehicle folders (subdirs) under DBC_DIR."""
+    dbc_dir = settings.DBC_DIR
+    if not os.path.isdir(dbc_dir):
+        return []
+    names = [d for d in os.listdir(dbc_dir) if os.path.isdir(os.path.join(dbc_dir, d)) and not d.startswith(".")]
+    return sorted(names)
+
+@app.get("/api/dbc/vehicles/{vehicle}/files")
+async def list_dbc_files(vehicle: str):
+    """List .dbc files in DBC_DIR/vehicle. Vehicle must be a direct subdir name."""
+    if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
+        raise HTTPException(status_code=400, detail="Invalid vehicle name.")
+    dbc_dir = settings.DBC_DIR
+    path = os.path.join(dbc_dir, vehicle)
+    if not os.path.isdir(path):
+        return []
+    files = [f for f in os.listdir(path) if f.lower().endswith(".dbc") and os.path.isfile(os.path.join(path, f))]
+    return sorted(files)
 
 @app.get("/api/serial-ports")
 async def list_serial_ports():
@@ -189,7 +228,11 @@ async def delete_bucket(name: str):
 
 # --- Socket.IO and Static Files ---
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins="*")
-app.mount("/", StaticFiles(directory="client/dist", html=True), name="static")
+if os.path.isdir(STATIC_CLIENT_DIR):
+    app.mount("/", StaticFiles(directory=STATIC_CLIENT_DIR, html=True), name="static")
+    logger.info(f"Serving static client from {STATIC_CLIENT_DIR}")
+else:
+    logger.warning(f"Static client not found at {STATIC_CLIENT_DIR}. Run 'cd client && npm run build' to build the client.")
 asgi_app = socketio.ASGIApp(sio, app)
 
 @sio.event

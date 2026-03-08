@@ -1,10 +1,10 @@
 import asyncio
 import logging
-from .parser_abc import Parser
+from ._parser_abc import _Parser
 
 logger = logging.getLogger(__name__)
 
-class FileParser(Parser):
+class FileParser(_Parser):
     def __init__(self, file_path: str, queue: asyncio.Queue, stop_event: asyncio.Event):
         super().__init__(queue, stop_event)
         self.file_path = file_path

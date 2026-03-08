@@ -2,11 +2,11 @@ import asyncio
 import logging
 
 from server.config import settings
-from .parser_abc import Parser
+from ._parser_abc import _Parser
 
 logger = logging.getLogger(__name__)
 
-class TCPParser(Parser):
+class TCPParser(_Parser):
     def __init__(self, ip: str, port: int, queue: asyncio.Queue, stop_event: asyncio.Event):
         super().__init__(queue, stop_event)
         self.source = (ip, port)

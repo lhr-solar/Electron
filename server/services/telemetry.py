@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from server.config import settings
 from server.util.can_manager import CANManager
 from server.util.async_parser_factory import create_async_parser
@@ -16,12 +17,17 @@ class TelemetryService:
         self.influx_writer: InfluxDBWriter | None = None
         self.parser = None
         self.running = False
+        self.dbc_errors = []
 
     def get_parser_status(self):
         """Returns the current status of the parser."""
         if self.parser and self.running:
             return self.parser.get_status()
         return None
+
+    def get_dbc_errors(self):
+        """Returns list of DBC load/parse errors for the UI."""
+        return list(self.dbc_errors)
 
     async def start(self, influx_writer: InfluxDBWriter):
         """
@@ -44,14 +50,25 @@ class TelemetryService:
             logger.info(f"Startup clear requested for bucket: '{self.influx_writer.bucket}'")
             self.influx_writer.backup_and_clear_bucket()
 
-        # --- DBC Path Logic ---
-        dbc_filename = config['DBC_FILE']
-        if not dbc_filename.endswith('.dbc'):
-            dbc_filename += '.dbc'
-        dbc_file_path = f"dbc/{dbc_filename}"
-        # --------------------
-
-        can_manager = CANManager(dbc_file_path, config, influx_writer=self.influx_writer)
+        self.dbc_errors = []
+        vehicle = config.get("DBC_VEHICLE", "").strip() or "Daybreak"
+        dbc_dir = settings.DBC_DIR
+        dbc_files = config.get("DBC_FILES") or []
+        if not isinstance(dbc_files, list):
+            dbc_files = [f for f in str(dbc_files).split(",") if f.strip()]
+        dbc_paths = []
+        for f in dbc_files:
+            f = f.strip()
+            if not f:
+                continue
+            if not f.lower().endswith(".dbc"):
+                f = f + ".dbc"
+            path = os.path.join(dbc_dir, vehicle, f)
+            dbc_paths.append(path)
+        if not dbc_paths:
+            self.dbc_errors.append(f"No DBC files selected for vehicle '{vehicle}'.")
+        can_manager = CANManager(dbc_paths, config, influx_writer=self.influx_writer)
+        self.dbc_errors = can_manager.get_errors()
         
         self.parser = create_async_parser(config, self.packet_queue, self.stop_event)
         
@@ -89,6 +106,7 @@ class TelemetryService:
         
         self.running = False
         self.parser = None
+        self.dbc_errors = []
         logger.info("Telemetry Service Stopped.")
 
 telemetry_service = TelemetryService()

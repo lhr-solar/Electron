@@ -6,3 +6,4 @@ dotenv
 fastapi
 uvicorn
 python-multipart
+python-socketio

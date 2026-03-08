@@ -13,9 +13,10 @@ class Configuration:
         self.TRASH_DIR = os.environ.get("TRASH_DIR", ".trash")
 
         # --- Default Settings ---
-        self.INPUT_MODE = 'tcp' # Changed default to TCP
+        self.INPUT_MODE = 'tcp'
         self.COMMON_CONFIG = {
-            "DBC_FILE": "Daybreak_Telemetry", # Stored without extension
+            "DBC_VEHICLE": "Daybreak",
+            "DBC_FILES": [],  # list of .dbc filenames under DBC_DIR/<vehicle>/
             "PRINT_CAN_INFO": False,
             "CLEAR_DEBUG_BUCKET_ON_STARTUP": False,
         }
@@ -41,7 +42,7 @@ class Configuration:
         config = self.COMMON_CONFIG.copy()
         config.update(self.INFLUX_CONFIG)
         config["INPUT_MODE"] = self.INPUT_MODE
-        if self.INPUT_MODE == 'serial':
+        if self.INPUT_MODE in ("serial", "serial_canadapter", "serial_uart"):
             config.update(self.SERIAL_CONFIG)
             config["INFLUX_BUCKET"] = "debug"
         elif self.INPUT_MODE == 'file':
@@ -55,9 +56,9 @@ class Configuration:
             return None
         return config
 
-    def update_setting(self, key: str, value: str | int) -> bool:
+    def update_setting(self, key: str, value: str | int | list) -> bool:
         if key == "INPUT_MODE":
-            if value in ['serial', 'file', 'tcp']:
+            if value in ("serial", "serial_canadapter", "serial_uart", "file", "tcp"):
                 self.INPUT_MODE = value
                 logger.info(f"Input mode updated to '{value}'")
                 return True
@@ -69,12 +70,19 @@ class Configuration:
             if not os.path.isabs(value) and not os.path.dirname(value):
                 value = os.path.join(self.LOG_DIR, value)
         
+        if key == "DBC_FILES" and isinstance(value, list):
+            self.COMMON_CONFIG["DBC_FILES"] = [str(x) for x in value]
+            logger.info(f"Set DBC_FILES = {len(value)} file(s)")
+            return True
+
         for config_dict in [self.COMMON_CONFIG, self.SERIAL_CONFIG, self.TCP_CONFIG, self.FILE_CONFIG, self.INFLUX_CONFIG]:
             if key in config_dict:
+                if key == "DBC_FILES" and not isinstance(value, list):
+                    continue
                 config_dict[key] = value
                 logger.info(f"Set {key} = {value}")
                 return True
-                
+
         logger.warning(f"Attempted to update unknown setting '{key}'")
         return False
 

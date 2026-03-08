@@ -1,9 +1,62 @@
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bg: #0a0a0b;
+  --surface: #0f0f11;
+  --border: #1f1f23;
+  --text: #e4e4e7;
+  --text-muted: #71717a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: var(--mantine-color-dark-9);
+  background-color: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.mantine-Select-input,
+.mantine-TextInput-input {
+  background-color: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+
+.mantine-Select-input:focus,
+.mantine-TextInput-input:focus {
+  border-color: #3f3f46 !important;
+}
+
+.mantine-SegmentedControl-root {
+  background-color: var(--surface) !important;
+  border: 1px solid var(--border);
+  padding: 2px;
+}
+
+.mantine-SegmentedControl-indicator {
+  background-color: #27272a !important;
+  border-radius: 2px;
+}
+
+.mantine-SegmentedControl-label {
+  color: var(--text-muted);
+}
+
+.mantine-SegmentedControl-label[data-active] {
+  color: var(--text);
+}
+
+.mantine-Notification {
+  background-color: #18181b !important;
+  border: 1px solid var(--border);
+  color: var(--text);
 }
