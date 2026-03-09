@@ -314,9 +314,19 @@ else:
 asgi_app = socketio.ASGIApp(sio, app)
 
 @sio.event
-async def connect(sid, environ): logger.info(f"Client connected: {sid}")
+async def connect(sid, environ):
+    logger.info(f"Client connected: {sid}")
+    cache = telemetry_service.get_cache()
+    if cache:
+        await sio.emit("signal_cache", cache, to=sid)
+
 @sio.event
 async def disconnect(sid): logger.info(f"Client disconnected: {sid}")
+
+@sio.event
+async def request_cache(sid):
+    cache = telemetry_service.get_cache()
+    await sio.emit("signal_cache", cache, to=sid)
 
 if __name__ == "__main__":
     uvicorn.run("server.app:asgi_app", host="0.0.0.0", port=4000, reload=True)

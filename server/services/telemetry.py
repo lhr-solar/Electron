@@ -19,6 +19,7 @@ class TelemetryService:
         self.parser = None
         self.running = False
         self.dbc_errors = []
+        self.message_cache = {}  # {sender: {can_id_hex: {message_name, network, signals, raw_packet, timestamp_ns}}}
 
     def get_parser_status(self):
         """Returns the current status of the parser."""
@@ -30,10 +31,28 @@ class TelemetryService:
         """Returns list of DBC load/parse errors for the UI."""
         return list(self.dbc_errors)
 
+    def _update_cache(self, msg):
+        """Update the message cache with a single message payload."""
+        sender = msg.get("sender", "Unknown")
+        can_id_hex = msg.get("can_id_hex", "")
+        if sender not in self.message_cache:
+            self.message_cache[sender] = {}
+        self.message_cache[sender][can_id_hex] = {
+            "message_name": msg.get("message_name"),
+            "network": msg.get("network", "not_found"),
+            "signals": msg.get("signals", {}),
+            "raw_packet": msg.get("raw_packet", ""),
+            "timestamp_ns": msg.get("timestamp_ns", 0),
+        }
+
+    def get_cache(self):
+        """Return the full message cache."""
+        return self.message_cache
+
     async def _emit_live_messages(self, sio):
-        """Drain live_message_queue periodically (every 100ms) and emit batches to Socket.IO clients."""
-        batch_interval = 0.1  # 100 ms
-        max_batch_size = 200  # cap per emit to avoid huge payloads
+        """Drain live_message_queue periodically (every 100ms), update cache, and emit batches."""
+        batch_interval = 0.1
+        max_batch_size = 200
         while not self.stop_event.is_set() and self.live_message_queue is not None:
             try:
                 await asyncio.sleep(batch_interval)
@@ -45,6 +64,8 @@ class TelemetryService:
                     except asyncio.QueueEmpty:
                         break
                 if batch:
+                    for msg in batch:
+                        self._update_cache(msg)
                     await sio.emit("live_message_batch", batch)
             except asyncio.CancelledError:
                 break

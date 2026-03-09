@@ -88,8 +88,8 @@ export function LiveMessageLog() {
       style={{
         width: LIVE_LOG_WIDTH,
         minWidth: LIVE_LOG_WIDTH,
-        height: '100vh',
-        maxHeight: '100vh',
+        height: '100%',
+        maxHeight: '100%',
         borderLeft: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',

@@ -85,16 +85,18 @@ class CANManager:
             return None
 
     def process_message(self, raw_message: can.Message, slcan_packet: str):
-        """Process CAN message, write to Influx (found or not). Returns live payload for UI."""
+        """Process CAN message, write to Influx (found or not). Returns live payload for UI including sender/network."""
         can_id_hex = f"0x{raw_message.arbitration_id:03X}"
+        sender = self.id_map.get(raw_message.arbitration_id, "Unknown")
+        network = self.frame_id_to_network.get(raw_message.arbitration_id, "not_found")
         try:
             if raw_message.arbitration_id not in self.id_map:
                 self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
-                return {"can_id_hex": can_id_hex, "message_name": None, "signals": {}}
+                return {"can_id_hex": can_id_hex, "message_name": None, "sender": "Unknown", "network": "not_found", "signals": {}}
             decoded_msg = self.decode_message(raw_message.arbitration_id, raw_message.data)
             if not decoded_msg:
                 self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
-                return {"can_id_hex": can_id_hex, "message_name": None, "signals": {}}
+                return {"can_id_hex": can_id_hex, "message_name": None, "sender": sender, "network": network, "signals": {}}
             message_def = self.db.get_message_by_frame_id(raw_message.arbitration_id)
             if self.print_can_info:
                 self._print_message_info(raw_message, decoded_msg, slcan_packet)
@@ -111,12 +113,14 @@ class CANManager:
             return {
                 "can_id_hex": can_id_hex,
                 "message_name": message_def.name if message_def else None,
+                "sender": sender,
+                "network": network,
                 "signals": signals,
             }
         except Exception as e:
             logger.exception("process_message error: %s", e)
             self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
-            return {"can_id_hex": can_id_hex, "message_name": None, "signals": {}}
+            return {"can_id_hex": can_id_hex, "message_name": None, "sender": "Unknown", "network": "not_found", "signals": {}}
 
     def _write_unknown_to_influx(self, arbitration_id, slcan_packet):
         """Write a not-found / decode-failed message to Influx with raw packet only."""
