@@ -96,7 +96,7 @@ export function SignalDashboard() {
         </Text>
       )}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
         {senders.map((sender) => {
           const messages = cache[sender];
           const canIds = Object.keys(messages).sort();
@@ -122,9 +122,7 @@ export function SignalDashboard() {
                 borderRadius: 8,
                 backgroundColor: '#0f0f11',
                 padding: 16,
-                minWidth: 300,
-                maxWidth: 420,
-                flex: '1 1 340px',
+                minWidth: 360,
               }}
             >
               <Text size="sm" fw={600} mb="sm" style={{ color: '#e4e4e7' }}>
