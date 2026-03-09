@@ -393,7 +393,10 @@ export function TelemetryDashboard() {
         </Group>
         <Group gap={6}>
           <Circle size={8} fill={status.influx_connected ? STATUS_GREEN : STATUS_GRAY} />
-          <Text size="sm" c="dimmed">{status.influx_connected ? 'InfluxDB' : 'InfluxDB (disconnected)'}</Text>
+          <Text size="sm" c="dimmed">
+            {status.influx_connected ? 'InfluxDB' : 'InfluxDB (disconnected)'}
+            {status.influx_bucket && <Text span size="sm" c="dimmed"> · {status.influx_bucket}</Text>}
+          </Text>
         </Group>
         <Group gap={6}>
           <Circle size={8} fill={status.grafana_active ? STATUS_GREEN : STATUS_GRAY} />
@@ -555,12 +558,6 @@ export function TelemetryDashboard() {
           }}
         />
       </Group>
-      {config.INFLUX_BUCKET && (
-        <Text size="xs" c="dimmed" mb="md">
-          Bucket: <Text span size="xs" style={{ color: 'var(--text)' }}>{config.INFLUX_BUCKET}</Text>
-        </Text>
-      )}
-
       <Button
         variant="filled"
         size="sm"

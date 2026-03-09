@@ -86,7 +86,7 @@ class CANManager:
 
     def process_message(self, raw_message: can.Message, slcan_packet: str):
         """Process CAN message, write to Influx (found or not). Returns live payload for UI."""
-        can_id_hex = f"0x{raw_message.arbitration_id:X}"
+        can_id_hex = f"0x{raw_message.arbitration_id:03X}"
         try:
             if raw_message.arbitration_id not in self.id_map:
                 self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)

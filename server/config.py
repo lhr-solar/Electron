@@ -39,22 +39,26 @@ class Configuration:
             "REPLAY_FILE_PATH": os.path.join(self.LOG_DIR, "261_log.txt"),
         }
 
+    def get_bucket(self):
+        """Return the InfluxDB bucket name for the current input mode."""
+        if self.INPUT_MODE == "tcp":
+            return "telemetry_main"
+        return "debug"
+
     def get_effective_config(self):
         config = self.COMMON_CONFIG.copy()
         config.update(self.INFLUX_CONFIG)
         config["INPUT_MODE"] = self.INPUT_MODE
         if self.INPUT_MODE in ("serial", "serial_canadapter", "serial_uart"):
             config.update(self.SERIAL_CONFIG)
-            config["INFLUX_BUCKET"] = "debug"
         elif self.INPUT_MODE == 'file':
             config.update(self.FILE_CONFIG)
-            config["INFLUX_BUCKET"] = "debug"
         elif self.INPUT_MODE == 'tcp':
             config.update(self.TCP_CONFIG)
-            config["INFLUX_BUCKET"] = "telemetry_main"
         else:
             logger.error(f"Invalid INPUT_MODE '{self.INPUT_MODE}' selected.")
             return None
+        config["INFLUX_BUCKET"] = self.get_bucket()
         return config
 
     def update_setting(self, key: str, value: str | int | list) -> bool:
