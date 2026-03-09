@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Stack, Group, Text, Select, TextInput, Button, Box, Divider, Checkbox, Switch } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { socket } from '../socket';
-import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2, Database } from 'lucide-react';
+import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2, Database, Square } from 'lucide-react';
 import { LogFileManagerModal, DbcFileManagerModal } from './FileManagerModals';
 
 const INPUT_MODES = [
@@ -369,42 +369,49 @@ export function TelemetryDashboard() {
   const startEnabled = !status.service_running && hasValidDbc;
 
   return (
-    <Stack gap={0} style={{ maxWidth: 420, margin: '0 auto' }} p="xl">
-      <Text size="xs" c="dimmed" tt="uppercase" mb="md">
-        Telemetry
-      </Text>
-
-      <Stack gap={4} mb="xl">
+    <Stack gap={0} style={{ maxWidth: 600, margin: '0 auto', flex: 1 }} p="xl">
+      <Group
+        gap="md"
+        mb="xl"
+        p="sm"
+        wrap="wrap"
+        style={{
+          backgroundColor: '#0f0f11',
+          border: '1px solid var(--border)',
+          borderRadius: 6,
+        }}
+      >
         <Group gap={6}>
           <Circle size={8} fill={backendConnected ? STATUS_GREEN : STATUS_GRAY} />
-          <Text size="sm" c="dimmed">{backendConnected ? 'Backend' : 'Backend (disconnected)'}</Text>
+          <Text size="xs" c="dimmed">{backendConnected ? 'Backend' : 'Disconnected'}</Text>
         </Group>
         <Group gap={6}>
           <Circle size={8} fill={status.service_running ? STATUS_GREEN : STATUS_GRAY} />
-          <Text size="sm" c="dimmed">
-            {status.service_running ? 'Service running' : 'Service stopped'}
-          </Text>
+          <Text size="xs" c="dimmed">{status.service_running ? 'Running' : 'Stopped'}</Text>
         </Group>
         <Group gap={6}>
           <Circle size={8} fill={status.parser_status === 'running' ? STATUS_GREEN : status.parser_status === 'error' ? '#ef4444' : STATUS_GRAY} />
-          <Text size="sm" style={{ color: parserColor }}>
-            Parser: {parserLabel === 'Active' ? 'receiving data' : parserLabel === 'Idle' ? 'waiting' : parserLabel === 'Done' ? 'finished' : parserLabel.toLowerCase()}
+          <Text size="xs" style={{ color: parserColor }}>
+            Parser: {parserLabel === 'Active' ? 'active' : parserLabel === 'Idle' ? 'idle' : parserLabel === 'Done' ? 'done' : parserLabel.toLowerCase()}
           </Text>
         </Group>
         <Group gap={6}>
           <Circle size={8} fill={status.influx_connected ? STATUS_GREEN : STATUS_GRAY} />
-          <Text size="sm" c="dimmed">
-            {status.influx_connected ? 'InfluxDB' : 'InfluxDB (disconnected)'}
-            {status.influx_bucket && <Text span size="sm" c="dimmed"> · {status.influx_bucket}</Text>}
-          </Text>
+          <Text size="xs" c="dimmed">{status.influx_connected ? 'InfluxDB' : 'InfluxDB ✗'}</Text>
         </Group>
         <Group gap={6}>
           <Circle size={8} fill={status.grafana_active ? STATUS_GREEN : STATUS_GRAY} />
-          <Text size="sm" c="dimmed">{status.grafana_active ? 'Grafana' : 'Grafana (inactive)'}</Text>
+          <Text size="xs" c="dimmed">{status.grafana_active ? 'Grafana' : 'Grafana ✗'}</Text>
         </Group>
-      </Stack>
+        {status.influx_bucket && (
+          <Group gap={6}>
+            <Database size={10} style={{ color: STATUS_GRAY }} />
+            <Text size="xs" c="dimmed">{status.influx_bucket}</Text>
+          </Group>
+        )}
+      </Group>
 
-      <Group gap="sm" mb="xl">
+      <Group gap="sm" mb="xl" justify="center">
         <Button
           variant="filled"
           size="sm"
@@ -421,7 +428,7 @@ export function TelemetryDashboard() {
         <Button
           variant="filled"
           size="sm"
-          leftSection={<Power size={14} />}
+          leftSection={<Square size={12} fill="currentColor" />}
           onClick={handleStop}
           loading={loading.stop}
           disabled={!status.service_running}
@@ -430,19 +437,6 @@ export function TelemetryDashboard() {
           style={!status.service_running ? { opacity: 0.8 } : {}}
         >
           Stop
-        </Button>
-        <Button
-          variant="filled"
-          size="sm"
-          leftSection={<RefreshCw size={14} />}
-          onClick={handleRestart}
-          loading={loading.restart}
-          disabled={!backendConnected}
-          bg={backendConnected ? BLUE_ACTIVE : STATUS_GRAY}
-          c={backendConnected ? 'white' : '#a1a1aa'}
-          style={!backendConnected ? { opacity: 0.8 } : {}}
-        >
-          Restart
         </Button>
       </Group>
 

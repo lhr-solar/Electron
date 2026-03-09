@@ -10,7 +10,7 @@ const SCROLL_THRESHOLD = 20;
 function formatTime(timestampNs) {
   const ms = Number(timestampNs) / 1e6;
   const d = new Date(ms);
-  return d.toISOString().slice(11, 23);
+  return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
 }
 
 function matchesSearch(msg, searchLower) {
@@ -156,7 +156,7 @@ export function LiveMessageLog() {
                 <Text size="xs" c="dimmed" style={{ marginBottom: 2 }}>
                   {formatTime(msg.timestamp_ns)}
                 </Text>
-                <Text size="sm" style={{ color: 'var(--text)' }}>
+                <Text size="sm" style={{ color: msg.message_name != null ? 'var(--text)' : '#ef4444' }}>
                   {msg.can_id_hex}
                   {msg.message_name != null ? ` · ${msg.message_name}` : ' · Not Found'}
                 </Text>

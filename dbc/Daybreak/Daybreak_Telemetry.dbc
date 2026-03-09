@@ -352,6 +352,7 @@ VAL_ 1024 Array_Precharge_State_Expected 1 "Closed" 0 "Open" ;
 VAL_ 258 BPS_ArrayContactor 1 "Closed" 0 "Open" ;
 VAL_ 258 BPS_HVContactors 1 "Closed" 0 "Open" ;
 VAL_ 268 Battery_ChargeEnabled 1 "Enabled" 0 "Disabled" ;
+VAL_ 2 BPS_Trip 0 "No Fault" 1 "Fault";
 VAL_ 271 BPS_Fault 11 "MPPT" 10 "E-STOP/Contactor" 9 "IsoSPI" 8 "Watchdog" 7 "OS" 6 "Handler" 5 "Open Wire" 4 "Over Current" 3 "Over Temperature" 2 "Overvoltage" 1 "Undervoltage" 0 "None" ;
 VAL_ 537 MPPT_SetMode 1 "Enabled" 0 "Disabled" ;
 VAL_ 521 MPPT_SetMode 1 "Enabled" 0 "Disabled" ;
