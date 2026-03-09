@@ -13,6 +13,7 @@ class TelemetryService:
     def __init__(self):
         self.stop_event = asyncio.Event()
         self.packet_queue = asyncio.Queue()
+        self.live_message_queue: asyncio.Queue | None = None
         self.background_tasks = set()
         self.influx_writer: InfluxDBWriter | None = None
         self.parser = None
@@ -29,9 +30,30 @@ class TelemetryService:
         """Returns list of DBC load/parse errors for the UI."""
         return list(self.dbc_errors)
 
-    async def start(self, influx_writer: InfluxDBWriter):
+    async def _emit_live_messages(self, sio):
+        """Drain live_message_queue periodically (every 100ms) and emit batches to Socket.IO clients."""
+        batch_interval = 0.1  # 100 ms
+        max_batch_size = 200  # cap per emit to avoid huge payloads
+        while not self.stop_event.is_set() and self.live_message_queue is not None:
+            try:
+                await asyncio.sleep(batch_interval)
+                batch = []
+                while len(batch) < max_batch_size:
+                    try:
+                        payload = self.live_message_queue.get_nowait()
+                        batch.append(payload)
+                    except asyncio.QueueEmpty:
+                        break
+                if batch:
+                    await sio.emit("live_message_batch", batch)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.exception("live_message emit: %s", e)
+
+    async def start(self, influx_writer: InfluxDBWriter, sio=None):
         """
-        Starts the telemetry service with a pre-configured InfluxDB writer.
+        Starts the telemetry service. If sio is provided, live CAN messages are emitted to clients.
         """
         if self.running:
             logger.warning("TelemetryService is already running.")
@@ -71,18 +93,24 @@ class TelemetryService:
         self.dbc_errors = can_manager.get_errors()
         
         self.parser = create_async_parser(config, self.packet_queue, self.stop_event)
-        
+        self.live_message_queue = asyncio.Queue(maxsize=500) if sio else None
+
         self.stop_event.clear()
-        
+
         parser_task = asyncio.create_task(self.parser.run())
         self.background_tasks.add(parser_task)
         parser_task.add_done_callback(self.background_tasks.discard)
-        
+
         processor_task = asyncio.create_task(
-            process_packets(self.packet_queue, self.stop_event, can_manager)
+            process_packets(self.packet_queue, self.stop_event, can_manager, self.live_message_queue)
         )
         self.background_tasks.add(processor_task)
         processor_task.add_done_callback(self.background_tasks.discard)
+
+        if sio and self.live_message_queue is not None:
+            emit_task = asyncio.create_task(self._emit_live_messages(sio))
+            self.background_tasks.add(emit_task)
+            emit_task.add_done_callback(self.background_tasks.discard)
 
         self.running = True
         logger.info(f"--- Telemetry Service Started (Mode: {config['INPUT_MODE']}) ---")

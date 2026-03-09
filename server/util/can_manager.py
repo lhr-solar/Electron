@@ -85,17 +85,35 @@ class CANManager:
             return None
 
     def process_message(self, raw_message: can.Message, slcan_packet: str):
+        """Process CAN message, write to Influx if decoded. Returns live payload for UI: { can_id_hex, message_name, signals }."""
+        can_id_hex = f"0x{raw_message.arbitration_id:X}"
         try:
             if raw_message.arbitration_id not in self.id_map:
-                return
+                return {"can_id_hex": can_id_hex, "message_name": None, "signals": {}}
             decoded_msg = self.decode_message(raw_message.arbitration_id, raw_message.data)
             if not decoded_msg:
-                return
+                return {"can_id_hex": can_id_hex, "message_name": None, "signals": {}}
+            message_def = self.db.get_message_by_frame_id(raw_message.arbitration_id)
             if self.print_can_info:
                 self._print_message_info(raw_message, decoded_msg, slcan_packet)
             self._write_to_influx(raw_message.arbitration_id, decoded_msg, slcan_packet)
+            index_signal_name = self.array_messages.get(raw_message.arbitration_id)
+            signals = {}
+            for k, v in decoded_msg.items():
+                if index_signal_name and k == index_signal_name:
+                    continue
+                if isinstance(v, (int, float)):
+                    signals[k] = float(v) if isinstance(v, float) else v
+                else:
+                    signals[k] = str(v)
+            return {
+                "can_id_hex": can_id_hex,
+                "message_name": message_def.name if message_def else None,
+                "signals": signals,
+            }
         except Exception as e:
             logger.exception("process_message error: %s", e)
+            return {"can_id_hex": can_id_hex, "message_name": None, "signals": {}}
 
     def _write_to_influx(self, arbitration_id, decoded_msg, slcan_packet):
         """Write one point to Influx. Tags: vehicle, network (DBC name), sender, message_name [, idx]. Fields: raw_packet + decoded signals."""
