@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Stack, Group, Text, Select, TextInput, Button, Box, Divider, Checkbox } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { socket } from '../socket';
-import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save } from 'lucide-react';
+import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2 } from 'lucide-react';
+import { LogFileManagerModal, DbcFileManagerModal } from './FileManagerModals';
 
 const INPUT_MODES = [
   { value: 'serial_canadapter', label: 'Adapter' },
@@ -57,6 +58,8 @@ export function TelemetryDashboard() {
     error_message: null,
   });
   const [loading, setLoading] = useState({ start: false, stop: false, restart: false, save: false });
+  const [logModalOpen, setLogModalOpen] = useState(false);
+  const [dbcModalOpen, setDbcModalOpen] = useState(false);
 
   const inputMode = config?.INPUT_MODE === 'serial' ? 'serial_canadapter' : (config?.INPUT_MODE || 'tcp');
 
@@ -318,21 +321,32 @@ export function TelemetryDashboard() {
         );
       case 'file':
         return (
-          <Group gap="sm" align="flex-end">
-            <Select
-              label="Log file"
-              data={logFiles}
-              value={config.REPLAY_FILE_PATH ? config.REPLAY_FILE_PATH.replace(/^.*[/\\]/, '') : null}
-              onChange={(v) => setLocalConfig('REPLAY_FILE_PATH', v)}
-              searchable
-              disabled={disabled}
-              size="sm"
-              style={{ flex: 1 }}
-            />
-            <Button variant="subtle" size="sm" onClick={loadLogFiles} disabled={disabled} style={{ color: 'var(--text-muted)' }}>
-              <RefreshCw size={14} />
+          <>
+            <Group gap="sm" align="flex-end">
+              <Select
+                label="Log file"
+                data={logFiles}
+                value={config.REPLAY_FILE_PATH ? config.REPLAY_FILE_PATH.replace(/^.*[/\\]/, '') : null}
+                onChange={(v) => setLocalConfig('REPLAY_FILE_PATH', v)}
+                searchable
+                disabled={disabled}
+                size="sm"
+                style={{ flex: 1 }}
+              />
+              <Button variant="subtle" size="sm" onClick={loadLogFiles} disabled={disabled} style={{ color: 'var(--text-muted)' }}>
+                <RefreshCw size={14} />
+              </Button>
+            </Group>
+            <Button
+              variant="subtle"
+              size="compact-xs"
+              onClick={() => setLogModalOpen(true)}
+              style={{ color: 'var(--text-muted)', alignSelf: 'flex-start' }}
+              leftSection={<Settings2 size={12} />}
+            >
+              Edit log files
             </Button>
-          </Group>
+          </>
         );
       default:
         return null;
@@ -446,9 +460,18 @@ export function TelemetryDashboard() {
       {config.DBC_VEHICLE && (
         dbcFilesForVehicle.length > 0 ? (
           <>
-            <Text size="xs" c="dimmed" mb="xs">
-              DBC files
-            </Text>
+            <Group gap="xs" mb="xs" justify="space-between">
+              <Text size="xs" c="dimmed">DBC files</Text>
+              <Button
+                variant="subtle"
+                size="compact-xs"
+                onClick={() => setDbcModalOpen(true)}
+                style={{ color: 'var(--text-muted)' }}
+                leftSection={<Settings2 size={12} />}
+              >
+                Edit
+              </Button>
+            </Group>
             <Stack gap="xs" mb={hasDbcSelection ? 'md' : 0}>
               {dbcFilesForVehicle.map((filename) => {
                 const selected = Array.isArray(config.DBC_FILES) && config.DBC_FILES.includes(filename);
@@ -523,6 +546,20 @@ export function TelemetryDashboard() {
       >
         Save
       </Button>
+
+      <LogFileManagerModal
+        opened={logModalOpen}
+        onClose={() => setLogModalOpen(false)}
+        onFilesChanged={loadLogFiles}
+      />
+      <DbcFileManagerModal
+        opened={dbcModalOpen}
+        onClose={() => setDbcModalOpen(false)}
+        vehicles={vehicles}
+        currentVehicle={config.DBC_VEHICLE}
+        onFilesChanged={() => loadDbcFilesForVehicle(config.DBC_VEHICLE)}
+        onVehiclesChanged={loadVehicles}
+      />
     </Stack>
   );
 }
