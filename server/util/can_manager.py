@@ -85,13 +85,15 @@ class CANManager:
             return None
 
     def process_message(self, raw_message: can.Message, slcan_packet: str):
-        """Process CAN message, write to Influx if decoded. Returns live payload for UI: { can_id_hex, message_name, signals }."""
+        """Process CAN message, write to Influx (found or not). Returns live payload for UI."""
         can_id_hex = f"0x{raw_message.arbitration_id:X}"
         try:
             if raw_message.arbitration_id not in self.id_map:
+                self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
                 return {"can_id_hex": can_id_hex, "message_name": None, "signals": {}}
             decoded_msg = self.decode_message(raw_message.arbitration_id, raw_message.data)
             if not decoded_msg:
+                self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
                 return {"can_id_hex": can_id_hex, "message_name": None, "signals": {}}
             message_def = self.db.get_message_by_frame_id(raw_message.arbitration_id)
             if self.print_can_info:
@@ -113,7 +115,25 @@ class CANManager:
             }
         except Exception as e:
             logger.exception("process_message error: %s", e)
+            self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
             return {"can_id_hex": can_id_hex, "message_name": None, "signals": {}}
+
+    def _write_unknown_to_influx(self, arbitration_id, slcan_packet):
+        """Write a not-found / decode-failed message to Influx with raw packet only."""
+        if not self.influx_writer:
+            return
+        try:
+            measurement = f"{arbitration_id:X}"
+            tags = {
+                "vehicle": self.vehicle_name,
+                "network": "not_found",
+                "sender": "Unknown",
+                "message_name": "not_found",
+            }
+            fields = {"raw_packet": slcan_packet}
+            self.influx_writer.write_data(measurement, tags, fields, int(time.time_ns()))
+        except Exception as e:
+            logger.error("Influx write (unknown) error: %s", e)
 
     def _write_to_influx(self, arbitration_id, decoded_msg, slcan_packet):
         """Write one point to Influx. Tags: vehicle, network (DBC name), sender, message_name [, idx]. Fields: raw_packet + decoded signals."""
