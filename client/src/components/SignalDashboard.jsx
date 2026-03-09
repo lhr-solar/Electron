@@ -38,6 +38,7 @@ export function SignalDashboard() {
             message_name: msg.message_name,
             network: msg.network || 'not_found',
             signals: mergedSignals,
+            units: msg.units || (existing && existing.units) || {},
             is_array: true,
             raw_packet: msg.raw_packet || '',
             timestamp_ns: msg.timestamp_ns || 0,
@@ -47,6 +48,7 @@ export function SignalDashboard() {
             message_name: msg.message_name,
             network: msg.network || 'not_found',
             signals: msg.signals || {},
+            units: msg.units || {},
             raw_packet: msg.raw_packet || '',
             timestamp_ns: msg.timestamp_ns || 0,
           };
@@ -179,10 +181,12 @@ export function SignalDashboard() {
                         </Text>
                       </Group>
                       <Stack gap={4} mt="xs" pl="xs" style={{ borderLeft: '2px solid var(--border)' }}>
-                        {hasSignals && Object.entries(msg.signals).map(([name, value]) => (
-                          Array.isArray(value) ? (
+                        {hasSignals && Object.entries(msg.signals).map(([name, value]) => {
+                          const unit = msg.units && msg.units[name];
+                          const unitStr = unit ? ` ${unit}` : '';
+                          return Array.isArray(value) ? (
                             <div key={name}>
-                              <Text size="xs" fw={500} style={{ color: 'var(--text-muted)' }}>{name}:</Text>
+                              <Text size="xs" fw={500} style={{ color: 'var(--text-muted)' }}>{name}{unit ? ` (${unit})` : ''}:</Text>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 8px', paddingLeft: 8, marginTop: 2 }}>
                                 {value.map((v, i) => (
                                   <Text key={i} size="xs" style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>
@@ -193,10 +197,10 @@ export function SignalDashboard() {
                             </div>
                           ) : (
                             <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
-                              {name}: {String(value)}
+                              {name}: {String(value)}{unitStr}
                             </Text>
-                          )
-                        ))}
+                          );
+                        })}
                         {msg.raw_packet && (
                           <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', opacity: 0.6 }}>
                             {msg.raw_packet}

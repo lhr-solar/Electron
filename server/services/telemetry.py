@@ -61,6 +61,7 @@ class TelemetryService:
                 "message_name": msg.get("message_name"),
                 "network": msg.get("network", "not_found"),
                 "signals": merged_signals,
+                "units": msg.get("units", {}),
                 "is_array": True,
                 "raw_packet": msg.get("raw_packet", ""),
                 "timestamp_ns": msg.get("timestamp_ns", 0),
@@ -70,6 +71,7 @@ class TelemetryService:
                 "message_name": msg.get("message_name"),
                 "network": msg.get("network", "not_found"),
                 "signals": incoming_signals,
+                "units": msg.get("units", {}),
                 "raw_packet": msg.get("raw_packet", ""),
                 "timestamp_ns": msg.get("timestamp_ns", 0),
             }

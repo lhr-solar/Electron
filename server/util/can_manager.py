@@ -122,12 +122,18 @@ class CANManager:
                     signals[k] = float(v) if isinstance(v, float) else v
                 else:
                     signals[k] = str(v)
+            units = {}
+            if message_def:
+                for sig in message_def.signals:
+                    if sig.unit:
+                        units[sig.name] = sig.unit
             result = {
                 "can_id_hex": can_id_hex,
                 "message_name": message_def.name if message_def else None,
                 "sender": sender,
                 "network": network,
                 "signals": signals,
+                "units": units,
             }
             if array_index is not None:
                 result["array_index"] = array_index

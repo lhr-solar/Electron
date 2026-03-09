@@ -197,11 +197,14 @@ export function LiveMessageLog() {
                 </Text>
                 <Collapse in={isExpanded}>
                   <Stack gap={4} mt="xs" pl="xs" style={{ borderLeft: '2px solid var(--border)' }}>
-                    {hasSignals && Object.entries(msg.signals).map(([name, value]) => (
-                      <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
-                        {name}: {String(value)}
-                      </Text>
-                    ))}
+                    {hasSignals && Object.entries(msg.signals).map(([name, value]) => {
+                      const unit = msg.units && msg.units[name];
+                      return (
+                        <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
+                          {name}: {String(value)}{unit ? ` ${unit}` : ''}
+                        </Text>
+                      );
+                    })}
                     {msg.raw_packet && (
                       <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', opacity: 0.6 }}>
                         {msg.raw_packet}
