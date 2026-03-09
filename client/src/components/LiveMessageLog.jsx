@@ -196,10 +196,15 @@ export function LiveMessageLog() {
                     {msg.can_id_hex}
                     {msg.message_name != null ? ` · ${msg.message_name}` : ' · Not Found'}
                   </Text>
-                  {msg.vehicle && <Text size="xs" c="dimmed" style={{ opacity: 0.5, flexShrink: 0 }}>{msg.vehicle}</Text>}
+                  {msg.sender && <Text size="xs" c="dimmed" style={{ opacity: 0.5, flexShrink: 0 }}>{msg.sender}</Text>}
                 </Group>
                 <Collapse in={isExpanded}>
                   <Stack gap={4} mt="xs" pl="xs" style={{ borderLeft: '2px solid var(--border)' }}>
+                    {(msg.vehicle || msg.network) && (
+                      <Text size="xs" style={{ color: '#6d9eeb', opacity: 0.8, fontStyle: 'italic' }}>
+                        {[msg.vehicle, msg.network].filter(Boolean).join(' · ')}
+                      </Text>
+                    )}
                     {hasSignals && Object.entries(msg.signals).map(([name, value]) => {
                       const unit = msg.units && msg.units[name];
                       return (
