@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Stack, Group, Text, Select, TextInput, Button, Box, Divider, Checkbox } from '@mantine/core';
+import { Stack, Group, Text, Select, TextInput, Button, Box, Divider, Checkbox, Switch } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { socket } from '../socket';
-import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2 } from 'lucide-react';
+import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2, Database } from 'lucide-react';
 import { LogFileManagerModal, DbcFileManagerModal } from './FileManagerModals';
 
 const INPUT_MODES = [
@@ -23,7 +23,7 @@ function api(path, options = {}) {
   });
 }
 
-const CONFIG_KEYS = ['INPUT_MODE', 'DBC_VEHICLE', 'DBC_FILES', 'SERIAL_PORT', 'SERIAL_BAUDRATE', 'CAN_BITRATE', 'TCP_IP', 'TCP_PORT', 'REPLAY_FILE_PATH'];
+const CONFIG_KEYS = ['INPUT_MODE', 'DBC_VEHICLE', 'DBC_FILES', 'SERIAL_PORT', 'SERIAL_BAUDRATE', 'CAN_BITRATE', 'TCP_IP', 'TCP_PORT', 'REPLAY_FILE_PATH', 'INFLUX_WRITE_ENABLED'];
 
 function configEquals(a, b) {
   if (!a || !b) return !a && !b;
@@ -532,6 +532,35 @@ export function TelemetryDashboard() {
         {renderModeFields()}
       </Stack>
 
+      <Divider color="var(--border)" mt="md" mb="md" />
+
+      <Group gap="xs" mb="xs" align="center" justify="space-between">
+        <Group gap={6}>
+          <Database size={14} style={{ color: 'var(--text-muted)' }} />
+          <Text size="xs" c="dimmed">Database</Text>
+        </Group>
+        <Switch
+          size="xs"
+          checked={config.INFLUX_WRITE_ENABLED !== false}
+          onChange={(e) => setLocalConfig('INFLUX_WRITE_ENABLED', e.currentTarget.checked)}
+          disabled={status.service_running}
+          label={config.INFLUX_WRITE_ENABLED !== false ? 'Write enabled' : 'Write disabled'}
+          color={config.INFLUX_WRITE_ENABLED !== false ? 'green' : 'red'}
+          styles={{
+            label: { color: 'var(--text-muted)', fontSize: 12 },
+            track: {
+              backgroundColor: config.INFLUX_WRITE_ENABLED !== false ? '#22c55e' : '#ef4444',
+              borderColor: config.INFLUX_WRITE_ENABLED !== false ? '#22c55e' : '#ef4444',
+            },
+          }}
+        />
+      </Group>
+      {config.INFLUX_BUCKET && (
+        <Text size="xs" c="dimmed" mb="md">
+          Bucket: <Text span size="xs" style={{ color: 'var(--text)' }}>{config.INFLUX_BUCKET}</Text>
+        </Text>
+      )}
+
       <Button
         variant="filled"
         size="sm"
@@ -539,7 +568,7 @@ export function TelemetryDashboard() {
         onClick={handleSave}
         loading={loading.save}
         disabled={!saveEnabled}
-        mt="md"
+        mt="xs"
         bg={saveEnabled ? BLUE_ACTIVE : STATUS_GRAY}
         c={saveEnabled ? 'white' : '#a1a1aa'}
         style={!saveEnabled ? { opacity: 0.8 } : {}}

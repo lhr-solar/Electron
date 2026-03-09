@@ -66,11 +66,15 @@ class TelemetryService:
             logger.error("Could not start service due to invalid configuration.")
             return
 
-        self.influx_writer = influx_writer
-        
-        if config.get("CLEAR_DEBUG_BUCKET_ON_STARTUP") and config.get("INFLUX_BUCKET") == "debug":
+        influx_write_enabled = config.get("INFLUX_WRITE_ENABLED", True)
+        self.influx_writer = influx_writer if influx_write_enabled else None
+
+        if influx_write_enabled and config.get("CLEAR_DEBUG_BUCKET_ON_STARTUP") and config.get("INFLUX_BUCKET") == "debug":
             logger.info(f"Startup clear requested for bucket: '{self.influx_writer.bucket}'")
             self.influx_writer.backup_and_clear_bucket()
+
+        if not influx_write_enabled:
+            logger.info("InfluxDB writes disabled by config.")
 
         self.dbc_errors = []
         vehicle = config.get("DBC_VEHICLE", "").strip() or "Daybreak"

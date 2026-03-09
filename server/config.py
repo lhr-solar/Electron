@@ -19,6 +19,7 @@ class Configuration:
             "DBC_FILES": [],  # list of .dbc filenames under DBC_DIR/<vehicle>/
             "PRINT_CAN_INFO": False,
             "CLEAR_DEBUG_BUCKET_ON_STARTUP": False,
+            "INFLUX_WRITE_ENABLED": True,
         }
         self.INFLUX_CONFIG = {
             "INFLUX_URL": "http://localhost:8086",
