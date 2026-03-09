@@ -32,17 +32,20 @@ class TelemetryService:
         return list(self.dbc_errors)
 
     def _update_cache(self, msg):
-        """Update the message cache with a single message payload. Handles array messages by merging into indexed lists."""
+        """Update the message cache with a single message payload. Handles array messages by merging into indexed lists.
+        Top-level key is 'vehicle::sender' to separate ECUs across vehicles."""
         sender = msg.get("sender", "Unknown")
+        vehicle = msg.get("vehicle", "unknown")
+        cache_key = f"{vehicle}::{sender}"
         can_id_hex = msg.get("can_id_hex", "")
-        if sender not in self.message_cache:
-            self.message_cache[sender] = {}
+        if cache_key not in self.message_cache:
+            self.message_cache[cache_key] = {}
 
         array_index = msg.get("array_index")
         incoming_signals = msg.get("signals", {})
 
         if array_index is not None:
-            existing = self.message_cache[sender].get(can_id_hex)
+            existing = self.message_cache[cache_key].get(can_id_hex)
             if existing and existing.get("is_array"):
                 merged_signals = existing["signals"]
             else:
@@ -57,7 +60,7 @@ class TelemetryService:
                 arr[array_index] = sig_val
                 merged_signals[sig_name] = arr
 
-            self.message_cache[sender][can_id_hex] = {
+            self.message_cache[cache_key][can_id_hex] = {
                 "message_name": msg.get("message_name"),
                 "network": msg.get("network", "not_found"),
                 "signals": merged_signals,
@@ -67,7 +70,7 @@ class TelemetryService:
                 "timestamp_ns": msg.get("timestamp_ns", 0),
             }
         else:
-            self.message_cache[sender][can_id_hex] = {
+            self.message_cache[cache_key][can_id_hex] = {
                 "message_name": msg.get("message_name"),
                 "network": msg.get("network", "not_found"),
                 "signals": incoming_signals,

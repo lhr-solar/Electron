@@ -76,6 +76,7 @@ async def send_status_updates(sio: socketio.AsyncServer):
             "error_message": parser_status.get("error_message") if parser_status else None,
             "dbc_errors": telemetry_service.get_dbc_errors(),
             "influx_bucket": settings.get_bucket(),
+            "vehicle": settings.COMMON_CONFIG.get("DBC_VEHICLE", ""),
         }
         await sio.emit('status', status)
         await asyncio.sleep(1)

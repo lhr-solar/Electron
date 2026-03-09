@@ -9,6 +9,12 @@ function formatTime(timestampNs) {
   return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
 }
 
+function parseCacheKey(key) {
+  const idx = key.indexOf('::');
+  if (idx === -1) return { vehicle: '', sender: key };
+  return { vehicle: key.slice(0, idx), sender: key.slice(idx + 2) };
+}
+
 export function SignalDashboard() {
   const [cache, setCache] = useState({});
   const [search, setSearch] = useState('');
@@ -18,14 +24,16 @@ export function SignalDashboard() {
       const next = { ...prev };
       for (const msg of msgs) {
         const sender = msg.sender || 'Unknown';
+        const vehicle = msg.vehicle || 'unknown';
+        const cacheKey = `${vehicle}::${sender}`;
         const canId = msg.can_id_hex;
         if (!canId) continue;
-        if (!next[sender]) next[sender] = {};
-        next[sender] = { ...next[sender] };
+        if (!next[cacheKey]) next[cacheKey] = {};
+        next[cacheKey] = { ...next[cacheKey] };
 
         const arrayIndex = msg.array_index;
         if (arrayIndex != null) {
-          const existing = next[sender][canId];
+          const existing = next[cacheKey][canId];
           const mergedSignals = (existing && existing.is_array) ? { ...existing.signals } : {};
           const incoming = msg.signals || {};
           for (const [sigName, sigVal] of Object.entries(incoming)) {
@@ -34,7 +42,7 @@ export function SignalDashboard() {
             arr[arrayIndex] = sigVal;
             mergedSignals[sigName] = arr;
           }
-          next[sender][canId] = {
+          next[cacheKey][canId] = {
             message_name: msg.message_name,
             network: msg.network || 'not_found',
             signals: mergedSignals,
@@ -44,7 +52,7 @@ export function SignalDashboard() {
             timestamp_ns: msg.timestamp_ns || 0,
           };
         } else {
-          next[sender][canId] = {
+          next[cacheKey][canId] = {
             message_name: msg.message_name,
             network: msg.network || 'not_found',
             signals: msg.signals || {},
@@ -80,7 +88,7 @@ export function SignalDashboard() {
   }, [mergeIntoCache]);
 
   const searchLower = search.trim().toLowerCase();
-  const senders = Object.keys(cache).sort();
+  const cacheKeys = Object.keys(cache).sort();
 
   return (
     <Box
@@ -95,12 +103,12 @@ export function SignalDashboard() {
       <Group gap="md" mb="lg" align="center">
         <Text size="md" fw={600} style={{ color: '#e4e4e7' }}>Signal Dashboard</Text>
         <TextInput
-          placeholder="Filter by ECU, ID, or message name..."
+          placeholder="Filter by ECU, vehicle, ID, or name..."
           size="xs"
           value={search}
           onChange={(e) => setSearch(e.currentTarget.value)}
           leftSection={<Search size={12} />}
-          style={{ width: 280 }}
+          style={{ width: 300 }}
           styles={{ input: { backgroundColor: '#0f0f11' } }}
         />
         <ActionIcon
@@ -114,15 +122,16 @@ export function SignalDashboard() {
         </ActionIcon>
       </Group>
 
-      {senders.length === 0 && (
+      {cacheKeys.length === 0 && (
         <Text c="dimmed" size="sm" ta="center" mt="xl">
           No messages received yet. Start the telemetry service to see signals.
         </Text>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
-        {senders.map((sender) => {
-          const messages = cache[sender];
+        {cacheKeys.map((cacheKey) => {
+          const { vehicle, sender } = parseCacheKey(cacheKey);
+          const messages = cache[cacheKey];
           const canIds = Object.keys(messages).sort();
 
           const filteredIds = searchLower
@@ -130,6 +139,7 @@ export function SignalDashboard() {
                 const m = messages[id];
                 return (
                   sender.toLowerCase().includes(searchLower) ||
+                  vehicle.toLowerCase().includes(searchLower) ||
                   id.toLowerCase().includes(searchLower) ||
                   (m.message_name || '').toLowerCase().includes(searchLower)
                 );
@@ -140,7 +150,7 @@ export function SignalDashboard() {
 
           return (
             <Box
-              key={sender}
+              key={cacheKey}
               style={{
                 border: '1px solid var(--border)',
                 borderRadius: 8,
@@ -149,9 +159,10 @@ export function SignalDashboard() {
                 minWidth: 360,
               }}
             >
-              <Text size="sm" fw={600} mb="sm" style={{ color: '#e4e4e7' }}>
-                {sender}
-              </Text>
+              <Group gap={6} mb="sm">
+                <Text size="sm" fw={600} style={{ color: '#e4e4e7' }}>{sender}</Text>
+                {vehicle && <Text size="xs" c="dimmed" style={{ opacity: 0.5 }}>· {vehicle}</Text>}
+              </Group>
               <Stack gap={6}>
                 {filteredIds.map((canId) => {
                   const msg = messages[canId];

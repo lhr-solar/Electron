@@ -191,10 +191,13 @@ export function LiveMessageLog() {
                 <Text size="xs" c="dimmed" style={{ marginBottom: 2 }}>
                   {formatTime(msg.timestamp_ns)}
                 </Text>
-                <Text size="sm" style={{ color: msg.message_name != null ? 'var(--text)' : '#ef4444' }}>
-                  {msg.can_id_hex}
-                  {msg.message_name != null ? ` · ${msg.message_name}` : ' · Not Found'}
-                </Text>
+                <Group gap={6} wrap="nowrap">
+                  <Text size="sm" style={{ color: msg.message_name != null ? 'var(--text)' : '#ef4444' }}>
+                    {msg.can_id_hex}
+                    {msg.message_name != null ? ` · ${msg.message_name}` : ' · Not Found'}
+                  </Text>
+                  {msg.vehicle && <Text size="xs" c="dimmed" style={{ opacity: 0.5, flexShrink: 0 }}>{msg.vehicle}</Text>}
+                </Group>
                 <Collapse in={isExpanded}>
                   <Stack gap={4} mt="xs" pl="xs" style={{ borderLeft: '2px solid var(--border)' }}>
                     {hasSignals && Object.entries(msg.signals).map(([name, value]) => {
