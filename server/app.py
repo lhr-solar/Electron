@@ -32,6 +32,8 @@ STATIC_CLIENT_DIR = os.path.join(_PROJECT_ROOT, "client", "dist")
 class Bucket(BaseModel): name: str
 class ConfigUpdate(BaseModel): key: str; value: str | int | list
 class FileAction(BaseModel): filename: str
+class FileRename(BaseModel): old_name: str; new_name: str
+class VehicleCreate(BaseModel): name: str
 
 # --- Helper Functions ---
 def move_to_trash(directory: str, filename: str):
@@ -217,6 +219,65 @@ async def delete_file_endpoint(directory_key: str, action: FileAction):
     if not os.path.exists(file_path): raise HTTPException(status_code=404, detail="File not found.")
     move_to_trash(dir_path, action.filename)
     return {"message": f"File '{action.filename}' moved to trash."}
+
+@app.put("/api/files/{directory_key}/rename")
+async def rename_file_endpoint(directory_key: str, body: FileRename):
+    dir_path = getattr(settings, f"{directory_key.upper()}_DIR", None)
+    if not dir_path: raise HTTPException(status_code=404, detail="Directory not found.")
+    old_path = os.path.join(dir_path, body.old_name)
+    new_path = os.path.join(dir_path, body.new_name)
+    if not os.path.exists(old_path): raise HTTPException(status_code=404, detail="File not found.")
+    if os.path.exists(new_path): raise HTTPException(status_code=409, detail=f"File '{body.new_name}' already exists.")
+    os.rename(old_path, new_path)
+    return {"message": f"Renamed '{body.old_name}' to '{body.new_name}'."}
+
+@app.post("/api/dbc/vehicles")
+async def create_vehicle(body: VehicleCreate):
+    name = body.name.strip()
+    if not name or ".." in name or "/" in name or "\\" in name:
+        raise HTTPException(status_code=400, detail="Invalid vehicle name.")
+    path = os.path.join(settings.DBC_DIR, name)
+    if os.path.exists(path): raise HTTPException(status_code=409, detail=f"Vehicle '{name}' already exists.")
+    os.makedirs(path)
+    return {"message": f"Vehicle '{name}' created."}
+
+@app.post("/api/dbc/vehicles/{vehicle}/files")
+async def upload_dbc_file(vehicle: str, file: UploadFile = File(...), overwrite: bool = False):
+    if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
+        raise HTTPException(status_code=400, detail="Invalid vehicle name.")
+    dir_path = os.path.join(settings.DBC_DIR, vehicle)
+    if not os.path.isdir(dir_path): raise HTTPException(status_code=404, detail="Vehicle not found.")
+    file_path = os.path.join(dir_path, file.filename)
+    if os.path.exists(file_path) and not overwrite:
+        raise HTTPException(status_code=409, detail=f"File '{file.filename}' already exists.")
+    if os.path.exists(file_path) and overwrite:
+        move_to_trash(dir_path, file.filename)
+    with open(file_path, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
+    return {"filename": file.filename}
+
+@app.delete("/api/dbc/vehicles/{vehicle}/files")
+async def delete_dbc_file(vehicle: str, action: FileAction):
+    if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
+        raise HTTPException(status_code=400, detail="Invalid vehicle name.")
+    dir_path = os.path.join(settings.DBC_DIR, vehicle)
+    if not os.path.isdir(dir_path): raise HTTPException(status_code=404, detail="Vehicle not found.")
+    file_path = os.path.join(dir_path, action.filename)
+    if not os.path.exists(file_path): raise HTTPException(status_code=404, detail="File not found.")
+    move_to_trash(dir_path, action.filename)
+    return {"message": f"File '{action.filename}' moved to trash."}
+
+@app.put("/api/dbc/vehicles/{vehicle}/files/rename")
+async def rename_dbc_file(vehicle: str, body: FileRename):
+    if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
+        raise HTTPException(status_code=400, detail="Invalid vehicle name.")
+    dir_path = os.path.join(settings.DBC_DIR, vehicle)
+    if not os.path.isdir(dir_path): raise HTTPException(status_code=404, detail="Vehicle not found.")
+    old_path = os.path.join(dir_path, body.old_name)
+    new_path = os.path.join(dir_path, body.new_name)
+    if not os.path.exists(old_path): raise HTTPException(status_code=404, detail="File not found.")
+    if os.path.exists(new_path): raise HTTPException(status_code=409, detail=f"File '{body.new_name}' already exists.")
+    os.rename(old_path, new_path)
+    return {"message": f"Renamed '{body.old_name}' to '{body.new_name}'."}
 
 @app.get("/api/influx/buckets")
 async def list_buckets():
