@@ -80,9 +80,17 @@ class CANManager:
     def decode_message(self, arbitration_id, data):
         try:
             return self.db.decode_message(arbitration_id, data)
+        except Exception:
+            pass
+        # Retry with zero-padded data if shorter than DBC-defined length
+        try:
+            msg_def = self.db.get_message_by_frame_id(arbitration_id)
+            if msg_def and len(data) < msg_def.length:
+                padded = data + b'\x00' * (msg_def.length - len(data))
+                return self.db.decode_message(arbitration_id, padded)
         except Exception as e:
             logger.debug("Decode failed for id %s: %s", hex(arbitration_id), e)
-            return None
+        return None
 
     def process_message(self, raw_message: can.Message, slcan_packet: str):
         """Process CAN message, write to Influx (found or not). Returns live payload for UI including sender/network."""
@@ -102,21 +110,28 @@ class CANManager:
                 self._print_message_info(raw_message, decoded_msg, slcan_packet)
             self._write_to_influx(raw_message.arbitration_id, decoded_msg, slcan_packet)
             index_signal_name = self.array_messages.get(raw_message.arbitration_id)
+            array_index = None
             signals = {}
             for k, v in decoded_msg.items():
                 if index_signal_name and k == index_signal_name:
-                    continue
+                    try:
+                        array_index = int(v)
+                    except (TypeError, ValueError):
+                        array_index = None
                 if isinstance(v, (int, float)):
                     signals[k] = float(v) if isinstance(v, float) else v
                 else:
                     signals[k] = str(v)
-            return {
+            result = {
                 "can_id_hex": can_id_hex,
                 "message_name": message_def.name if message_def else None,
                 "sender": sender,
                 "network": network,
                 "signals": signals,
             }
+            if array_index is not None:
+                result["array_index"] = array_index
+            return result
         except Exception as e:
             logger.exception("process_message error: %s", e)
             self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)

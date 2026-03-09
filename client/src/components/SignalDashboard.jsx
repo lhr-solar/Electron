@@ -22,13 +22,35 @@ export function SignalDashboard() {
         if (!canId) continue;
         if (!next[sender]) next[sender] = {};
         next[sender] = { ...next[sender] };
-        next[sender][canId] = {
-          message_name: msg.message_name,
-          network: msg.network || 'not_found',
-          signals: msg.signals || {},
-          raw_packet: msg.raw_packet || '',
-          timestamp_ns: msg.timestamp_ns || 0,
-        };
+
+        const arrayIndex = msg.array_index;
+        if (arrayIndex != null) {
+          const existing = next[sender][canId];
+          const mergedSignals = (existing && existing.is_array) ? { ...existing.signals } : {};
+          const incoming = msg.signals || {};
+          for (const [sigName, sigVal] of Object.entries(incoming)) {
+            const arr = Array.isArray(mergedSignals[sigName]) ? [...mergedSignals[sigName]] : [];
+            while (arr.length <= arrayIndex) arr.push(0);
+            arr[arrayIndex] = sigVal;
+            mergedSignals[sigName] = arr;
+          }
+          next[sender][canId] = {
+            message_name: msg.message_name,
+            network: msg.network || 'not_found',
+            signals: mergedSignals,
+            is_array: true,
+            raw_packet: msg.raw_packet || '',
+            timestamp_ns: msg.timestamp_ns || 0,
+          };
+        } else {
+          next[sender][canId] = {
+            message_name: msg.message_name,
+            network: msg.network || 'not_found',
+            signals: msg.signals || {},
+            raw_packet: msg.raw_packet || '',
+            timestamp_ns: msg.timestamp_ns || 0,
+          };
+        }
       }
       return next;
     });
@@ -158,9 +180,22 @@ export function SignalDashboard() {
                       </Group>
                       <Stack gap={4} mt="xs" pl="xs" style={{ borderLeft: '2px solid var(--border)' }}>
                         {hasSignals && Object.entries(msg.signals).map(([name, value]) => (
-                          <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
-                            {name}: {String(value)}
-                          </Text>
+                          Array.isArray(value) ? (
+                            <div key={name}>
+                              <Text size="xs" fw={500} style={{ color: 'var(--text-muted)' }}>{name}:</Text>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 8px', paddingLeft: 8, marginTop: 2 }}>
+                                {value.map((v, i) => (
+                                  <Text key={i} size="xs" style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                    [{i}] {String(v)}
+                                  </Text>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
+                              {name}: {String(value)}
+                            </Text>
+                          )
                         ))}
                         {msg.raw_packet && (
                           <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', opacity: 0.6 }}>

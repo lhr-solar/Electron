@@ -32,18 +32,47 @@ class TelemetryService:
         return list(self.dbc_errors)
 
     def _update_cache(self, msg):
-        """Update the message cache with a single message payload."""
+        """Update the message cache with a single message payload. Handles array messages by merging into indexed lists."""
         sender = msg.get("sender", "Unknown")
         can_id_hex = msg.get("can_id_hex", "")
         if sender not in self.message_cache:
             self.message_cache[sender] = {}
-        self.message_cache[sender][can_id_hex] = {
-            "message_name": msg.get("message_name"),
-            "network": msg.get("network", "not_found"),
-            "signals": msg.get("signals", {}),
-            "raw_packet": msg.get("raw_packet", ""),
-            "timestamp_ns": msg.get("timestamp_ns", 0),
-        }
+
+        array_index = msg.get("array_index")
+        incoming_signals = msg.get("signals", {})
+
+        if array_index is not None:
+            existing = self.message_cache[sender].get(can_id_hex)
+            if existing and existing.get("is_array"):
+                merged_signals = existing["signals"]
+            else:
+                merged_signals = {}
+
+            for sig_name, sig_val in incoming_signals.items():
+                arr = merged_signals.get(sig_name)
+                if not isinstance(arr, list):
+                    arr = []
+                if array_index >= len(arr):
+                    arr.extend([0] * (array_index + 1 - len(arr)))
+                arr[array_index] = sig_val
+                merged_signals[sig_name] = arr
+
+            self.message_cache[sender][can_id_hex] = {
+                "message_name": msg.get("message_name"),
+                "network": msg.get("network", "not_found"),
+                "signals": merged_signals,
+                "is_array": True,
+                "raw_packet": msg.get("raw_packet", ""),
+                "timestamp_ns": msg.get("timestamp_ns", 0),
+            }
+        else:
+            self.message_cache[sender][can_id_hex] = {
+                "message_name": msg.get("message_name"),
+                "network": msg.get("network", "not_found"),
+                "signals": incoming_signals,
+                "raw_packet": msg.get("raw_packet", ""),
+                "timestamp_ns": msg.get("timestamp_ns", 0),
+            }
 
     def get_cache(self):
         """Return the full message cache."""
