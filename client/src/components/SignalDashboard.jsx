@@ -84,7 +84,7 @@ export function SignalDashboard() {
           color="gray"
           size="sm"
           title="Reset dashboard"
-          onClick={() => setCache({})}
+          onClick={() => { setCache({}); socket.emit('reset_cache'); }}
         >
           <RotateCcw size={14} />
         </ActionIcon>

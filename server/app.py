@@ -328,5 +328,10 @@ async def request_cache(sid):
     cache = telemetry_service.get_cache()
     await sio.emit("signal_cache", cache, to=sid)
 
+@sio.event
+async def reset_cache(sid):
+    telemetry_service.message_cache = {}
+    logger.info(f"Signal cache reset by client {sid}")
+
 if __name__ == "__main__":
     uvicorn.run("server.app:asgi_app", host="0.0.0.0", port=4000, reload=True)
