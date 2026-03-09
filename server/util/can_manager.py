@@ -25,6 +25,11 @@ class CANManager:
         for path in paths:
             self._add_dbc_file(path)
 
+        # Ensure every message in merged db has a network (DBC name); cantools merge may reorder
+        for msg in self.db.messages:
+            if msg.frame_id not in self.frame_id_to_network:
+                self.frame_id_to_network[msg.frame_id] = "unknown"
+
         self.array_messages = {}  # frame_id -> index signal name (for array messages)
         self._parse_dbc_for_ecus_and_arrays()
 
@@ -34,16 +39,18 @@ class CANManager:
             logger.error(f"DBC file not found at: {dbc_file}")
             return
         try:
-            assigned_before = set(self.frame_id_to_network.keys())
-            self.db.add_dbc_file(dbc_file)
+            # Network name = DBC filename without extension (used as 'network' tag in DB).
             network_name = os.path.basename(dbc_file)
             if network_name.lower().endswith(".dbc"):
                 network_name = network_name[:-4]
-            for msg in self.db.messages:
-                if msg.frame_id not in assigned_before:
-                    self.frame_id_to_network[msg.frame_id] = network_name
-                    assigned_before.add(msg.frame_id)
-            logger.info(f"Loaded DBC: {dbc_file}")
+            # Resolve which frame_ids this DBC defines so we tag them with this network.
+            # Cantools merges when we add to main db; later file overwrites same frame_id.
+            temp_db = cantools.database.Database()
+            temp_db.add_dbc_file(dbc_file)
+            for msg in temp_db.messages:
+                self.frame_id_to_network[msg.frame_id] = network_name
+            self.db.add_dbc_file(dbc_file)
+            logger.info(f"Loaded DBC: {dbc_file} (network: {network_name})")
         except Exception as e:
             msg = f"{dbc_file}: {e!s}"
             self.load_errors.append(msg)
@@ -91,7 +98,7 @@ class CANManager:
             logger.exception("process_message error: %s", e)
 
     def _write_to_influx(self, arbitration_id, decoded_msg, slcan_packet):
-        """Write one point to Influx with consistent structure: measurement=CAN ID, tags=vehicle, network, sender, message_name [, idx], fields=raw_packet + decoded signals."""
+        """Write one point to Influx. Tags: vehicle, network (DBC name), sender, message_name [, idx]. Fields: raw_packet + decoded signals."""
         if not self.influx_writer:
             return
         try:
@@ -109,7 +116,6 @@ class CANManager:
                 "network": network,
                 "sender": sender,
                 "message_name": message_def.name,
-                "dbc_name": self.vehicle_name,  # backward compat for existing dashboards
             }
 
             # Array messages: message has an index signal (e.g. cell index). When idx is valid we add it as a tag
