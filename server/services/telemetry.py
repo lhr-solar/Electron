@@ -101,13 +101,17 @@ class TelemetryService:
         self.background_tasks.add(parser_task)
         parser_task.add_done_callback(self.background_tasks.discard)
 
-        # When file parser reaches end of file, auto-stop the service (parser sets stop_event; we run full stop).
         if config.get("INPUT_MODE") == "file":
 
             async def _stop_when_parser_done():
                 await parser_task
+                if not self.running:
+                    return
+                logger.info("File replay finished; waiting for packet queue to drain...")
+                await self.packet_queue.join()
+                await asyncio.sleep(0.3)
                 if self.running:
-                    logger.info("File replay finished; stopping telemetry service.")
+                    logger.info("Queue drained; stopping telemetry service.")
                     await self.stop()
 
             asyncio.create_task(_stop_when_parser_done())

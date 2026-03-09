@@ -21,7 +21,7 @@ async def process_packets(packet_queue: asyncio.Queue, stop_event: asyncio.Event
                 payload = await asyncio.to_thread(can_manager.process_message, msg, raw_frame)
                 if payload and live_message_queue is not None:
                     try:
-                        live_message_queue.put_nowait({"timestamp_ns": timestamp_ns, **payload})
+                        live_message_queue.put_nowait({"timestamp_ns": timestamp_ns, "raw_packet": raw_frame, **payload})
                     except asyncio.QueueFull:
                         pass
             packet_queue.task_done()

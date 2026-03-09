@@ -15,6 +15,7 @@ class FileParser(_Parser):
         logger.info(f"Starting async replay from file: {self.file_path}")
         self.status = "running"
         self.error_message = None
+        completed_normally = False
         
         try:
             with open(self.file_path, 'r') as f:
@@ -35,6 +36,7 @@ class FileParser(_Parser):
             if not self.stop_event.is_set():
                 logger.info("End of file reached.")
                 self.status = "finished"
+                completed_normally = True
 
         except FileNotFoundError:
             logger.error(f"Replay file not found at {self.file_path}")
@@ -48,6 +50,7 @@ class FileParser(_Parser):
             self.status = "error"
             self.error_message = str(e)
         finally:
-            self.stop_event.set()
+            if not completed_normally:
+                self.stop_event.set()
         
         logger.info(f"Async FileParser finished with status: {self.status}")

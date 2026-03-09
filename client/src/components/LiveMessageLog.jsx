@@ -149,28 +149,31 @@ export function LiveMessageLog() {
                   borderRadius: 4,
                   padding: '6px 8px',
                   backgroundColor: '#0f0f11',
-                  cursor: hasSignals ? 'pointer' : 'default',
+                  cursor: 'pointer',
                 }}
-                onClick={() => hasSignals && setExpandedId((x) => (x === msg.id ? null : msg.id))}
+                onClick={() => setExpandedId((x) => (x === msg.id ? null : msg.id))}
               >
                 <Text size="xs" c="dimmed" style={{ marginBottom: 2 }}>
                   {formatTime(msg.timestamp_ns)}
                 </Text>
                 <Text size="sm" style={{ color: 'var(--text)' }}>
                   {msg.can_id_hex}
-                  {msg.message_name != null ? ` · ${msg.message_name}` : ' | Not Found'}
+                  {msg.message_name != null ? ` · ${msg.message_name}` : ' · Not Found'}
                 </Text>
-                {hasSignals && (
-                  <Collapse in={isExpanded}>
-                    <Stack gap={4} mt="xs" pl="xs" style={{ borderLeft: '2px solid var(--border)' }}>
-                      {Object.entries(msg.signals).map(([name, value]) => (
-                        <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
-                          {name}: {String(value)}
-                        </Text>
-                      ))}
-                    </Stack>
-                  </Collapse>
-                )}
+                <Collapse in={isExpanded}>
+                  <Stack gap={4} mt="xs" pl="xs" style={{ borderLeft: '2px solid var(--border)' }}>
+                    {hasSignals && Object.entries(msg.signals).map(([name, value]) => (
+                      <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
+                        {name}: {String(value)}
+                      </Text>
+                    ))}
+                    {msg.raw_packet && (
+                      <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', opacity: 0.6 }}>
+                        {msg.raw_packet}
+                      </Text>
+                    )}
+                  </Stack>
+                </Collapse>
               </Box>
             );
           })}

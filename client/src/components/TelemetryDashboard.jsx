@@ -142,14 +142,14 @@ export function TelemetryDashboard() {
           title: 'Parser error',
           message: data.error_message,
           color: 'red',
-          autoClose: 8000,
+          autoClose: 3000,
         });
       }
       const errs = data.dbc_errors || [];
       if (errs.length && JSON.stringify(errs) !== JSON.stringify(lastDbcErrorsRef.current)) {
         lastDbcErrorsRef.current = errs;
         errs.forEach((msg) =>
-          notifications.show({ title: 'DBC error', message: msg, color: 'red', autoClose: 8000 })
+          notifications.show({ title: 'DBC error', message: msg, color: 'red', autoClose: 3000 })
         );
       } else if (!errs.length) lastDbcErrorsRef.current = [];
     };
