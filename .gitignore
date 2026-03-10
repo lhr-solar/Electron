@@ -20,3 +20,5 @@ grafana/provisions/datasources
 
 test_data
 .trash
+
+.DS_Store
