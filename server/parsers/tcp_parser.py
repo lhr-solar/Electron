@@ -43,9 +43,16 @@ class TCPParser(_Parser):
 
                     buffer += data.decode('ascii', errors='ignore')
 
-                    while '\r' in buffer:
-                        end_index = buffer.index('\r')
-                        potential_frame = buffer[:end_index + 1]
+                    # Process buffer using incremental search to avoid repeated rescans
+                    search_start = 0
+                    while True:
+                        end_index = buffer.find('\r', search_start)
+                        if end_index == -1:
+                            # Keep unprocessed tail in buffer
+                            buffer = buffer[search_start:]
+                            break
+
+                        potential_frame = buffer[search_start:end_index + 1]
                         t_index = potential_frame.rfind('t')
                         T_index = potential_frame.rfind('T')
                         start_index = max(t_index, T_index)
@@ -54,8 +61,8 @@ class TCPParser(_Parser):
                             valid_frame = potential_frame[start_index:].strip()
                             if valid_frame:
                                 await self.queue.put(valid_frame)
-                        
-                        buffer = buffer[end_index + 1:]
+
+                        search_start = end_index + 1
 
             except asyncio.TimeoutError:
                 logger.warning(f"Connection timed out after {self.connection_timeout}s. Reconnecting...")

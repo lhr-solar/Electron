@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Box, Text, Stack, Group, TextInput, ActionIcon } from '@mantine/core';
 import { Search, RotateCcw } from 'lucide-react';
 import { socket } from '../socket';
@@ -88,7 +88,7 @@ export function SignalDashboard() {
   }, [mergeIntoCache]);
 
   const searchLower = search.trim().toLowerCase();
-  const cacheKeys = Object.keys(cache).sort();
+  const cacheKeys = useMemo(() => Object.keys(cache).sort(), [cache]);
 
   return (
     <Box

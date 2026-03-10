@@ -301,33 +301,44 @@ async def upload_file(directory_key: str, file: UploadFile = File(...), overwrit
     dir_path = getattr(settings, f"{directory_key.upper()}_DIR", None)
     if not dir_path: raise HTTPException(status_code=404, detail="Directory not found.")
     os.makedirs(dir_path, exist_ok=True)
-    file_path = os.path.join(dir_path, file.filename)
+    safe_name = os.path.basename(file.filename)
+    if not safe_name or safe_name in (".", "..") or any(sep in safe_name for sep in ("/", "\\")):
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    file_path = os.path.join(dir_path, safe_name)
     if os.path.exists(file_path) and not overwrite:
-        raise HTTPException(status_code=409, detail=f"File '{file.filename}' already exists. Please confirm to overwrite.")
+        raise HTTPException(status_code=409, detail=f"File '{safe_name}' already exists. Please confirm to overwrite.")
     if os.path.exists(file_path) and overwrite:
-        move_to_trash(dir_path, file.filename)
+        move_to_trash(dir_path, safe_name)
     with open(file_path, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
-    return {"filename": file.filename}
+    return {"filename": safe_name}
 
 @app.delete("/api/files/{directory_key}")
 async def delete_file_endpoint(directory_key: str, action: FileAction):
     dir_path = getattr(settings, f"{directory_key.upper()}_DIR", None)
     if not dir_path: raise HTTPException(status_code=404, detail="Directory not found.")
-    file_path = os.path.join(dir_path, action.filename)
+    safe_name = os.path.basename(action.filename)
+    if not safe_name or safe_name in (".", "..") or any(sep in safe_name for sep in ("/", "\\")):
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    file_path = os.path.join(dir_path, safe_name)
     if not os.path.exists(file_path): raise HTTPException(status_code=404, detail="File not found.")
-    move_to_trash(dir_path, action.filename)
-    return {"message": f"File '{action.filename}' moved to trash."}
+    move_to_trash(dir_path, safe_name)
+    return {"message": f"File '{safe_name}' moved to trash."}
 
 @app.put("/api/files/{directory_key}/rename")
 async def rename_file_endpoint(directory_key: str, body: FileRename):
     dir_path = getattr(settings, f"{directory_key.upper()}_DIR", None)
     if not dir_path: raise HTTPException(status_code=404, detail="Directory not found.")
-    old_path = os.path.join(dir_path, body.old_name)
-    new_path = os.path.join(dir_path, body.new_name)
+    old_name = os.path.basename(body.old_name)
+    new_name = os.path.basename(body.new_name)
+    for nm in (old_name, new_name):
+        if not nm or nm in (".", "..") or any(sep in nm for sep in ("/", "\\")):
+            raise HTTPException(status_code=400, detail="Invalid filename.")
+    old_path = os.path.join(dir_path, old_name)
+    new_path = os.path.join(dir_path, new_name)
     if not os.path.exists(old_path): raise HTTPException(status_code=404, detail="File not found.")
-    if os.path.exists(new_path): raise HTTPException(status_code=409, detail=f"File '{body.new_name}' already exists.")
+    if os.path.exists(new_path): raise HTTPException(status_code=409, detail=f"File '{new_name}' already exists.")
     os.rename(old_path, new_path)
-    return {"message": f"Renamed '{body.old_name}' to '{body.new_name}'."}
+    return {"message": f"Renamed '{old_name}' to '{new_name}'."}
 
 @app.post("/api/dbc/vehicles")
 async def create_vehicle(body: VehicleCreate):
@@ -351,22 +362,25 @@ async def upload_dbc_file(vehicle: str, file: UploadFile = File(...), overwrite:
     dir_path = os.path.join(settings.DBC_DIR, local_dir_name)
     if not os.path.isdir(dir_path):
         os.makedirs(dir_path, exist_ok=True)
-    file_path = os.path.join(dir_path, file.filename)
+    safe_name = os.path.basename(file.filename)
+    if not safe_name or safe_name in (".", "..") or any(sep in safe_name for sep in ("/", "\\")):
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    file_path = os.path.join(dir_path, safe_name)
     from fastapi import status as http_status
     existing = await list_dbc_files(vehicle)
     lower_names = {entry["name"].lower() for entry in existing}
-    if file.filename.lower() in lower_names:
+    if safe_name.lower() in lower_names:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
-            detail=f"DBC '{file.filename}' already exists (including Embedded-Sharepoint).",
+            detail=f"DBC '{safe_name}' already exists (including Embedded-Sharepoint).",
         )
     if os.path.exists(file_path) and not overwrite:
-        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=f"File '{file.filename}' already exists.")
+        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=f"File '{safe_name}' already exists.")
     if os.path.exists(file_path) and overwrite:
-        move_to_trash(dir_path, file.filename)
+        move_to_trash(dir_path, safe_name)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    return {"filename": file.filename}
+    return {"filename": safe_name}
 
 @app.delete("/api/dbc/vehicles/{vehicle}/files")
 async def delete_dbc_file(vehicle: str, action: FileAction):
@@ -378,17 +392,20 @@ async def delete_dbc_file(vehicle: str, action: FileAction):
     dir_path = os.path.join(settings.DBC_DIR, local_actual)
     if not os.path.isdir(dir_path):
         raise HTTPException(status_code=404, detail="Vehicle not found.")
+    safe_name = os.path.basename(action.filename)
+    if not safe_name or safe_name in (".", "..") or any(sep in safe_name for sep in ("/", "\\")):
+        raise HTTPException(status_code=400, detail="Invalid filename.")
     if emb_actual is not None:
         emb_dir = os.path.join(EMBEDDED_DBC_DIR, emb_actual)
         if os.path.isdir(emb_dir):
             for f in os.listdir(emb_dir):
-                if f.lower() == action.filename.lower():
+                if f.lower() == safe_name.lower():
                     raise HTTPException(status_code=403, detail="Cannot delete DBC from Embedded-Sharepoint.")
-    file_path = os.path.join(dir_path, action.filename)
+    file_path = os.path.join(dir_path, safe_name)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found.")
-    move_to_trash(dir_path, action.filename)
-    return {"message": f"File '{action.filename}' moved to trash."}
+    move_to_trash(dir_path, safe_name)
+    return {"message": f"File '{safe_name}' moved to trash."}
 
 @app.put("/api/dbc/vehicles/{vehicle}/files/rename")
 async def rename_dbc_file(vehicle: str, body: FileRename):
@@ -400,22 +417,27 @@ async def rename_dbc_file(vehicle: str, body: FileRename):
     dir_path = os.path.join(settings.DBC_DIR, local_actual)
     if not os.path.isdir(dir_path):
         raise HTTPException(status_code=404, detail="Vehicle not found.")
+    old_name = os.path.basename(body.old_name)
+    new_name = os.path.basename(body.new_name)
+    for nm in (old_name, new_name):
+        if not nm or nm in (".", "..") or any(sep in nm for sep in ("/", "\\")):
+            raise HTTPException(status_code=400, detail="Invalid filename.")
     if emb_actual is not None:
         emb_dir = os.path.join(EMBEDDED_DBC_DIR, emb_actual)
         if os.path.isdir(emb_dir):
             for f in os.listdir(emb_dir):
-                if f.lower() == body.old_name.lower():
+                if f.lower() == old_name.lower():
                     raise HTTPException(status_code=403, detail="Cannot rename DBC from Embedded-Sharepoint.")
-    old_path = os.path.join(dir_path, body.old_name)
-    new_path = os.path.join(dir_path, body.new_name)
+    old_path = os.path.join(dir_path, old_name)
+    new_path = os.path.join(dir_path, new_name)
     if not os.path.exists(old_path):
         raise HTTPException(status_code=404, detail="File not found.")
     existing = await list_dbc_files(vehicle)
     lower_names = {entry["name"].lower() for entry in existing}
-    if body.new_name.lower() in lower_names:
-        raise HTTPException(status_code=409, detail=f"DBC '{body.new_name}' already exists.")
+    if new_name.lower() in lower_names:
+        raise HTTPException(status_code=409, detail=f"DBC '{new_name}' already exists.")
     os.rename(old_path, new_path)
-    return {"message": f"Renamed '{body.old_name}' to '{body.new_name}'."}
+    return {"message": f"Renamed '{old_name}' to '{new_name}'."}
 
 @app.get("/api/influx/buckets")
 async def list_buckets():
