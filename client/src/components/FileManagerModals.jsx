@@ -67,7 +67,7 @@ function DropZone({ accept, onFiles }) {
   );
 }
 
-function FileRow({ name, onDelete, onRename }) {
+function FileRow({ name, onDelete, onRename, readOnly = false, embedded = false }) {
   const [editing, setEditing] = useState(false);
   const [newName, setNewName] = useState(name);
 
@@ -125,15 +125,26 @@ function FileRow({ name, onDelete, onRename }) {
         </>
       ) : (
         <>
-          <Text size="sm" style={{ flex: 1, color: '#e4e4e7', wordBreak: 'break-all' }}>
-            {name}
-          </Text>
-          <ActionIcon size="sm" variant="subtle" color="gray" onClick={startEdit} title="Rename">
-            <Pencil size={14} />
-          </ActionIcon>
-          <ActionIcon size="sm" variant="subtle" color="red" onClick={() => onDelete(name)} title="Delete">
-            <Trash2 size={14} />
-          </ActionIcon>
+          <Group gap={4} justify="space-between" style={{ flex: 1 }}>
+            <Text size="sm" style={{ color: '#e4e4e7', wordBreak: 'break-all' }}>
+              {name}
+            </Text>
+            {embedded && (
+              <Text size="xs" c="dimmed" style={{ opacity: 0.7 }}>
+                *
+              </Text>
+            )}
+          </Group>
+          {!readOnly && (
+            <>
+              <ActionIcon size="sm" variant="subtle" color="gray" onClick={startEdit} title="Rename">
+                <Pencil size={14} />
+              </ActionIcon>
+              <ActionIcon size="sm" variant="subtle" color="red" onClick={() => onDelete(name)} title="Delete">
+                <Trash2 size={14} />
+              </ActionIcon>
+            </>
+          )}
         </>
       )}
     </Group>
@@ -238,7 +249,9 @@ export function DbcFileManagerModal({ opened, onClose, vehicles, currentVehicle,
   const loadFiles = useCallback((vehicle) => {
     if (!vehicle) { setFiles([]); return; }
     api(`/api/dbc/vehicles/${encodeURIComponent(vehicle)}/files`)
-      .then((list) => setFiles(list || []))
+      .then((list) => setFiles((list || []).map((entry) => (
+        typeof entry === 'string' ? { name: entry, source: 'local' } : entry
+      ))))
       .catch((e) => {
         setFiles([]);
         notifications.show({ title: 'Error', message: e.message, color: 'red' });
@@ -377,9 +390,19 @@ export function DbcFileManagerModal({ opened, onClose, vehicles, currentVehicle,
             {loading && <Text size="xs" c="dimmed">Uploading...</Text>}
             <Text size="xs" c="dimmed" tt="uppercase">{files.length} file{files.length !== 1 ? 's' : ''}</Text>
             <Stack gap={6}>
-              {files.sort().map((f) => (
-                <FileRow key={f} name={f} onDelete={handleDelete} onRename={handleRename} />
-              ))}
+              {files
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((f) => (
+                  <FileRow
+                    key={f.name}
+                    name={f.name}
+                    onDelete={handleDelete}
+                    onRename={handleRename}
+                    readOnly={f.source === 'embedded'}
+                    embedded={f.source === 'embedded'}
+                  />
+                ))}
               {files.length === 0 && <Text size="sm" c="dimmed">No DBC files in this vehicle.</Text>}
             </Stack>
           </>
