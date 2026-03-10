@@ -20,11 +20,14 @@ class TelemetryService:
         self.running = False
         self.dbc_errors = []
         self.message_cache = {}  # {sender: {can_id_hex: {message_name, network, signals, raw_packet, timestamp_ns}}}
+        self.last_parser_error: str | None = None
 
     def get_parser_status(self):
-        """Returns the current status of the parser."""
+        """Returns the current status of the parser. Includes last error when stopped due to parser failure."""
         if self.parser and self.running:
             return self.parser.get_status()
+        if self.last_parser_error and not self.running:
+            return {"status": "error", "error_message": self.last_parser_error}
         return None
 
     def get_dbc_errors(self):
@@ -109,11 +112,19 @@ class TelemetryService:
     async def start(self, influx_writer: InfluxDBWriter, sio=None):
         """
         Starts the telemetry service. If sio is provided, live CAN messages are emitted to clients.
+        Does not start any tasks if pre-start validation fails.
         """
         if self.running:
             logger.warning("TelemetryService is already running.")
             return
 
+        from server.util.start_validation import validate_start_config
+        title, detail = validate_start_config()
+        if title and detail:
+            logger.error("Start aborted: %s: %s", title, detail)
+            return
+
+        self.last_parser_error = None
         logger.info("--- Starting Telemetry Service ---")
         
         config = settings.get_effective_config()
@@ -155,10 +166,24 @@ class TelemetryService:
         self.live_message_queue = asyncio.Queue(maxsize=500) if sio else None
 
         self.stop_event.clear()
+        self.running = True  # Set before starting tasks so error callback can stop
 
         parser_task = asyncio.create_task(self.parser.run())
         self.background_tasks.add(parser_task)
         parser_task.add_done_callback(self.background_tasks.discard)
+
+        def _on_parser_done(t):
+            if not self.running:
+                return
+            try:
+                s = self.parser.get_status() if self.parser else {}
+                if s.get("status") == "error":
+                    self.last_parser_error = s.get("error_message") or "Parser error"
+                    logger.info("Parser error detected; auto-stopping service.")
+                    asyncio.get_running_loop().create_task(self.stop())
+            except Exception:
+                pass
+        parser_task.add_done_callback(_on_parser_done)
 
         if config.get("INPUT_MODE") == "file":
 
@@ -186,7 +211,6 @@ class TelemetryService:
             self.background_tasks.add(emit_task)
             emit_task.add_done_callback(self.background_tasks.discard)
 
-        self.running = True
         logger.info(f"--- Telemetry Service Started (Mode: {config['INPUT_MODE']}) ---")
 
     async def stop(self):
@@ -210,5 +234,6 @@ class TelemetryService:
         self.parser = None
         self.dbc_errors = []
         logger.info("Telemetry Service Stopped.")
+
 
 telemetry_service = TelemetryService()

@@ -5,12 +5,13 @@ from server.parsers.tcp_parser import TCPParser
 from server.parsers.serial_canadapter_parser import SerialCanAdapterParser
 from server.parsers.serial_uart_parser import SerialUartParser
 from server.parsers.file_parser import FileParser
+from server.parsers.pcan_parser import PcanParser
 from server.parsers._parser_abc import _Parser
 
 logger = logging.getLogger(__name__)
 
 # Legacy: "serial" is treated as "serial_canadapter"
-VALID_INPUT_MODES = ("tcp", "file", "serial_canadapter", "serial_uart")
+VALID_INPUT_MODES = ("tcp", "file", "serial_canadapter", "serial_uart", "pcan")
 
 
 def create_async_parser(config: dict, queue: asyncio.Queue, stop_event: asyncio.Event) -> _Parser:
@@ -26,6 +27,7 @@ def create_async_parser(config: dict, queue: asyncio.Queue, stop_event: asyncio.
         "serial_canadapter": SerialCanAdapterParser,
         "serial_uart": SerialUartParser,
         "file": FileParser,
+        "pcan": PcanParser,
     }.get(input_mode)
 
     if not parser_class:
@@ -49,5 +51,13 @@ def create_async_parser(config: dict, queue: asyncio.Queue, stop_event: asyncio.
         })
     elif input_mode == "file":
         kwargs.update({"file_path": config.get("REPLAY_FILE_PATH")})
+    elif input_mode == "pcan":
+        pcan_kw = {
+            "channel": config.get("PCAN_CHANNEL", "PCAN_USBBUS1"),
+            "can_bitrate": config.get("PCAN_BITRATE", 500000),
+        }
+        if config.get("PCAN_DEVICE_ID") is not None:
+            pcan_kw["device_id"] = config["PCAN_DEVICE_ID"]
+        kwargs.update(pcan_kw)
 
     return parser_class(**kwargs)

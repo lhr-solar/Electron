@@ -30,7 +30,7 @@ STATIC_CLIENT_DIR = os.path.join(_PROJECT_ROOT, "client", "dist")
 
 # --- Pydantic Models ---
 class Bucket(BaseModel): name: str
-class ConfigUpdate(BaseModel): key: str; value: str | int | list
+class ConfigUpdate(BaseModel): key: str; value: str | int | list | None
 class FileAction(BaseModel): filename: str
 class FileRename(BaseModel): old_name: str; new_name: str
 class VehicleCreate(BaseModel): name: str
@@ -115,10 +115,18 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # --- API Endpoints ---
+def _validate_and_raise():
+    """Run start validation; raise HTTPException if invalid so caller does not start the service."""
+    from server.util.start_validation import validate_start_config
+    title, detail = validate_start_config()
+    if title and detail:
+        raise HTTPException(status_code=400, detail=f"{title}: {detail}")
+
 @app.post("/api/start")
 async def start_service():
     if telemetry_service.running: raise HTTPException(status_code=400, detail="Service is already running.")
     if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    _validate_and_raise()
     config = settings.get_effective_config()
     target_bucket = config.get("INFLUX_BUCKET", "debug")
     writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
@@ -135,6 +143,7 @@ async def stop_service():
 async def restart_service():
     """Stop the service if running, then start with current config."""
     if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    _validate_and_raise()
     if telemetry_service.running:
         await telemetry_service.stop()
     config = settings.get_effective_config()
@@ -179,6 +188,16 @@ async def list_dbc_files(vehicle: str):
 async def list_serial_ports():
     ports = await asyncio.to_thread(serial.tools.list_ports.comports)
     return [{"device": port.device, "description": port.description} for port in ports]
+
+@app.get("/api/pcan/channels")
+async def list_pcan_channels():
+    from server.util.pcan_utils import get_available_pcan_channels
+    return await asyncio.to_thread(get_available_pcan_channels)
+
+@app.get("/api/pcan/prerequisites")
+async def check_pcan_prerequisites():
+    from server.util.pcan_utils import check_pcan_prerequisites
+    return await asyncio.to_thread(check_pcan_prerequisites)
 
 @app.get("/api/files/{directory_key}")
 async def list_files(directory_key: str):

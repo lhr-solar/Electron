@@ -2,12 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Stack, Group, Text, Select, TextInput, Button, Box, Divider, Checkbox, Switch } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { socket } from '../socket';
-import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2, Database, Square } from 'lucide-react';
+import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2, Database, Square, Cpu } from 'lucide-react';
 import { LogFileManagerModal, DbcFileManagerModal } from './FileManagerModals';
 
 const INPUT_MODES = [
   { value: 'serial_canadapter', label: 'Adapter' },
   { value: 'serial_uart', label: 'UART' },
+  { value: 'pcan', label: 'PCAN' },
   { value: 'tcp', label: 'TCP' },
   { value: 'file', label: 'File' },
 ];
@@ -23,7 +24,14 @@ function api(path, options = {}) {
   });
 }
 
-const CONFIG_KEYS = ['INPUT_MODE', 'DBC_VEHICLE', 'DBC_FILES', 'SERIAL_PORT', 'SERIAL_BAUDRATE', 'CAN_BITRATE', 'TCP_IP', 'TCP_PORT', 'REPLAY_FILE_PATH', 'INFLUX_WRITE_ENABLED'];
+const CONFIG_KEYS = ['INPUT_MODE', 'DBC_VEHICLE', 'DBC_FILES', 'SERIAL_PORT', 'SERIAL_BAUDRATE', 'CAN_BITRATE', 'TCP_IP', 'TCP_PORT', 'REPLAY_FILE_PATH', 'INFLUX_WRITE_ENABLED', 'PCAN_CHANNEL', 'PCAN_BITRATE', 'PCAN_DEVICE_ID'];
+
+const CAN_BITRATE_OPTIONS = [
+  { value: '125000', label: '125 kbps' },
+  { value: '250000', label: '250 kbps' },
+  { value: '500000', label: '500 kbps' },
+  { value: '1000000', label: '1 Mbps' },
+];
 
 function configEquals(a, b) {
   if (!a || !b) return !a && !b;
@@ -45,6 +53,8 @@ export function TelemetryDashboard() {
   const [savedConfig, setSavedConfig] = useState(null);
   const [serialPorts, setSerialPorts] = useState([]);
   const [logFiles, setLogFiles] = useState([]);
+  const [pcanChannels, setPcanChannels] = useState([]);
+  const [pcanPrereq, setPcanPrereq] = useState(null);
   const [vehicles, setVehicles] = useState([]);
   const [dbcFilesForVehicle, setDbcFilesForVehicle] = useState([]);
   const hasDefaultedDbcRef = React.useRef(false);
@@ -84,6 +94,18 @@ export function TelemetryDashboard() {
       .catch((e) => notifications.show({ title: 'Log files', message: e.message, color: 'red' }));
   }, []);
 
+  const loadPcanChannels = useCallback(() => {
+    api('/api/pcan/channels')
+      .then((channels) => setPcanChannels(channels || []))
+      .catch((e) => notifications.show({ title: 'PCAN channels', message: e.message, color: 'red' }));
+  }, []);
+
+  const loadPcanPrereq = useCallback(() => {
+    api('/api/pcan/prerequisites')
+      .then(setPcanPrereq)
+      .catch(() => setPcanPrereq({ ok: false, message: 'Failed to check', platform: 'unknown', hint: null }));
+  }, []);
+
   const loadVehicles = useCallback(() => {
     api('/api/dbc/vehicles')
       .then(setVehicles)
@@ -106,6 +128,13 @@ export function TelemetryDashboard() {
     loadLogFiles();
     loadVehicles();
   }, [loadConfig, loadSerialPorts, loadLogFiles, loadVehicles]);
+
+  useEffect(() => {
+    if (inputMode === 'pcan') {
+      loadPcanPrereq();
+      loadPcanChannels();
+    }
+  }, [inputMode, loadPcanPrereq, loadPcanChannels]);
 
   useEffect(() => {
     const v = config?.DBC_VEHICLE;
@@ -134,16 +163,22 @@ export function TelemetryDashboard() {
   }, []);
 
   const lastDbcErrorsRef = React.useRef([]);
+  const lastParserErrorRef = React.useRef(null);
   useEffect(() => {
     const onStatus = (data) => {
       setStatus(data);
       if (data.error_message && data.parser_status === 'error') {
-        notifications.show({
-          title: 'Parser error',
-          message: data.error_message,
-          color: 'red',
-          autoClose: 3000,
-        });
+        if (data.error_message !== lastParserErrorRef.current) {
+          lastParserErrorRef.current = data.error_message;
+          notifications.show({
+            title: 'Parser error',
+            message: data.error_message,
+            color: 'red',
+            autoClose: 5000,
+          });
+        }
+      } else {
+        lastParserErrorRef.current = null;
       }
       const errs = data.dbc_errors || [];
       if (errs.length && JSON.stringify(errs) !== JSON.stringify(lastDbcErrorsRef.current)) {
@@ -200,11 +235,19 @@ export function TelemetryDashboard() {
       .finally(() => setLoading((l) => ({ ...l, save: false })));
   };
 
+  const showApiError = (e, action) => {
+    const msg = e?.message || 'Unknown error';
+    const colon = msg.indexOf(': ');
+    const title = colon >= 0 ? `${action} — ${msg.slice(0, colon)}` : action;
+    const detail = colon >= 0 ? msg.slice(colon + 2) : msg;
+    notifications.show({ title, message: detail, color: 'red', autoClose: 5000 });
+  };
+
   const handleStart = () => {
     setLoading((l) => ({ ...l, start: true }));
     api('/api/start', { method: 'POST' })
       .then(() => notifications.show({ title: 'Service', message: 'Started', color: 'green' }))
-      .catch((e) => notifications.show({ title: 'Start failed', message: e.message, color: 'red' }))
+      .catch((e) => showApiError(e, 'Start failed'))
       .finally(() => setLoading((l) => ({ ...l, start: false })));
   };
 
@@ -212,7 +255,7 @@ export function TelemetryDashboard() {
     setLoading((l) => ({ ...l, stop: true }));
     api('/api/stop', { method: 'POST' })
       .then(() => notifications.show({ title: 'Service', message: 'Stopped', color: 'green' }))
-      .catch((e) => notifications.show({ title: 'Stop failed', message: e.message, color: 'red' }))
+      .catch((e) => showApiError(e, 'Stop failed'))
       .finally(() => setLoading((l) => ({ ...l, stop: false })));
   };
 
@@ -220,7 +263,7 @@ export function TelemetryDashboard() {
     setLoading((l) => ({ ...l, restart: true }));
     api('/api/restart', { method: 'POST' })
       .then(() => notifications.show({ title: 'Service', message: 'Restarted', color: 'green' }))
-      .catch((e) => notifications.show({ title: 'Restart failed', message: e.message, color: 'red' }))
+      .catch((e) => showApiError(e, 'Restart failed'))
       .finally(() => setLoading((l) => ({ ...l, restart: false })));
   };
 
@@ -263,7 +306,7 @@ export function TelemetryDashboard() {
             />
             <Select
               label="CAN bitrate"
-              data={['125000', '250000', '500000', '1000000']}
+              data={CAN_BITRATE_OPTIONS}
               value={String(config.CAN_BITRATE)}
               onChange={(v) => setLocalConfig('CAN_BITRATE', parseInt(v, 10))}
               disabled={disabled}
@@ -294,6 +337,57 @@ export function TelemetryDashboard() {
               data={['9600', '115200', '230400', '460800', '921600']}
               value={String(config.SERIAL_BAUDRATE)}
               onChange={(v) => setLocalConfig('SERIAL_BAUDRATE', parseInt(v, 10))}
+              disabled={disabled}
+              size="sm"
+            />
+          </>
+        );
+      case 'pcan':
+        const channelOptions = pcanChannels.length > 0
+          ? pcanChannels.map((c) => ({ value: c.channel, label: c.channel }))
+          : [
+              { value: 'PCAN_USBBUS1', label: 'PCAN_USBBUS1' },
+              { value: 'PCAN_USBBUS2', label: 'PCAN_USBBUS2' },
+            ];
+        return (
+          <>
+            {pcanPrereq && !pcanPrereq.ok && (
+              <Box p="xs" mb="xs" style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 4 }}>
+                <Text size="xs" c="red">{pcanPrereq.message}</Text>
+                {pcanPrereq.hint && <Text size="xs" c="dimmed" mt={4}>{pcanPrereq.hint}</Text>}
+              </Box>
+            )}
+            <Group gap="sm" align="flex-end">
+              <Select
+                label="Channel"
+                data={channelOptions}
+                value={config.PCAN_CHANNEL || 'PCAN_USBBUS1'}
+                onChange={(v) => setLocalConfig('PCAN_CHANNEL', v)}
+                searchable
+                disabled={disabled}
+                size="sm"
+                style={{ flex: 1 }}
+              />
+              <Button variant="subtle" size="sm" onClick={loadPcanChannels} disabled={disabled} title="Detect PCAN devices">
+                <RefreshCw size={14} />
+              </Button>
+            </Group>
+            <Select
+              label="CAN bitrate"
+              data={CAN_BITRATE_OPTIONS}
+              value={String(config.PCAN_BITRATE ?? 500000)}
+              onChange={(v) => setLocalConfig('PCAN_BITRATE', parseInt(v, 10))}
+              disabled={disabled}
+              size="sm"
+            />
+            <TextInput
+              label="Device ID (optional)"
+              placeholder="Leave empty to use channel"
+              value={config.PCAN_DEVICE_ID != null && config.PCAN_DEVICE_ID !== '' ? String(config.PCAN_DEVICE_ID) : ''}
+              onChange={(e) => {
+                const v = e.currentTarget.value.trim();
+                setLocalConfig('PCAN_DEVICE_ID', v === '' ? null : parseInt(v, 10) || null);
+              }}
               disabled={disabled}
               size="sm"
             />
@@ -518,6 +612,7 @@ export function TelemetryDashboard() {
           >
             {m.value === 'serial_canadapter' && <Usb size={12} style={{ marginRight: 4 }} />}
             {m.value === 'serial_uart' && <Usb size={12} style={{ marginRight: 4 }} />}
+            {m.value === 'pcan' && <Cpu size={12} style={{ marginRight: 4 }} />}
             {m.value === 'tcp' && <Wifi size={12} style={{ marginRight: 4 }} />}
             {m.value === 'file' && <FileText size={12} style={{ marginRight: 4 }} />}
             {m.label}
