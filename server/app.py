@@ -34,6 +34,9 @@ class ConfigUpdate(BaseModel): key: str; value: str | int | list | None
 class FileAction(BaseModel): filename: str
 class FileRename(BaseModel): old_name: str; new_name: str
 class VehicleCreate(BaseModel): name: str
+class TcpConfigCreate(BaseModel): name: str; ip: str; port: int
+class TcpConfigUpdate(BaseModel): name: str; ip: str; port: int
+class TcpTestRequest(BaseModel): ip: str
 
 # --- Helper Functions ---
 def move_to_trash(directory: str, filename: str):
@@ -198,6 +201,52 @@ async def list_pcan_channels():
 async def check_pcan_prerequisites():
     from server.util.pcan_utils import check_pcan_prerequisites
     return await asyncio.to_thread(check_pcan_prerequisites)
+
+@app.get("/api/tcp/configs")
+async def list_tcp_configs():
+    from server.util.tcp_configs import list_configs
+    return await asyncio.to_thread(list_configs)
+
+@app.post("/api/tcp/configs")
+async def create_tcp_config(body: TcpConfigCreate):
+    from server.util.tcp_configs import add_config
+    return await asyncio.to_thread(add_config, body.name, body.ip, body.port)
+
+@app.put("/api/tcp/configs/{config_id}")
+async def update_tcp_config(config_id: str, body: TcpConfigUpdate):
+    from server.util.tcp_configs import update_config
+    result = await asyncio.to_thread(update_config, config_id, body.name, body.ip, body.port)
+    if not result:
+        raise HTTPException(status_code=404, detail="TCP config not found.")
+    return result
+
+@app.delete("/api/tcp/configs/{config_id}")
+async def delete_tcp_config(config_id: str):
+    from server.util.tcp_configs import delete_config
+    if not await asyncio.to_thread(delete_config, config_id):
+        raise HTTPException(status_code=404, detail="TCP config not found.")
+    return {"message": "Deleted."}
+
+@app.post("/api/tcp/test")
+async def test_tcp_connection(body: TcpTestRequest):
+    """Ping the given IP address. Returns success/failure."""
+    import platform
+    import subprocess
+    ip = body.ip.strip()
+    if not ip:
+        return {"ok": False, "message": "IP required."}
+    try:
+        count = "1"
+        flag = "-n" if platform.system() == "Windows" else "-c"
+        result = await asyncio.to_thread(
+            subprocess.run, ["ping", flag, count, ip],
+            capture_output=True, timeout=10
+        )
+        if result.returncode == 0:
+            return {"ok": True, "message": "Ping successful."}
+        return {"ok": False, "message": result.stderr.decode(errors="ignore") or "Ping failed."}
+    except Exception as e:
+        return {"ok": False, "message": "Ping timed out." if "TimeoutExpired" in type(e).__name__ else str(e)}
 
 @app.get("/api/files/{directory_key}")
 async def list_files(directory_key: str):

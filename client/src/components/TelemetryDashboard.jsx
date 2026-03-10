@@ -4,6 +4,7 @@ import { notifications } from '@mantine/notifications';
 import { socket } from '../socket';
 import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2, Database, Square, Cpu } from 'lucide-react';
 import { LogFileManagerModal, DbcFileManagerModal } from './FileManagerModals';
+import { TcpConfigModal } from './TcpConfigModal';
 
 const INPUT_MODES = [
   { value: 'serial_canadapter', label: 'Adapter' },
@@ -67,9 +68,11 @@ export function TelemetryDashboard() {
     parser_connection_state: null,
     error_message: null,
   });
-  const [loading, setLoading] = useState({ start: false, stop: false, restart: false, save: false });
+  const [loading, setLoading] = useState({ start: false, stop: false, restart: false, save: false, tcpTest: false });
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [dbcModalOpen, setDbcModalOpen] = useState(false);
+  const [tcpModalOpen, setTcpModalOpen] = useState(false);
+  const [tcpConfigs, setTcpConfigs] = useState([]);
 
   const inputMode = config?.INPUT_MODE === 'serial' ? 'serial_canadapter' : (config?.INPUT_MODE || 'tcp');
 
@@ -106,6 +109,12 @@ export function TelemetryDashboard() {
       .catch(() => setPcanPrereq({ ok: false, message: 'Failed to check', platform: 'unknown', hint: null }));
   }, []);
 
+  const loadTcpConfigs = useCallback(() => {
+    api('/api/tcp/configs')
+      .then(setTcpConfigs)
+      .catch(() => setTcpConfigs([]));
+  }, []);
+
   const loadVehicles = useCallback(() => {
     api('/api/dbc/vehicles')
       .then(setVehicles)
@@ -127,7 +136,8 @@ export function TelemetryDashboard() {
     loadSerialPorts();
     loadLogFiles();
     loadVehicles();
-  }, [loadConfig, loadSerialPorts, loadLogFiles, loadVehicles]);
+    loadTcpConfigs();
+  }, [loadConfig, loadSerialPorts, loadLogFiles, loadVehicles, loadTcpConfigs]);
 
   useEffect(() => {
     if (inputMode === 'pcan') {
@@ -394,23 +404,70 @@ export function TelemetryDashboard() {
           </>
         );
       case 'tcp':
+        const tcpPresetOptions = [
+          { value: '', label: 'Custom' },
+          ...tcpConfigs.map((c) => ({ value: c.id, label: `${c.name} (${c.ip}:${c.port})` })),
+        ];
+        const selectedPreset = tcpConfigs.find((c) => c.ip === config.TCP_IP && c.port === config.TCP_PORT)?.id || '';
         return (
           <>
-            <TextInput
-              label="IP"
-              value={config.TCP_IP || ''}
-              onChange={(e) => setLocalConfig('TCP_IP', e.target.value)}
-              disabled={disabled}
-              size="sm"
-            />
-            <TextInput
-              label="Port"
-              type="number"
-              value={String(config.TCP_PORT || '')}
-              onChange={(e) => setLocalConfig('TCP_PORT', parseInt(e.target.value, 10) || 0)}
-              disabled={disabled}
-              size="sm"
-            />
+            <Group gap="sm" align="flex-end">
+              <Select
+                label="Preset"
+                data={tcpPresetOptions}
+                value={selectedPreset || ''}
+                onChange={(v) => {
+                  const c = tcpConfigs.find((x) => x.id === v);
+                  if (c) {
+                    setLocalConfig('TCP_IP', c.ip);
+                    setLocalConfig('TCP_PORT', c.port);
+                  }
+                }}
+                searchable
+                disabled={disabled}
+                size="sm"
+                style={{ flex: 1 }}
+              />
+              <Button variant="subtle" size="sm" onClick={() => setTcpModalOpen(true)} disabled={disabled} title="Manage TCP configs">
+                <Settings2 size={14} />
+              </Button>
+            </Group>
+            <Group grow>
+              <TextInput
+                label="IP"
+                value={config.TCP_IP || ''}
+                onChange={(e) => setLocalConfig('TCP_IP', e.target.value)}
+                disabled={disabled}
+                size="sm"
+              />
+              <TextInput
+                label="Port"
+                type="number"
+                value={String(config.TCP_PORT || '')}
+                onChange={(e) => setLocalConfig('TCP_PORT', parseInt(e.target.value, 10) || 0)}
+                disabled={disabled}
+                size="sm"
+              />
+            </Group>
+            <Button
+              variant="subtle"
+              size="compact-xs"
+              onClick={() => {
+                setLoading((l) => ({ ...l, tcpTest: true }));
+                api('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.TCP_IP || '' }) })
+                  .then((res) => {
+                    if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' });
+                    else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 });
+                  })
+                  .catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' }))
+                  .finally(() => setLoading((l) => ({ ...l, tcpTest: false })));
+              }}
+              loading={loading.tcpTest}
+              disabled={disabled || !config.TCP_IP}
+              leftSection={<Wifi size={12} />}
+            >
+              Test connection
+            </Button>
           </>
         );
       case 'file':
@@ -674,6 +731,13 @@ export function TelemetryDashboard() {
         currentVehicle={config.DBC_VEHICLE}
         onFilesChanged={() => loadDbcFilesForVehicle(config.DBC_VEHICLE)}
         onVehiclesChanged={loadVehicles}
+      />
+      <TcpConfigModal
+        opened={tcpModalOpen}
+        onClose={() => setTcpModalOpen(false)}
+        onRefresh={loadTcpConfigs}
+        currentIp={config.TCP_IP}
+        currentPort={config.TCP_PORT}
       />
     </Stack>
   );
