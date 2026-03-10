@@ -27,6 +27,12 @@ influx_client: InfluxDBClient | None = None
 # Path to built static client (project root / client / dist)
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 STATIC_CLIENT_DIR = os.path.join(_PROJECT_ROOT, "client", "dist")
+EMBEDDED_DBC_DIR = os.path.join(_PROJECT_ROOT, "Embedded-Sharepoint", "can", "dbc")
+
+from server.util.vehicle_dbc_resolve import (
+    get_vehicle_folders,
+    resolve_vehicle as _resolve_vehicle,
+)
 
 # --- Pydantic Models ---
 class Bucket(BaseModel): name: str
@@ -157,7 +163,11 @@ async def restart_service():
     return {"message": "Telemetry service restarted."}
 
 @app.get("/api/config")
-async def get_config(): return settings.get_effective_config()
+async def get_config():
+    data = settings.get_effective_config()
+    if data is not None:
+        data["default_dbc_vehicle"] = settings.DEFAULT_DBC_VEHICLE
+    return data
 
 @app.post("/api/config")
 async def update_config(update: ConfigUpdate):
@@ -168,24 +178,42 @@ async def update_config(update: ConfigUpdate):
 
 @app.get("/api/dbc/vehicles")
 async def list_dbc_vehicles():
-    """List vehicle folders (subdirs) under DBC_DIR."""
-    dbc_dir = settings.DBC_DIR
-    if not os.path.isdir(dbc_dir):
-        return []
-    names = [d for d in os.listdir(dbc_dir) if os.path.isdir(os.path.join(dbc_dir, d)) and not d.startswith(".")]
-    return sorted(names)
+    """List vehicle folders combining local DBC_DIR and Embedded-Sharepoint.
+    Cross-referenced by case-insensitive + trim; Embedded-Sharepoint spelling preferred.
+    """
+    display, _, _ = get_vehicle_folders(settings.DBC_DIR)
+    return sorted(display.values())
 
 @app.get("/api/dbc/vehicles/{vehicle}/files")
 async def list_dbc_files(vehicle: str):
-    """List .dbc files in DBC_DIR/vehicle. Vehicle must be a direct subdir name."""
+    """List .dbc files for a vehicle from Embedded-Sharepoint and local DBC_DIR.
+    Vehicle is matched case-insensitively with trim; Embedded-Sharepoint files take priority when names collide.
+    Returns list of {name, source} where source is 'embedded' or 'local'.
+    """
     if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
         raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    dbc_dir = settings.DBC_DIR
-    path = os.path.join(dbc_dir, vehicle)
-    if not os.path.isdir(path):
-        return []
-    files = [f for f in os.listdir(path) if f.lower().endswith(".dbc") and os.path.isfile(os.path.join(path, f))]
-    return sorted(files)
+    _, emb_actual, loc_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
+    if emb_actual is None and loc_actual is None:
+        raise HTTPException(status_code=404, detail="Vehicle not found.")
+    result = {}
+    if emb_actual is not None:
+        emb_dir = os.path.join(EMBEDDED_DBC_DIR, emb_actual)
+        if os.path.isdir(emb_dir):
+            for f in os.listdir(emb_dir):
+                full = os.path.join(emb_dir, f)
+                if f.lower().endswith(".dbc") and os.path.isfile(full):
+                    key = f.lower()
+                    result[key] = {"name": f, "source": "embedded"}
+    if loc_actual is not None:
+        loc_dir = os.path.join(settings.DBC_DIR, loc_actual)
+        if os.path.isdir(loc_dir):
+            for f in os.listdir(loc_dir):
+                full = os.path.join(loc_dir, f)
+                if f.lower().endswith(".dbc") and os.path.isfile(full):
+                    key = f.lower()
+                    if key not in result:
+                        result[key] = {"name": f, "source": "local"}
+    return [result[k] for k in sorted(result.keys())]
 
 @app.get("/api/serial-ports")
 async def list_serial_ports():
@@ -315,24 +343,50 @@ async def create_vehicle(body: VehicleCreate):
 async def upload_dbc_file(vehicle: str, file: UploadFile = File(...), overwrite: bool = False):
     if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
         raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    dir_path = os.path.join(settings.DBC_DIR, vehicle)
-    if not os.path.isdir(dir_path): raise HTTPException(status_code=404, detail="Vehicle not found.")
+    display, emb_actual, local_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
+    if display is None:
+        raise HTTPException(status_code=404, detail="Vehicle not found.")
+    # Use local folder if present, else create with display name (Embedded-Sharepoint spelling)
+    local_dir_name = local_actual if local_actual is not None else display
+    dir_path = os.path.join(settings.DBC_DIR, local_dir_name)
+    if not os.path.isdir(dir_path):
+        os.makedirs(dir_path, exist_ok=True)
     file_path = os.path.join(dir_path, file.filename)
+    from fastapi import status as http_status
+    existing = await list_dbc_files(vehicle)
+    lower_names = {entry["name"].lower() for entry in existing}
+    if file.filename.lower() in lower_names:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=f"DBC '{file.filename}' already exists (including Embedded-Sharepoint).",
+        )
     if os.path.exists(file_path) and not overwrite:
-        raise HTTPException(status_code=409, detail=f"File '{file.filename}' already exists.")
+        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=f"File '{file.filename}' already exists.")
     if os.path.exists(file_path) and overwrite:
         move_to_trash(dir_path, file.filename)
-    with open(file_path, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
     return {"filename": file.filename}
 
 @app.delete("/api/dbc/vehicles/{vehicle}/files")
 async def delete_dbc_file(vehicle: str, action: FileAction):
     if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
         raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    dir_path = os.path.join(settings.DBC_DIR, vehicle)
-    if not os.path.isdir(dir_path): raise HTTPException(status_code=404, detail="Vehicle not found.")
+    _, emb_actual, local_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
+    if local_actual is None:
+        raise HTTPException(status_code=404, detail="Vehicle not found.")
+    dir_path = os.path.join(settings.DBC_DIR, local_actual)
+    if not os.path.isdir(dir_path):
+        raise HTTPException(status_code=404, detail="Vehicle not found.")
+    if emb_actual is not None:
+        emb_dir = os.path.join(EMBEDDED_DBC_DIR, emb_actual)
+        if os.path.isdir(emb_dir):
+            for f in os.listdir(emb_dir):
+                if f.lower() == action.filename.lower():
+                    raise HTTPException(status_code=403, detail="Cannot delete DBC from Embedded-Sharepoint.")
     file_path = os.path.join(dir_path, action.filename)
-    if not os.path.exists(file_path): raise HTTPException(status_code=404, detail="File not found.")
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found.")
     move_to_trash(dir_path, action.filename)
     return {"message": f"File '{action.filename}' moved to trash."}
 
@@ -340,12 +394,26 @@ async def delete_dbc_file(vehicle: str, action: FileAction):
 async def rename_dbc_file(vehicle: str, body: FileRename):
     if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
         raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    dir_path = os.path.join(settings.DBC_DIR, vehicle)
-    if not os.path.isdir(dir_path): raise HTTPException(status_code=404, detail="Vehicle not found.")
+    _, emb_actual, local_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
+    if local_actual is None:
+        raise HTTPException(status_code=404, detail="Vehicle not found.")
+    dir_path = os.path.join(settings.DBC_DIR, local_actual)
+    if not os.path.isdir(dir_path):
+        raise HTTPException(status_code=404, detail="Vehicle not found.")
+    if emb_actual is not None:
+        emb_dir = os.path.join(EMBEDDED_DBC_DIR, emb_actual)
+        if os.path.isdir(emb_dir):
+            for f in os.listdir(emb_dir):
+                if f.lower() == body.old_name.lower():
+                    raise HTTPException(status_code=403, detail="Cannot rename DBC from Embedded-Sharepoint.")
     old_path = os.path.join(dir_path, body.old_name)
     new_path = os.path.join(dir_path, body.new_name)
-    if not os.path.exists(old_path): raise HTTPException(status_code=404, detail="File not found.")
-    if os.path.exists(new_path): raise HTTPException(status_code=409, detail=f"File '{body.new_name}' already exists.")
+    if not os.path.exists(old_path):
+        raise HTTPException(status_code=404, detail="File not found.")
+    existing = await list_dbc_files(vehicle)
+    lower_names = {entry["name"].lower() for entry in existing}
+    if body.new_name.lower() in lower_names:
+        raise HTTPException(status_code=409, detail=f"DBC '{body.new_name}' already exists.")
     os.rename(old_path, new_path)
     return {"message": f"Renamed '{body.old_name}' to '{body.new_name}'."}
 

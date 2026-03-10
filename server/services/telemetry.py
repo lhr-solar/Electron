@@ -3,6 +3,7 @@ import logging
 import os
 from server.config import settings
 from server.util.can_manager import CANManager
+from server.util.vehicle_dbc_resolve import resolve_dbc_paths
 from server.util.async_parser_factory import create_async_parser
 from server.util.async_processor import process_packets
 from server.util.influx_writer import InfluxDBWriter
@@ -143,20 +144,11 @@ class TelemetryService:
             logger.info("InfluxDB writes disabled by config.")
 
         self.dbc_errors = []
-        vehicle = config.get("DBC_VEHICLE", "").strip() or "Daybreak"
-        dbc_dir = settings.DBC_DIR
+        vehicle = config.get("DBC_VEHICLE", "").strip() or settings.DEFAULT_DBC_VEHICLE
         dbc_files = config.get("DBC_FILES") or []
         if not isinstance(dbc_files, list):
             dbc_files = [f for f in str(dbc_files).split(",") if f.strip()]
-        dbc_paths = []
-        for f in dbc_files:
-            f = f.strip()
-            if not f:
-                continue
-            if not f.lower().endswith(".dbc"):
-                f = f + ".dbc"
-            path = os.path.join(dbc_dir, vehicle, f)
-            dbc_paths.append(path)
+        dbc_paths = resolve_dbc_paths(vehicle, dbc_files, settings.DBC_DIR)
         if not dbc_paths:
             self.dbc_errors.append(f"No DBC files selected for vehicle '{vehicle}'.")
         can_manager = CANManager(dbc_paths, config, influx_writer=self.influx_writer)

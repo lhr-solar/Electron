@@ -7,6 +7,7 @@ import os
 import logging
 from server.config import settings
 from server.util.can_manager import CANManager
+from server.util.vehicle_dbc_resolve import resolve_dbc_paths
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +23,11 @@ def validate_start_config() -> tuple[str | None, str | None]:
     input_mode = config.get("INPUT_MODE", "tcp")
 
     # DBC: must have at least one DBC file selected
-    vehicle = config.get("DBC_VEHICLE", "").strip() or "Daybreak"
-    dbc_dir = settings.DBC_DIR
+    vehicle = config.get("DBC_VEHICLE", "").strip() or settings.DEFAULT_DBC_VEHICLE
     dbc_files = config.get("DBC_FILES") or []
     if not isinstance(dbc_files, list):
         dbc_files = [f for f in str(dbc_files).split(",") if f.strip()]
-    dbc_paths = []
-    for f in dbc_files:
-        f = (f or "").strip()
-        if not f:
-            continue
-        if not f.lower().endswith(".dbc"):
-            f = f + ".dbc"
-        path = os.path.join(dbc_dir, vehicle, f)
-        dbc_paths.append(path)
+    dbc_paths = resolve_dbc_paths(vehicle, dbc_files, settings.DBC_DIR)
     if not dbc_paths:
         return "DBC error", f"No DBC files selected for vehicle '{vehicle}'."
 

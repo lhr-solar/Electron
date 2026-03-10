@@ -13,9 +13,10 @@ class Configuration:
         self.TRASH_DIR = os.environ.get("TRASH_DIR", ".trash")
 
         # --- Default Settings ---
+        self.DEFAULT_DBC_VEHICLE = os.environ.get("DEFAULT_DBC_VEHICLE", "Mcqueen")
         self.INPUT_MODE = 'tcp'
         self.COMMON_CONFIG = {
-            "DBC_VEHICLE": "Daybreak",
+            "DBC_VEHICLE": self.DEFAULT_DBC_VEHICLE,
             "DBC_FILES": [],  # list of .dbc filenames under DBC_DIR/<vehicle>/
             "PRINT_CAN_INFO": False,
             "CLEAR_DEBUG_BUCKET_ON_STARTUP": False,
