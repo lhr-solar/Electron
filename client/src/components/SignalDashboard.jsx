@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Box, Text, Stack, Group, TextInput, ActionIcon } from '@mantine/core';
-import { Search, RotateCcw } from 'lucide-react';
+import { Search, RotateCcw, Pause, Play } from 'lucide-react';
 import { socket } from '../socket';
 
 function formatTime(timestampNs) {
@@ -15,11 +15,19 @@ function parseCacheKey(key) {
   return { vehicle: key.slice(0, idx), sender: key.slice(idx + 2) };
 }
 
+function isIndexSignalName(name) {
+  const n = String(name || '').toLowerCase();
+  return n.includes('idx') || n.includes('index');
+}
+
 export function SignalDashboard() {
   const [cache, setCache] = useState({});
   const [search, setSearch] = useState('');
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
 
   const mergeIntoCache = useCallback((msgs) => {
+    if (pausedRef.current) return;
     setCache((prev) => {
       const next = { ...prev };
       for (const msg of msgs) {
@@ -68,10 +76,12 @@ export function SignalDashboard() {
 
   useEffect(() => {
     const onSignalCache = (fullCache) => {
+      if (pausedRef.current) return;
       setCache(fullCache);
     };
     const onBatch = (batch) => {
       if (!Array.isArray(batch) || batch.length === 0) return;
+      if (pausedRef.current) return;
       mergeIntoCache(batch);
     };
     socket.on('signal_cache', onSignalCache);
@@ -111,6 +121,19 @@ export function SignalDashboard() {
           style={{ width: 300 }}
           styles={{ input: { backgroundColor: '#0f0f11' } }}
         />
+        <ActionIcon
+          variant="subtle"
+          color={paused ? 'yellow' : 'gray'}
+          size="sm"
+          title={paused ? 'Resume live updates' : 'Pause live updates'}
+          onClick={() => {
+            const next = !paused;
+            setPaused(next);
+            pausedRef.current = next;
+          }}
+        >
+          {paused ? <Play size={14} /> : <Pause size={14} />}
+        </ActionIcon>
         <ActionIcon
           variant="subtle"
           color="gray"
@@ -195,6 +218,10 @@ export function SignalDashboard() {
                         {hasSignals && Object.entries(msg.signals).map(([name, value]) => {
                           const unit = msg.units && msg.units[name];
                           const unitStr = unit ? ` ${unit}` : '';
+                          // In the Signal Dashboard, hide explicit index signals for array messages.
+                          if (Array.isArray(value) && isIndexSignalName(name)) {
+                            return null;
+                          }
                           return Array.isArray(value) ? (
                             <div key={name}>
                               <Text size="xs" fw={500} style={{ color: 'var(--text-muted)' }}>{name}{unit ? ` (${unit})` : ''}:</Text>

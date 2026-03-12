@@ -133,12 +133,19 @@ def _validate_and_raise():
 
 @app.post("/api/start")
 async def start_service():
-    if telemetry_service.running: raise HTTPException(status_code=400, detail="Service is already running.")
-    if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    if telemetry_service.running:
+        raise HTTPException(status_code=400, detail="Service is already running.")
     _validate_and_raise()
     config = settings.get_effective_config()
-    target_bucket = config.get("INFLUX_BUCKET", "debug")
-    writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
+    if not config:
+        raise HTTPException(status_code=500, detail="Invalid configuration.")
+    influx_write_enabled = config.get("INFLUX_WRITE_ENABLED", True)
+    if influx_write_enabled and not influx_client:
+        raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    writer: InfluxDBWriter | None = None
+    if influx_write_enabled:
+        target_bucket = config.get("INFLUX_BUCKET", "debug")
+        writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
     asyncio.create_task(telemetry_service.start(writer, sio=sio))
     return {"message": "Telemetry service starting."}
 
@@ -151,14 +158,18 @@ async def stop_service():
 @app.post("/api/restart")
 async def restart_service():
     """Stop the service if running, then start with current config."""
-    if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    config = settings.get_effective_config()
+    if not config: raise HTTPException(status_code=500, detail="Invalid configuration.")
+    influx_write_enabled = config.get("INFLUX_WRITE_ENABLED", True)
+    if influx_write_enabled and not influx_client:
+        raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
     _validate_and_raise()
     if telemetry_service.running:
         await telemetry_service.stop()
-    config = settings.get_effective_config()
-    if not config: raise HTTPException(status_code=500, detail="Invalid configuration.")
-    target_bucket = config.get("INFLUX_BUCKET", "debug")
-    writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
+    writer: InfluxDBWriter | None = None
+    if influx_write_enabled:
+        target_bucket = config.get("INFLUX_BUCKET", "debug")
+        writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
     asyncio.create_task(telemetry_service.start(writer, sio=sio))
     return {"message": "Telemetry service restarted."}
 

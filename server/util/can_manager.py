@@ -47,8 +47,13 @@ class CANManager:
             # Cantools merges when we add to main db; later file overwrites same frame_id.
             temp_db = cantools.database.Database()
             temp_db.add_dbc_file(dbc_file)
+            frame_ids = set()
             for msg in temp_db.messages:
                 self.frame_id_to_network[msg.frame_id] = network_name
+                frame_ids.add(msg.frame_id)
+            if frame_ids:
+                ids_hex = ", ".join(f"0x{fid:X}" for fid in sorted(frame_ids))
+                logger.info(f"DBC IDs for {os.path.basename(dbc_file)} (network '{network_name}'): {ids_hex}")
             self.db.add_dbc_file(dbc_file)
             logger.info(f"Loaded DBC: {dbc_file} (network: {network_name})")
         except Exception as e:
@@ -64,8 +69,10 @@ class CANManager:
         """Build id_map (frame_id -> sender), array_messages (frame_id -> index signal name), and ecu_list."""
         try:
             for msg in self.db.messages:
-                if msg.senders:
-                    self.id_map[msg.frame_id] = msg.senders[0]
+                # Ensure every message has an entry in id_map so we can decode it,
+                # even if the DBC does not define an explicit sender.
+                sender = msg.senders[0] if msg.senders else "Unknown"
+                self.id_map[msg.frame_id] = sender
                 index_signal = next(
                     (s.name for s in msg.signals if "idx" in s.name.lower() or "index" in s.name.lower()),
                     None,
@@ -79,6 +86,7 @@ class CANManager:
 
     def decode_message(self, arbitration_id, data):
         try:
+            print(f"Decoding message: {arbitration_id}, {data}")
             return self.db.decode_message(arbitration_id, data)
         except Exception:
             pass
@@ -95,12 +103,19 @@ class CANManager:
     def process_message(self, raw_message: can.Message, slcan_packet: str):
         """Process CAN message, write to Influx (found or not). Returns live payload for UI including sender/network."""
         can_id_hex = f"0x{raw_message.arbitration_id:03X}"
-        sender = self.id_map.get(raw_message.arbitration_id, "Unknown")
+        sender = self.id_map.get(raw_message.arbitration_id, "not_found")
         network = self.frame_id_to_network.get(raw_message.arbitration_id, "not_found")
         try:
             if raw_message.arbitration_id not in self.id_map:
                 self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
-                return {"can_id_hex": can_id_hex, "message_name": None, "sender": "Unknown", "network": "not_found", "vehicle": self.vehicle_name, "signals": {}}
+                return {
+                    "can_id_hex": can_id_hex,
+                    "message_name": None,
+                    "sender": "not_found",
+                    "network": "not_found",
+                    "vehicle": self.vehicle_name,
+                    "signals": {},
+                }
             decoded_msg = self.decode_message(raw_message.arbitration_id, raw_message.data)
             if not decoded_msg:
                 self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)

@@ -125,11 +125,24 @@ export function LiveMessageLog() {
             flexShrink: 0,
           }}
         >
-          {paused
-            ? <Play size={18} strokeWidth={2.5} style={{ color: 'var(--mantine-color-anchor)' }} />
-            : <Pause size={18} strokeWidth={2.5} style={{ color: 'var(--mantine-color-dimmed)' }} />
-          }
-          <Text size="xs" c="dimmed" style={{ lineHeight: 1 }}>
+          {paused ? (
+            <Play
+              size={18}
+              strokeWidth={2.5}
+              style={{ color: '#facc15' }} // yellow highlight when paused
+            />
+          ) : (
+            <Pause
+              size={18}
+              strokeWidth={2.5}
+              style={{ color: 'var(--mantine-color-dimmed)' }}
+            />
+          )}
+          <Text
+            size="xs"
+            c={paused ? 'yellow' : 'dimmed'}
+            style={{ lineHeight: 1 }}
+          >
             {paused ? 'Play' : 'Pause'}
           </Text>
         </UnstyledButton>
