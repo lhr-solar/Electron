@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Group, UnstyledButton, Text } from '@mantine/core';
-import { Settings, LayoutDashboard } from 'lucide-react';
+import { Settings, LayoutDashboard, FileText } from 'lucide-react';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { LiveMessageLog } from './components/LiveMessageLog';
 import { SignalDashboard } from './components/SignalDashboard';
+import { DbcViewer } from './components/DbcViewer';
 
 function getPage() {
   const hash = window.location.hash.replace('#', '') || 'control';
@@ -37,6 +38,7 @@ function App() {
       >
         <NavTab icon={<Settings size={14} />} label="Control" active={page === 'control'} onClick={() => navigate('control')} />
         <NavTab icon={<LayoutDashboard size={14} />} label="Signals" active={page === 'dashboard'} onClick={() => navigate('dashboard')} />
+        <NavTab icon={<FileText size={14} />} label="DBC Viewer" active={page === 'dbc-viewer'} onClick={() => navigate('dbc-viewer')} />
       </Group>
       <div style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
         <Group align="stretch" gap={0} wrap="nowrap" style={{ flex: 1, display: page === 'control' ? 'flex' : 'none' }}>
@@ -45,6 +47,9 @@ function App() {
         </Group>
         <div style={{ flex: 1, display: page === 'dashboard' ? 'flex' : 'none' }}>
           <SignalDashboard />
+        </div>
+        <div style={{ flex: 1, display: page === 'dbc-viewer' ? 'flex' : 'none' }}>
+          <DbcViewer />
         </div>
       </div>
     </div>

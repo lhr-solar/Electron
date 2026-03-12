@@ -18,6 +18,11 @@ import serial.tools.list_ports
 from server.config import settings
 from server.services.telemetry import telemetry_service
 from server.util.influx_writer import InfluxDBWriter
+from server.util.vehicle_dbc_resolve import (
+    get_vehicle_folders,
+    resolve_vehicle as _resolve_vehicle,
+    resolve_dbc_paths,
+)
 
 # --- Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -28,11 +33,6 @@ influx_client: InfluxDBClient | None = None
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 STATIC_CLIENT_DIR = os.path.join(_PROJECT_ROOT, "client", "dist")
 EMBEDDED_DBC_DIR = os.path.join(_PROJECT_ROOT, "Embedded-Sharepoint", "can", "dbc")
-
-from server.util.vehicle_dbc_resolve import (
-    get_vehicle_folders,
-    resolve_vehicle as _resolve_vehicle,
-)
 
 # --- Pydantic Models ---
 class Bucket(BaseModel): name: str
@@ -178,6 +178,9 @@ async def get_config():
     data = settings.get_effective_config()
     if data is not None:
         data["default_dbc_vehicle"] = settings.DEFAULT_DBC_VEHICLE
+        # If InfluxDB is not connected, default writes to disabled in the UI
+        if not influx_client:
+            data["INFLUX_WRITE_ENABLED"] = False
     return data
 
 @app.post("/api/config")
@@ -449,6 +452,65 @@ async def rename_dbc_file(vehicle: str, body: FileRename):
         raise HTTPException(status_code=409, detail=f"DBC '{new_name}' already exists.")
     os.rename(old_path, new_path)
     return {"message": f"Renamed '{old_name}' to '{new_name}'."}
+
+
+@app.get("/api/dbc/vehicles/{vehicle}/files/{filename}/schema")
+async def get_dbc_schema(vehicle: str, filename: str):
+    """Return DBC schema (messages and signals) for a given vehicle + DBC filename."""
+    if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
+        raise HTTPException(status_code=400, detail="Invalid vehicle name.")
+    safe_name = os.path.basename(filename)
+    if not safe_name or safe_name in (".", "..") or any(sep in safe_name for sep in ("/", "\\")):
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    # Resolve full path using the same vehicle resolution / embedded precedence as runtime
+    paths = resolve_dbc_paths(vehicle, [safe_name], settings.DBC_DIR)
+    if not paths:
+        raise HTTPException(status_code=404, detail="DBC not found.")
+    dbc_path = paths[0]
+    if not os.path.isfile(dbc_path):
+        raise HTTPException(status_code=404, detail="DBC not found.")
+    try:
+        import cantools
+        db = cantools.database.load_file(dbc_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load DBC: {e!s}")
+    messages = []
+    for msg in db.messages:
+        signals = []
+        for sig in msg.signals:
+            start_bit = getattr(sig, "start", None)
+            length = getattr(sig, "length", None)
+            bit_range = None
+            if start_bit is not None and length is not None:
+                bit_range = [int(start_bit), int(start_bit) + int(length) - 1]
+            # Value table / choices (enumerations)
+            choices = None
+            try:
+                if getattr(sig, "choices", None):
+                    choices = {int(k): str(v) for k, v in sig.choices.items()}
+            except Exception:
+                choices = None
+            signals.append(
+                {
+                    "name": sig.name,
+                    "start_bit": start_bit,
+                    "length": length,
+                    "bit_range": bit_range,
+                    "unit": sig.unit or None,
+                    "choices": choices,
+                }
+            )
+        messages.append(
+            {
+                "id": msg.frame_id,
+                "id_hex": f"0x{msg.frame_id:X}",
+                "name": msg.name,
+                "length": msg.length,
+                "ecu": msg.senders[0] if msg.senders else None,
+                "signals": signals,
+            }
+        )
+    return {"vehicle": vehicle, "filename": safe_name, "path": dbc_path, "messages": messages}
 
 @app.get("/api/influx/buckets")
 async def list_buckets():
