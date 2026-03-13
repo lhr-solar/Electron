@@ -66,7 +66,7 @@ class CANManager:
         return list(self.load_errors)
 
     def _parse_dbc_for_ecus_and_arrays(self):
-        """Build id_map (frame_id -> sender), array_messages (frame_id -> index signal name), and ecu_list."""
+        """Build id_map (frame_id -> sender), array_messages metadata, and ecu_list."""
         try:
             for msg in self.db.messages:
                 # Ensure every message has an entry in id_map so we can decode it,
@@ -74,11 +74,17 @@ class CANManager:
                 sender = msg.senders[0] if msg.senders else "Unknown"
                 self.id_map[msg.frame_id] = sender
                 index_signal = next(
-                    (s.name for s in msg.signals if "idx" in s.name.lower() or "index" in s.name.lower()),
+                    (s for s in msg.signals if "idx" in s.name.lower() or "index" in s.name.lower()),
                     None,
                 )
                 if index_signal:
-                    self.array_messages[msg.frame_id] = index_signal
+                    min_idx = getattr(index_signal, "minimum", None)
+                    max_idx = getattr(index_signal, "maximum", None)
+                    self.array_messages[msg.frame_id] = {
+                        "index_signal": index_signal.name,
+                        "min": min_idx,
+                        "max": max_idx,
+                    }
             self.ecu_list = sorted(set(self.id_map.values()))
         except Exception as e:
             self.load_errors.append(f"Parse ECUs/arrays: {e!s}")
@@ -86,7 +92,7 @@ class CANManager:
 
     def decode_message(self, arbitration_id, data):
         try:
-            print(f"Decoding message: {arbitration_id}, {data}")
+            # print(f"Decoding message: {arbitration_id}, {data}")
             return self.db.decode_message(arbitration_id, data)
         except Exception:
             pass
@@ -106,6 +112,8 @@ class CANManager:
         sender = self.id_map.get(raw_message.arbitration_id, "not_found")
         network = self.frame_id_to_network.get(raw_message.arbitration_id, "not_found")
         try:
+            meta = self.array_messages.get(raw_message.arbitration_id)
+            index_signal_name = meta["index_signal"] if meta else None
             if raw_message.arbitration_id not in self.id_map:
                 self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
                 return {
@@ -124,7 +132,6 @@ class CANManager:
             if self.print_can_info:
                 self._print_message_info(raw_message, decoded_msg, slcan_packet)
             self._write_to_influx(raw_message.arbitration_id, decoded_msg, slcan_packet)
-            index_signal_name = self.array_messages.get(raw_message.arbitration_id)
             array_index = None
             signals = {}
             for k, v in decoded_msg.items():
@@ -153,6 +160,9 @@ class CANManager:
             }
             if array_index is not None:
                 result["array_index"] = array_index
+                if meta:
+                    result["array_index_min"] = meta.get("min")
+                    result["array_index_max"] = meta.get("max")
             return result
         except Exception as e:
             logger.exception("process_message error: %s", e)
