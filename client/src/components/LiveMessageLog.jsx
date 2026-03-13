@@ -22,6 +22,19 @@ function matchesSearch(msg, searchLower) {
   return idMatch || nameMatch;
 }
 
+function formatValue3(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const s = value.toFixed(3);
+    return s.replace(/\.?0+$/, '');
+  }
+  const num = Number(value);
+  if (Number.isFinite(num)) {
+    const s = num.toFixed(3);
+    return s.replace(/\.?0+$/, '');
+  }
+  return String(value);
+}
+
 export function LiveMessageLog() {
   const [messages, setMessages] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
@@ -222,7 +235,7 @@ export function LiveMessageLog() {
                       const unit = msg.units && msg.units[name];
                       return (
                         <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
-                          {name}: {String(value)}{unit ? ` ${unit}` : ''}
+                          {name}: {formatValue3(value)}{unit ? ` ${unit}` : ''}
                         </Text>
                       );
                     })}

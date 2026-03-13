@@ -80,6 +80,7 @@ async def send_status_updates(sio: socketio.AsyncServer):
             "service_running": telemetry_service.running,
             "influx_connected": influx_connected,
             "grafana_active": grafana_active,
+            "grafana_url": os.environ.get("GRAFANA_URL", "http://127.0.0.1:3000"),
             "parser_status": parser_status.get("status", "idle") if parser_status else "idle",
             "parser_connection_state": parser_status.get("connection_state") if parser_status else None,
             "error_message": parser_status.get("error_message") if parser_status else None,

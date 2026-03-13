@@ -20,6 +20,19 @@ function isIndexSignalName(name) {
   return n.includes('idx') || n.includes('index');
 }
 
+function formatValue3(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const s = value.toFixed(3);
+    return s.replace(/\.?0+$/, '');
+  }
+  const num = Number(value);
+  if (Number.isFinite(num)) {
+    const s = num.toFixed(3);
+    return s.replace(/\.?0+$/, '');
+  }
+  return String(value);
+}
+
 export function SignalDashboard() {
   const [cache, setCache] = useState({});
   const [search, setSearch] = useState('');
@@ -228,14 +241,14 @@ export function SignalDashboard() {
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 8px', paddingLeft: 8, marginTop: 2 }}>
                                 {value.map((v, i) => (
                                   <Text key={i} size="xs" style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                                    [{i}] {String(v)}
+                                    [{i}] {formatValue3(v)}
                                   </Text>
                                 ))}
                               </div>
                             </div>
                           ) : (
                             <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
-                              {name}: {String(value)}{unitStr}
+                              {name}: {formatValue3(value)}{unitStr}
                             </Text>
                           );
                         })}
