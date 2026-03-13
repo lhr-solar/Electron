@@ -53,35 +53,24 @@ export function SignalDashboard() {
         next[cacheKey] = { ...next[cacheKey] };
 
         const arrayIndex = msg.array_index;
-        const indexMin = msg.array_index_min;
-        const indexMax = msg.array_index_max;
         if (arrayIndex != null) {
           const existing = next[cacheKey][canId];
           const mergedSignals = (existing && existing.is_array) ? { ...existing.signals } : {};
           const incoming = msg.signals || {};
-          const hasStaticRange =
-            typeof indexMin === 'number' &&
-            typeof indexMax === 'number' &&
-            indexMax >= indexMin &&
-            !(indexMin === 0 && indexMax === 0);
+          const indexSet = new Set(
+            existing && existing.indices
+              ? existing.indices
+              : []
+          );
+          indexSet.add(arrayIndex);
+          const indices = Array.from(indexSet).sort((a, b) => a - b);
           for (const [sigName, sigVal] of Object.entries(incoming)) {
-            let arr = Array.isArray(mergedSignals[sigName]) ? [...mergedSignals[sigName]] : [];
-            if (hasStaticRange) {
-              const desiredLen = indexMax - indexMin + 1;
-              if (arr.length !== desiredLen) {
-                // Use null as placeholder so UI can hide unseen indices.
-                arr = new Array(desiredLen).fill(null);
-              }
-              const pos = arrayIndex - indexMin;
-              if (pos >= 0 && pos < arr.length) {
-                arr[pos] = sigVal;
-              }
-            } else {
-              // For dynamic arrays, also use null as placeholder so we can hide unseen indices.
-              while (arr.length <= arrayIndex) arr.push(null);
-              arr[arrayIndex] = sigVal;
-            }
-            mergedSignals[sigName] = arr;
+            const map =
+              mergedSignals[sigName] && typeof mergedSignals[sigName] === 'object' && !Array.isArray(mergedSignals[sigName])
+                ? { ...mergedSignals[sigName] }
+                : {};
+            map[arrayIndex] = sigVal;
+            mergedSignals[sigName] = map;
           }
           next[cacheKey][canId] = {
             message_name: msg.message_name,
@@ -89,9 +78,9 @@ export function SignalDashboard() {
             signals: mergedSignals,
             units: msg.units || (existing && existing.units) || {},
             is_array: true,
+            indices,
             raw_packet: msg.raw_packet || '',
             timestamp_ns: msg.timestamp_ns || 0,
-            index_min: hasStaticRange ? indexMin : (existing && existing.index_min != null ? existing.index_min : 0),
           };
         } else {
           next[cacheKey][canId] = {
@@ -253,26 +242,29 @@ export function SignalDashboard() {
                           const unit = msg.units && msg.units[name];
                           const unitStr = unit ? ` ${unit}` : '';
                           // In the Signal Dashboard, hide explicit index signals for array messages.
-                          if (Array.isArray(value) && isIndexSignalName(name)) {
+                          if (msg.is_array && isIndexSignalName(name)) {
                             return null;
                           }
-                          return Array.isArray(value) ? (
-                            <div key={name}>
-                              <Text size="xs" fw={500} style={{ color: 'var(--text-muted)' }}>{name}{unit ? ` (${unit})` : ''}:</Text>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 8px', paddingLeft: 8, marginTop: 2 }}>
-                                {value.map((v, i) => {
-                                  if (v === null || v === undefined) return null;
-                                  const baseIndex = typeof msg.index_min === 'number' ? msg.index_min : 0;
-                                  const displayIndex = baseIndex + i;
-                                  return (
-                                    <Text key={i} size="xs" style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                                      [{displayIndex}] {formatValue3(v)}
-                                    </Text>
-                                  );
-                                })}
+                          if (msg.is_array && value && typeof value === 'object' && !Array.isArray(value)) {
+                            const indices = Array.isArray(msg.indices) ? msg.indices : Object.keys(value).map((k) => Number(k)).sort((a, b) => a - b);
+                            return (
+                              <div key={name}>
+                                <Text size="xs" fw={500} style={{ color: 'var(--text-muted)' }}>{name}{unit ? ` (${unit})` : ''}:</Text>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 8px', paddingLeft: 8, marginTop: 2 }}>
+                                  {indices.map((idx) => {
+                                    const v = value[idx];
+                                    if (v === null || v === undefined) return null;
+                                    return (
+                                      <Text key={idx} size="xs" style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                        [{idx}] {formatValue3(v)}
+                                      </Text>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          ) : (
+                            );
+                          }
+                          return (
                             <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
                               {name}: {formatValue3(value)}{unitStr}
                             </Text>

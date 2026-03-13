@@ -66,7 +66,7 @@ class CANManager:
         return list(self.load_errors)
 
     def _parse_dbc_for_ecus_and_arrays(self):
-        """Build id_map (frame_id -> sender), array_messages metadata, and ecu_list."""
+        """Build id_map (frame_id -> sender), array_messages (frame_id -> index signal name), and ecu_list."""
         try:
             for msg in self.db.messages:
                 # Ensure every message has an entry in id_map so we can decode it,
@@ -78,14 +78,8 @@ class CANManager:
                     None,
                 )
                 if index_signal:
-                    # Use DBC minimum/maximum directly for index range; ignore offset.
-                    raw_min = getattr(index_signal, "minimum", None)
-                    raw_max = getattr(index_signal, "maximum", None)
-                    self.array_messages[msg.frame_id] = {
-                        "index_signal": index_signal.name,
-                        "min": raw_min,
-                        "max": raw_max,
-                    }
+                    # Track which signal carries the array index for this frame_id.
+                    self.array_messages[msg.frame_id] = index_signal.name
             self.ecu_list = sorted(set(self.id_map.values()))
         except Exception as e:
             self.load_errors.append(f"Parse ECUs/arrays: {e!s}")
@@ -113,8 +107,7 @@ class CANManager:
         sender = self.id_map.get(raw_message.arbitration_id, "not_found")
         network = self.frame_id_to_network.get(raw_message.arbitration_id, "not_found")
         try:
-            meta = self.array_messages.get(raw_message.arbitration_id)
-            index_signal_name = meta["index_signal"] if meta else None
+            index_signal_name = self.array_messages.get(raw_message.arbitration_id)
             if raw_message.arbitration_id not in self.id_map:
                 self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
                 return {
@@ -161,9 +154,6 @@ class CANManager:
             }
             if array_index is not None:
                 result["array_index"] = array_index
-                if meta:
-                    result["array_index_min"] = meta.get("min")
-                    result["array_index_max"] = meta.get("max")
             return result
         except Exception as e:
             logger.exception("process_message error: %s", e)
