@@ -498,6 +498,10 @@ async def get_dbc_schema(vehicle: str, filename: str):
                     "length": length,
                     "bit_range": bit_range,
                     "unit": sig.unit or None,
+                    "scale": getattr(sig, "scale", None),
+                    "offset": getattr(sig, "offset", None),
+                    "min": getattr(sig, "minimum", None),
+                    "max": getattr(sig, "maximum", None),
                     "choices": choices,
                 }
             )

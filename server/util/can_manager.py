@@ -78,12 +78,13 @@ class CANManager:
                     None,
                 )
                 if index_signal:
-                    min_idx = getattr(index_signal, "minimum", None)
-                    max_idx = getattr(index_signal, "maximum", None)
+                    # Use DBC minimum/maximum directly for index range; ignore offset.
+                    raw_min = getattr(index_signal, "minimum", None)
+                    raw_max = getattr(index_signal, "maximum", None)
                     self.array_messages[msg.frame_id] = {
                         "index_signal": index_signal.name,
-                        "min": min_idx,
-                        "max": max_idx,
+                        "min": raw_min,
+                        "max": raw_max,
                     }
             self.ecu_list = sorted(set(self.id_map.values()))
         except Exception as e:

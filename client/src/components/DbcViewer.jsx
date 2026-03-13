@@ -206,7 +206,22 @@ export function DbcViewer() {
                                 </Text>
                               )}
                             </Group>
-                            {Array.isArray(s.choices) ? null : null}
+                            {(s.scale != null || s.offset != null || s.min != null || s.max != null) && (
+                              <Text
+                                size="xs"
+                                c="dimmed"
+                                style={{ marginLeft: 8, fontFamily: 'monospace', opacity: 0.85 }}
+                              >
+                                {[
+                                  s.scale != null ? `scale=${s.scale}` : null,
+                                  s.offset != null ? `offset=${s.offset}` : null,
+                                  s.min != null ? `min=${s.min}` : null,
+                                  s.max != null ? `max=${s.max}` : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(', ')}
+                              </Text>
+                            )}
                             {s.choices && (
                               <Text size="xs" c="dimmed" style={{ marginLeft: 8 }}>
                                 values:{' '}
