@@ -56,7 +56,7 @@ class Configuration:
         config.update(self.INFLUX_CONFIG)
         config["INPUT_MODE"] = self.INPUT_MODE
         config.update(self.PCAN_CONFIG)  # Always include for UI
-        if self.INPUT_MODE in ("serial", "serial_canadapter", "serial_uart"):
+        if self.INPUT_MODE in ("serial_canadapter", "serial_uart"):
             config.update(self.SERIAL_CONFIG)
         elif self.INPUT_MODE == "pcan":
             config.update(self.PCAN_CONFIG)
@@ -72,7 +72,7 @@ class Configuration:
 
     def update_setting(self, key: str, value: str | int | list) -> bool:
         if key == "INPUT_MODE":
-            if value in ("serial", "serial_canadapter", "serial_uart", "pcan", "file", "tcp"):
+            if value in ("serial_canadapter", "serial_uart", "pcan", "file", "tcp"):
                 self.INPUT_MODE = value
                 logger.info(f"Input mode updated to '{value}'")
                 return True

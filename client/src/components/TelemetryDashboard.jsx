@@ -73,7 +73,7 @@ export function TelemetryDashboard() {
   const [tcpModalOpen, setTcpModalOpen] = useState(false);
   const [tcpConfigs, setTcpConfigs] = useState([]);
 
-  const inputMode = config?.INPUT_MODE === 'serial' ? 'serial_canadapter' : (config?.INPUT_MODE || 'tcp');
+  const inputMode = config?.INPUT_MODE || 'tcp';
 
   const loadConfig = useCallback(() => {
     api('/api/config')
@@ -358,7 +358,7 @@ export function TelemetryDashboard() {
               <TextInput label="IP" value={config.TCP_IP || ''} onChange={(e) => setLocalConfig('TCP_IP', e.target.value)} disabled={disabled} size="sm" />
               <TextInput label="Port" type="number" value={String(config.TCP_PORT || '')} onChange={(e) => setLocalConfig('TCP_PORT', parseInt(e.target.value, 10) || 0)} disabled={disabled} size="sm" />
             </Group>
-            <Button variant="subtle" size="compact-sm" onClick={() => { setLoading((l) => ({ ...l, tcpTest: true })); api('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.TCP_IP || '' }) }).then((res) => { if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' }); else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 }); }).catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' })).finally(() => setLoading((l) => ({ ...l, tcpTest: false }))); }} loading={loading.tcpTest} disabled={disabled || !config.TCP_IP} leftSection={<Wifi size={12} />}>Test connection</Button>
+            <Button variant="subtle" size="compact-sm" onClick={() => { setLoading((l) => ({ ...l, tcpTest: true })); api('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.TCP_IP || '', port: config.TCP_PORT || 8187 }) }).then((res) => { if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' }); else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 }); }).catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' })).finally(() => setLoading((l) => ({ ...l, tcpTest: false }))); }} loading={loading.tcpTest} disabled={disabled || !config.TCP_IP} leftSection={<Wifi size={12} />}>Test connection</Button>
           </>
         );
       }

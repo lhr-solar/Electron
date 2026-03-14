@@ -42,7 +42,7 @@ class FileRename(BaseModel): old_name: str; new_name: str
 class VehicleCreate(BaseModel): name: str
 class TcpConfigCreate(BaseModel): name: str; ip: str; port: int
 class TcpConfigUpdate(BaseModel): name: str; ip: str; port: int
-class TcpTestRequest(BaseModel): ip: str
+class TcpTestRequest(BaseModel): ip: str; port: int = 8187
 
 # --- Helper Functions ---
 def move_to_trash(directory: str, filename: str):
@@ -272,24 +272,25 @@ async def delete_tcp_config(config_id: str):
 
 @app.post("/api/tcp/test")
 async def test_tcp_connection(body: TcpTestRequest):
-    """Ping the given IP address. Returns success/failure."""
-    import platform
-    import subprocess
+    """Test TCP connectivity to the given IP and port. Attempts a real socket connection."""
     ip = body.ip.strip()
     if not ip:
         return {"ok": False, "message": "IP required."}
+    port = body.port
+    if not (1 <= port <= 65535):
+        return {"ok": False, "message": "Port must be between 1 and 65535."}
     try:
-        count = "1"
-        flag = "-n" if platform.system() == "Windows" else "-c"
-        result = await asyncio.to_thread(
-            subprocess.run, ["ping", flag, count, ip],
-            capture_output=True, timeout=10
+        conn = await asyncio.wait_for(
+            asyncio.open_connection(ip, port),
+            timeout=5.0
         )
-        if result.returncode == 0:
-            return {"ok": True, "message": "Ping successful."}
-        return {"ok": False, "message": result.stderr.decode(errors="ignore") or "Ping failed."}
-    except Exception as e:
-        return {"ok": False, "message": "Ping timed out." if "TimeoutExpired" in type(e).__name__ else str(e)}
+        conn[0].close()
+        conn[1].close()
+        return {"ok": True, "message": f"TCP connection to {ip}:{port} successful."}
+    except asyncio.TimeoutError:
+        return {"ok": False, "message": "Connection timed out."}
+    except OSError as e:
+        return {"ok": False, "message": str(e) or "Connection failed."}
 
 @app.get("/api/files/{directory_key}")
 async def list_files(directory_key: str):

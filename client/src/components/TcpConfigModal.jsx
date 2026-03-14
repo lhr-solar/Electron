@@ -22,6 +22,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
   const [formPort, setFormPort] = useState('');
   const [adding, setAdding] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const load = useCallback(() => {
     api('/api/tcp/configs')
@@ -99,19 +100,25 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
   };
 
   const handleDelete = (c) => {
-    if (!confirm(`Delete "${c.name}"?`)) return;
-    api(`/api/tcp/configs/${c.id}`, { method: 'DELETE' })
+    setPendingDelete({ id: c.id, name: c.name });
+  };
+
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    const { id, name } = pendingDelete;
+    setPendingDelete(null);
+    api(`/api/tcp/configs/${id}`, { method: 'DELETE' })
       .then(() => {
-        setList((prev) => prev.filter((x) => x.id !== c.id));
+        setList((prev) => prev.filter((x) => x.id !== id));
         onRefresh?.();
-        notifications.show({ title: 'TCP config', message: 'Deleted', color: 'green' });
+        notifications.show({ title: 'TCP config', message: `"${name}" deleted`, color: 'green' });
       })
       .catch((e) => notifications.show({ title: 'Delete failed', message: e.message, color: 'red' }));
   };
 
   const testConnection = (ip, port) => {
     setTesting(true);
-    api('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: ip.trim() }) })
+    api('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: ip.trim(), port: parseInt(port, 10) || 8187 }) })
       .then((res) => {
         if (res.ok) {
           notifications.show({ title: 'Connection test', message: res.message, color: 'green' });
@@ -124,6 +131,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
   };
 
   return (
+    <>
     <Modal opened={opened} onClose={onClose} title="Manage TCP configs" size="md">
       <Stack gap="md">
         <Group justify="space-between">
@@ -203,5 +211,21 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
         )}
       </Stack>
     </Modal>
+
+    <Modal
+      opened={!!pendingDelete}
+      onClose={() => setPendingDelete(null)}
+      title="Delete TCP config"
+      centered
+    >
+      <Text size="sm" mb="md">
+        {pendingDelete ? `Delete "${pendingDelete.name}"? This cannot be undone.` : ''}
+      </Text>
+      <Group justify="flex-end" gap="xs">
+        <Button variant="subtle" onClick={() => setPendingDelete(null)}>Cancel</Button>
+        <Button color="red" onClick={confirmDelete}>Delete</Button>
+      </Group>
+    </Modal>
+    </>
   );
 }

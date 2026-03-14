@@ -51,18 +51,26 @@ class TelemetryService:
         if array_index is not None:
             existing = self.message_cache[cache_key].get(can_id_hex)
             if existing and existing.get("is_array"):
-                merged_signals = existing["signals"]
+                merged_signals = {}
+                for k, v in existing["signals"].items():
+                    if isinstance(v, dict):
+                        merged_signals[k] = dict(v)
+                    elif isinstance(v, list):
+                        merged_signals[k] = {i: x for i, x in enumerate(v)}
+                    else:
+                        merged_signals[k] = {}
+                indices_set = set(existing.get("indices", []))
             else:
                 merged_signals = {}
+                indices_set = set()
 
+            indices_set.add(array_index)
             for sig_name, sig_val in incoming_signals.items():
-                arr = merged_signals.get(sig_name)
-                if not isinstance(arr, list):
-                    arr = []
-                if array_index >= len(arr):
-                    arr.extend([0] * (array_index + 1 - len(arr)))
-                arr[array_index] = sig_val
-                merged_signals[sig_name] = arr
+                mapping = merged_signals.get(sig_name)
+                if not isinstance(mapping, dict):
+                    mapping = {}
+                mapping[array_index] = sig_val
+                merged_signals[sig_name] = mapping
 
             self.message_cache[cache_key][can_id_hex] = {
                 "message_name": msg.get("message_name"),
@@ -70,6 +78,7 @@ class TelemetryService:
                 "signals": merged_signals,
                 "units": msg.get("units", {}),
                 "is_array": True,
+                "indices": sorted(indices_set),
                 "raw_packet": msg.get("raw_packet", ""),
                 "timestamp_ns": msg.get("timestamp_ns", 0),
             }

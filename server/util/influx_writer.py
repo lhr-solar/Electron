@@ -1,4 +1,5 @@
 import influxdb_client
+from influxdb_client import Point
 from influxdb_client.client.write_api import WriteOptions
 from influxdb_client.client.exceptions import InfluxDBError
 import os
@@ -68,14 +69,16 @@ class InfluxDBWriter:
             result = self.query_api.query_stream(query)
             
             count = 0
+            skip_keys = {'_start', '_stop', '_time', '_measurement', '_field', '_value'}
             with open(backup_file_path, "w") as f:
                 for record in result:
-                    measurement = record.get_measurement()
-                    tags = "".join([f",{key}={value}" for key, value in record.values.items() if key not in ['_start', '_stop', '_time', '_measurement', '_field', '_value']])
-                    field = f"{record.get_field()}={record.get_value()}"
-                    time_ns = record.get_time().timestamp() * 1e9
-                    line = f"{measurement}{tags} {field} {int(time_ns)}"
-                    f.write(line + "\n")
+                    p = Point(record.get_measurement()).time(record.get_time())
+                    for key, value in record.values.items():
+                        if key in skip_keys:
+                            continue
+                        p = p.tag(key, value)
+                    p = p.field(record.get_field(), record.get_value())
+                    f.write(p.to_line_protocol() + "\n")
                     count += 1
             logger.info(f"Backup complete. {count} records saved.")
 

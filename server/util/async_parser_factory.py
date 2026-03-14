@@ -10,7 +10,6 @@ from server.parsers._parser_abc import _Parser
 
 logger = logging.getLogger(__name__)
 
-# Legacy: "serial" is treated as "serial_canadapter"
 VALID_INPUT_MODES = ("tcp", "file", "serial_canadapter", "serial_uart", "pcan")
 
 
