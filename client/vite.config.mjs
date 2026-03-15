@@ -21,5 +21,20 @@ export default defineConfig({
     },
     build: {
         outDir: 'dist',
+        target: 'esnext',
+        minify: 'esbuild',
+        sourcemap: false,
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    react: ['react', 'react-dom'],
+                    mantine: ['@mantine/core', '@mantine/hooks', '@mantine/notifications'],
+                    'lucide-react': ['lucide-react'],
+                },
+            },
+        },
+    },
+    optimizeDeps: {
+        include: ['react', 'react-dom', 'lucide-react'],
     },
 })
