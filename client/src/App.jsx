@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Group, UnstyledButton, Text } from '@mantine/core';
-import { Settings, LayoutDashboard, FileText, ExternalLink } from 'lucide-react';
+import { Settings, LayoutDashboard, FileText, ExternalLink, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { LiveMessageLog } from './components/LiveMessageLog';
 import { SignalDashboard } from './components/SignalDashboard';
 import { DbcViewer } from './components/DbcViewer';
 import { socket } from './socket';
+
+const PAGE_LAYOUTS = [
+  { id: 'dashboard', Component: SignalDashboard },
+  { id: 'dbc-viewer', Component: DbcViewer },
+];
 
 function getPage() {
   const hash = window.location.hash.replace('#', '') || 'control';
@@ -16,6 +21,7 @@ function App() {
   const [page, setPage] = useState(getPage);
   const [grafanaActive, setGrafanaActive] = useState(false);
   const [grafanaUrl, setGrafanaUrl] = useState('http://127.0.0.1:3000');
+  const [sideLogOpen, setSideLogOpen] = useState(false);
 
   useEffect(() => {
     const onHashChange = () => setPage(getPage());
@@ -54,7 +60,7 @@ function App() {
         }}
       >
         <Group gap="md">
-          <NavTab icon={<Settings size={14} />} label="Control" active={page === 'control'} onClick={() => navigate('control')} />
+          <NavTab icon={<Settings size={14} />} label="Config" active={page === 'control'} onClick={() => navigate('control')} />
           <NavTab icon={<LayoutDashboard size={14} />} label="Signals" active={page === 'dashboard'} onClick={() => navigate('dashboard')} />
           <NavTab icon={<FileText size={14} />} label="DBC Viewer" active={page === 'dbc-viewer'} onClick={() => navigate('dbc-viewer')} />
         </Group>
@@ -85,12 +91,75 @@ function App() {
           <TelemetryDashboard />
           <LiveMessageLog />
         </Group>
-        <div style={{ flex: 1, display: page === 'dashboard' ? 'flex' : 'none' }}>
-          <SignalDashboard />
-        </div>
-        <div style={{ flex: 1, display: page === 'dbc-viewer' ? 'flex' : 'none' }}>
-          <DbcViewer />
-        </div>
+        {PAGE_LAYOUTS.map(({ id, Component }) => (
+          <div key={id} style={{ flex: 1, display: page === id ? 'flex' : 'none' }}>
+            <PageWithCollapsibleLog logOpen={sideLogOpen} onToggle={() => setSideLogOpen((v) => !v)}>
+              <Component />
+            </PageWithCollapsibleLog>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PageWithCollapsibleLog({ children, logOpen, onToggle }) {
+  const sidebarWidth = 320;
+
+  return (
+    <div style={{ flex: 1, display: 'flex', position: 'relative', minHeight: 0 }}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          transition: 'margin-right 200ms ease',
+          marginRight: logOpen ? sidebarWidth : 0,
+        }}
+      >
+        {children}
+      </div>
+
+      <div
+        style={{
+          position: 'absolute',
+          top: '50%',
+          right: logOpen ? sidebarWidth : 0,
+          transform: 'translateY(-50%)',
+          zIndex: 3,
+        }}
+      >
+        <UnstyledButton
+          onClick={onToggle}
+          title={logOpen ? 'Hide live log' : 'Show live log'}
+          style={{
+            width: 26,
+            height: 72,
+            borderRadius: '12px 0 0 12px',
+            border: '1px solid var(--border)',
+            borderRight: 'none',
+            backgroundColor: '#0f0f11',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 0 12px rgba(0,0,0,0.6)',
+          }}
+        >
+          {logOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+        </UnstyledButton>
+      </div>
+
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          height: '100%',
+          width: logOpen ? sidebarWidth : 0,
+          overflow: 'hidden',
+          transition: 'width 220ms ease',
+        }}
+      >
+        {logOpen && <LiveMessageLog />}
       </div>
     </div>
   );
