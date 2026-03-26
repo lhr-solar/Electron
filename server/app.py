@@ -509,10 +509,6 @@ async def get_dbc_schema(vehicle: str, filename: str):
             else:
                 base = f"uint{length_bits}" if length_bits is not None else "unsigned int"
 
-        # Enumerations are typically backed by ints in DBC; expose category for UI.
-        if getattr(sig, "choices", None):
-            base = f"enum({base})"
-
         if is_multiplexer:
             base = f"mux({base})"
 
