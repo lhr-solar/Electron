@@ -49,6 +49,30 @@ function configEquals(a, b) {
   return true;
 }
 
+function arrayShallowEqual(a, b) {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function statusEquals(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.service_running === b.service_running &&
+    a.influx_connected === b.influx_connected &&
+    a.grafana_active === b.grafana_active &&
+    a.parser_status === b.parser_status &&
+    a.parser_connection_state === b.parser_connection_state &&
+    a.error_message === b.error_message &&
+    arrayShallowEqual(a.dbc_errors || [], b.dbc_errors || [])
+  );
+}
+
 export function TelemetryDashboard() {
   const [config, setConfig] = useState(null);
   const [savedConfig, setSavedConfig] = useState(null);
@@ -198,7 +222,7 @@ export function TelemetryDashboard() {
   const lastParserErrorRef = React.useRef(null);
   useEffect(() => {
     const onStatus = (data) => {
-      setStatus(data);
+      setStatus((prev) => (statusEquals(prev, data) ? prev : data));
       if (data.error_message && data.parser_status === 'error') {
         if (data.error_message !== lastParserErrorRef.current) {
           lastParserErrorRef.current = data.error_message;
@@ -213,7 +237,7 @@ export function TelemetryDashboard() {
         lastParserErrorRef.current = null;
       }
       const errs = data.dbc_errors || [];
-      if (errs.length && JSON.stringify(errs) !== JSON.stringify(lastDbcErrorsRef.current)) {
+      if (errs.length && !arrayShallowEqual(errs, lastDbcErrorsRef.current)) {
         lastDbcErrorsRef.current = errs;
         errs.forEach((msg) =>
           notifications.show({ title: 'DBC error', message: msg, color: 'red', autoClose: 3000 })

@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Box, Text, Stack, Group, TextInput, ActionIcon } from '@mantine/core';
+import React, { useState, useEffect, useCallback, useMemo, useRef, useDeferredValue } from 'react';
+import { Box, Text, Stack, Group, TextInput, ActionIcon, Button, Checkbox, Divider, ScrollArea } from '@mantine/core';
 import { Search, RotateCcw, Pause, Play } from 'lucide-react';
 import { socket } from '../socket';
+const UI_FLUSH_INTERVAL_MS = 80;
 
 function formatTime(timestampNs) {
   const ms = Number(timestampNs) / 1e6;
@@ -37,7 +38,12 @@ export function SignalDashboard() {
   const [cache, setCache] = useState({});
   const [search, setSearch] = useState('');
   const [paused, setPaused] = useState(false);
+  const [selectedIdKeys, setSelectedIdKeys] = useState([]);
+  const [selectedEcus, setSelectedEcus] = useState([]);
   const pausedRef = useRef(false);
+  const idsInitializedRef = useRef(false);
+  const ecusInitializedRef = useRef(false);
+  const pendingBatchesRef = useRef([]);
 
   const mergeIntoCache = useCallback((msgs) => {
     if (pausedRef.current) return;
@@ -105,7 +111,7 @@ export function SignalDashboard() {
     const onBatch = (batch) => {
       if (!Array.isArray(batch) || batch.length === 0) return;
       if (pausedRef.current) return;
-      mergeIntoCache(batch);
+      pendingBatchesRef.current.push(batch);
     };
     socket.on('signal_cache', onSignalCache);
     socket.on('live_message_batch', onBatch);
@@ -118,32 +124,138 @@ export function SignalDashboard() {
       socket.off('signal_cache', onSignalCache);
       socket.off('live_message_batch', onBatch);
     };
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (pausedRef.current) return;
+      const queued = pendingBatchesRef.current;
+      if (queued.length === 0) return;
+      pendingBatchesRef.current = [];
+      const merged = queued.flat();
+      if (merged.length > 0) {
+        mergeIntoCache(merged);
+      }
+    }, UI_FLUSH_INTERVAL_MS);
+    return () => clearInterval(timer);
   }, [mergeIntoCache]);
 
-  const searchLower = search.trim().toLowerCase();
+  const deferredSearch = useDeferredValue(search);
+  const searchLower = deferredSearch.trim().toLowerCase();
   const cacheKeys = useMemo(() => Object.keys(cache).sort(), [cache]);
+  const allEntries = useMemo(() => {
+    const entries = [];
+    for (const cacheKey of cacheKeys) {
+      const { vehicle, sender } = parseCacheKey(cacheKey);
+      const messages = cache[cacheKey] || {};
+      const canIds = Object.keys(messages).sort();
+      for (const canId of canIds) {
+        entries.push({
+          cacheKey,
+          vehicle,
+          sender,
+          canId,
+          msg: messages[canId],
+          idKey: `${cacheKey}::${canId}`,
+        });
+      }
+    }
+    return entries;
+  }, [cache, cacheKeys]);
+
+  const idOptions = useMemo(() => {
+    const list = allEntries.map((e) => ({
+      key: e.idKey,
+      canId: e.canId,
+      ecu: e.sender,
+    }));
+    list.sort((a, b) => (a.canId === b.canId ? a.ecu.localeCompare(b.ecu) : a.canId.localeCompare(b.canId)));
+    return list;
+  }, [allEntries]);
+
+  const ecuOptions = useMemo(
+    () => Array.from(new Set(allEntries.map((e) => e.sender))).sort((a, b) => a.localeCompare(b)),
+    [allEntries]
+  );
+
+  useEffect(() => {
+    const allowed = new Set(idOptions.map((o) => o.key));
+    const allIds = idOptions.map((o) => o.key);
+    if (!idsInitializedRef.current) {
+      idsInitializedRef.current = true;
+      setSelectedIdKeys(allIds);
+      return;
+    }
+    // Keep explicit user choices; only prune IDs that no longer exist.
+    setSelectedIdKeys((prev) => {
+      const next = prev.filter((k) => allowed.has(k));
+      if (next.length === prev.length && next.every((k, i) => k === prev[i])) {
+        return prev;
+      }
+      return next;
+    });
+  }, [idOptions]);
+
+  useEffect(() => {
+    const allowed = new Set(ecuOptions);
+    if (!ecusInitializedRef.current) {
+      ecusInitializedRef.current = true;
+      setSelectedEcus(ecuOptions);
+      return;
+    }
+    // Keep explicit user choices; only prune ECUs that no longer exist.
+    setSelectedEcus((prev) => {
+      const next = prev.filter((e) => allowed.has(e));
+      if (next.length === prev.length && next.every((e, i) => e === prev[i])) {
+        return prev;
+      }
+      return next;
+    });
+  }, [ecuOptions]);
+
+  const selectedIdsSet = useMemo(() => new Set(selectedIdKeys), [selectedIdKeys]);
+  const selectedEcusSet = useMemo(() => new Set(selectedEcus), [selectedEcus]);
+
+  const filteredEntries = useMemo(
+    () =>
+      allEntries.filter((e) => {
+        if (!selectedIdsSet.has(e.idKey)) return false;
+        if (!selectedEcusSet.has(e.sender)) return false;
+        if (!searchLower) return true;
+        return (
+          e.sender.toLowerCase().includes(searchLower) ||
+          e.vehicle.toLowerCase().includes(searchLower) ||
+          e.canId.toLowerCase().includes(searchLower) ||
+          (e.msg.message_name || '').toLowerCase().includes(searchLower)
+        );
+      }),
+    [allEntries, selectedIdsSet, selectedEcusSet, searchLower]
+  );
+
+  const visibleByCacheKey = useMemo(() => {
+    const grouped = {};
+    for (const e of filteredEntries) {
+      if (!grouped[e.cacheKey]) {
+        grouped[e.cacheKey] = { sender: e.sender, vehicle: e.vehicle, items: [] };
+      }
+      grouped[e.cacheKey].items.push({ canId: e.canId, msg: e.msg });
+    }
+    return grouped;
+  }, [filteredEntries]);
+  const visibleCacheKeys = useMemo(() => Object.keys(visibleByCacheKey).sort(), [visibleByCacheKey]);
 
   return (
     <Box
       style={{
         flex: 1,
         height: '100%',
-        overflow: 'auto',
-        padding: 24,
         backgroundColor: '#0a0a0b',
+        padding: 24,
+        minHeight: 0,
       }}
     >
       <Group gap="md" mb="lg" align="center">
         <Text size="md" fw={600} style={{ color: '#e4e4e7' }}>Signal Dashboard</Text>
-        <TextInput
-          placeholder="Filter by ECU, vehicle, ID, or name..."
-          size="xs"
-          value={search}
-          onChange={(e) => setSearch(e.currentTarget.value)}
-          leftSection={<Search size={12} />}
-          style={{ width: 300 }}
-          styles={{ input: { backgroundColor: '#0f0f11' } }}
-        />
         <ActionIcon
           variant="subtle"
           color={paused ? 'yellow' : 'gray'}
@@ -153,6 +265,10 @@ export function SignalDashboard() {
             const next = !paused;
             setPaused(next);
             pausedRef.current = next;
+            if (!next) {
+              // Avoid large burst merge after resume.
+              pendingBatchesRef.current = [];
+            }
           }}
         >
           {paused ? <Play size={14} /> : <Pause size={14} />}
@@ -162,7 +278,11 @@ export function SignalDashboard() {
           color="gray"
           size="sm"
           title="Reset dashboard"
-          onClick={() => { setCache({}); socket.emit('reset_cache'); }}
+          onClick={() => {
+            pendingBatchesRef.current = [];
+            setCache({});
+            socket.emit('reset_cache');
+          }}
         >
           <RotateCcw size={14} />
         </ActionIcon>
@@ -174,44 +294,143 @@ export function SignalDashboard() {
         </Text>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
-        {cacheKeys.map((cacheKey) => {
-          const { vehicle, sender } = parseCacheKey(cacheKey);
-          const messages = cache[cacheKey];
-          const canIds = Object.keys(messages).sort();
+      {cacheKeys.length > 0 && (
+        <div style={{ display: 'flex', gap: 16, minHeight: 0, height: 'calc(100% - 44px)' }}>
+          <Box
+            style={{
+              width: 300,
+              minWidth: 300,
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              backgroundColor: '#0f0f11',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <Box p="sm" style={{ borderBottom: '1px solid var(--border)' }}>
+              <TextInput
+                placeholder="Filter by ECU, vehicle, ID, or name..."
+                size="xs"
+                value={search}
+                onChange={(e) => setSearch(e.currentTarget.value)}
+                leftSection={<Search size={12} />}
+                styles={{ input: { backgroundColor: '#18181b' } }}
+              />
+            </Box>
+            <ScrollArea style={{ flex: 1 }} type="auto" scrollbarSize={8}>
+              <Box p="sm">
+                <Group justify="space-between" mb={6}>
+                  <Text size="xs" fw={600} c="dimmed">CAN IDs</Text>
+                  <Group gap={4}>
+                    <Button
+                      variant="subtle"
+                      size="compact-xs"
+                      onClick={() => setSelectedIdKeys(idOptions.map((o) => o.key))}
+                    >
+                      Select all
+                    </Button>
+                    <Button
+                      variant="subtle"
+                      size="compact-xs"
+                      color="gray"
+                      onClick={() => setSelectedIdKeys([])}
+                    >
+                      Deselect all
+                    </Button>
+                  </Group>
+                </Group>
+                <Stack gap={4} mb="sm">
+                  {idOptions.map((o) => (
+                    <Checkbox
+                      key={o.key}
+                      size="xs"
+                      checked={selectedIdsSet.has(o.key)}
+                      onChange={(e) => {
+                        const checked = e.currentTarget.checked;
+                        setSelectedIdKeys((prev) => {
+                          if (checked) {
+                            return prev.includes(o.key) ? prev : [...prev, o.key];
+                          }
+                          return prev.filter((k) => k !== o.key);
+                        });
+                      }}
+                      label={
+                        <Text size="xs" style={{ color: '#d4d4d8' }}>
+                          {o.canId} <span style={{ color: '#71717a' }}>({o.ecu})</span>
+                        </Text>
+                      }
+                    />
+                  ))}
+                </Stack>
 
-          const filteredIds = searchLower
-            ? canIds.filter((id) => {
-                const m = messages[id];
+                <Divider my="xs" />
+
+                <Group justify="space-between" mb={6}>
+                  <Text size="xs" fw={600} c="dimmed">ECUs</Text>
+                  <Group gap={4}>
+                    <Button
+                      variant="subtle"
+                      size="compact-xs"
+                      onClick={() => setSelectedEcus(ecuOptions)}
+                    >
+                      Select all
+                    </Button>
+                    <Button
+                      variant="subtle"
+                      size="compact-xs"
+                      color="gray"
+                      onClick={() => setSelectedEcus([])}
+                    >
+                      Deselect all
+                    </Button>
+                  </Group>
+                </Group>
+                <Stack gap={4}>
+                  {ecuOptions.map((ecu) => (
+                    <Checkbox
+                      key={ecu}
+                      size="xs"
+                      checked={selectedEcusSet.has(ecu)}
+                      onChange={(e) => {
+                        const checked = e.currentTarget.checked;
+                        setSelectedEcus((prev) => {
+                          if (checked) {
+                            return prev.includes(ecu) ? prev : [...prev, ecu];
+                          }
+                          return prev.filter((x) => x !== ecu);
+                        });
+                      }}
+                      label={<Text size="xs" style={{ color: '#d4d4d8' }}>{ecu}</Text>}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            </ScrollArea>
+          </Box>
+
+          <Box style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
+              {visibleCacheKeys.map((cacheKey) => {
+                const group = visibleByCacheKey[cacheKey];
+                const { vehicle, sender, items } = group;
                 return (
-                  sender.toLowerCase().includes(searchLower) ||
-                  vehicle.toLowerCase().includes(searchLower) ||
-                  id.toLowerCase().includes(searchLower) ||
-                  (m.message_name || '').toLowerCase().includes(searchLower)
-                );
-              })
-            : canIds;
-
-          if (filteredIds.length === 0) return null;
-
-          return (
-            <Box
-              key={cacheKey}
-              style={{
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                backgroundColor: '#0f0f11',
-                padding: 16,
-                minWidth: 360,
-              }}
-            >
-              <Group gap={6} mb="sm">
-                <Text size="sm" fw={600} style={{ color: '#e4e4e7' }}>{sender}</Text>
-                {vehicle && <Text size="xs" c="dimmed" style={{ opacity: 0.5 }}>· {vehicle}</Text>}
-              </Group>
-              <Stack gap={6}>
-                {filteredIds.map((canId) => {
-                  const msg = messages[canId];
+                  <Box
+                    key={cacheKey}
+                    style={{
+                      border: '1px solid var(--border)',
+                      borderRadius: 8,
+                      backgroundColor: '#0f0f11',
+                      padding: 16,
+                      minWidth: 360,
+                    }}
+                  >
+                    <Group gap={6} mb="sm">
+                      <Text size="sm" fw={600} style={{ color: '#e4e4e7' }}>{sender}</Text>
+                      {vehicle && <Text size="xs" c="dimmed" style={{ opacity: 0.5 }}>· {vehicle}</Text>}
+                    </Group>
+                    <Stack gap={6}>
+                      {items.map(({ canId, msg }) => {
                   const hasSignals = msg.signals && Object.keys(msg.signals).length > 0;
                   const notFound = msg.message_name == null;
 
@@ -283,12 +502,20 @@ export function SignalDashboard() {
                       </Stack>
                     </Box>
                   );
-                })}
-              </Stack>
-            </Box>
-          );
-        })}
-      </div>
+                      })}
+                    </Stack>
+                  </Box>
+                );
+              })}
+            </div>
+            {visibleCacheKeys.length === 0 && (
+              <Text c="dimmed" size="sm" ta="center" mt="xl">
+                No signals match current filters.
+              </Text>
+            )}
+          </Box>
+        </div>
+      )}
     </Box>
   );
 }

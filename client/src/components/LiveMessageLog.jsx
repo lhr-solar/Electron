@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue } from 'react';
 import { Box, Text, Stack, Collapse, TextInput, Button, Group, UnstyledButton } from '@mantine/core';
 import { ChevronsDown, Play, Pause } from 'lucide-react';
 import { socket } from '../socket';
@@ -6,6 +6,9 @@ import { socket } from '../socket';
 const MAX_MESSAGES = 500;
 const LIVE_LOG_WIDTH = 320;
 const SCROLL_THRESHOLD = 20;
+const UI_FLUSH_INTERVAL_MS = 80;
+const ESTIMATED_ROW_HEIGHT = 72;
+const OVERSCAN_ROWS = 8;
 
 function formatTime(timestampNs) {
   const ms = Number(timestampNs) / 1e6;
@@ -42,9 +45,13 @@ export function LiveMessageLog() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [paused, setPaused] = useState(false);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
   const scrollRef = useRef(null);
   const nextIdRef = useRef(0);
   const pausedRef = useRef(false);
+  const autoScrollRef = useRef(true);
+  const pendingMsgsRef = useRef([]);
 
   const checkAtBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -62,26 +69,43 @@ export function LiveMessageLog() {
   }, []);
 
   useEffect(() => {
+    autoScrollRef.current = autoScroll;
+  }, [autoScroll]);
+
+  useEffect(() => {
     const onLiveMessageBatch = (batch) => {
       if (!Array.isArray(batch) || batch.length === 0) return;
-      const newMsgs = batch.map((payload) => ({ id: nextIdRef.current++, ...payload }));
       if (pausedRef.current) return;
-      setMessages((prev) => {
-        const next = [...prev, ...newMsgs].slice(-MAX_MESSAGES);
-        return next;
-      });
-      if (autoScroll) {
-        requestAnimationFrame(() => scrollToBottom());
+      for (const payload of batch) {
+        pendingMsgsRef.current.push({ id: nextIdRef.current++, ...payload });
       }
     };
     socket.on('live_message_batch', onLiveMessageBatch);
     return () => socket.off('live_message_batch', onLiveMessageBatch);
-  }, [autoScroll, scrollToBottom]);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (pausedRef.current) return;
+      const pending = pendingMsgsRef.current;
+      if (pending.length === 0) return;
+      pendingMsgsRef.current = [];
+      setMessages((prev) => [...prev, ...pending].slice(-MAX_MESSAGES));
+      if (autoScrollRef.current) {
+        requestAnimationFrame(() => scrollToBottom());
+      }
+    }, UI_FLUSH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [scrollToBottom]);
 
   const togglePause = useCallback(() => {
     setPaused((p) => {
       const next = !p;
       pausedRef.current = next;
+      if (!next) {
+        // Resume from a clean queue to avoid large burst rendering.
+        pendingMsgsRef.current = [];
+      }
       return next;
     });
   }, []);
@@ -89,12 +113,41 @@ export function LiveMessageLog() {
   const handleScroll = useCallback(() => {
     const atBottom = checkAtBottom();
     setIsAtBottom(atBottom);
+    const el = scrollRef.current;
+    if (el) setScrollTop(el.scrollTop);
   }, [checkAtBottom]);
 
-  const searchLower = search.trim().toLowerCase();
-  const filtered = searchLower
-    ? messages.filter((msg) => matchesSearch(msg, searchLower))
-    : messages;
+  const deferredSearch = useDeferredValue(search);
+  const searchLower = deferredSearch.trim().toLowerCase();
+  const filtered = useMemo(
+    () => (searchLower ? messages.filter((msg) => matchesSearch(msg, searchLower)) : messages),
+    [messages, searchLower]
+  );
+
+  const totalRows = filtered.length;
+  const startIndex = Math.max(0, Math.floor(scrollTop / ESTIMATED_ROW_HEIGHT) - OVERSCAN_ROWS);
+  const visibleRowCount = Math.ceil((viewportHeight || 0) / ESTIMATED_ROW_HEIGHT) + OVERSCAN_ROWS * 2;
+  const endIndex = Math.min(totalRows, startIndex + Math.max(visibleRowCount, 30));
+  const visibleRows = useMemo(
+    () => filtered.slice(startIndex, endIndex),
+    [filtered, startIndex, endIndex]
+  );
+  const topSpacerHeight = startIndex * ESTIMATED_ROW_HEIGHT;
+  const bottomSpacerHeight = Math.max(0, (totalRows - endIndex) * ESTIMATED_ROW_HEIGHT);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    const updateSize = () => setViewportHeight(el.clientHeight || 0);
+    updateSize();
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(updateSize);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
 
   return (
     <Box
@@ -199,7 +252,8 @@ export function LiveMessageLog() {
         }}
       >
         <Stack gap={4}>
-          {filtered.map((msg) => {
+          {topSpacerHeight > 0 && <Box style={{ height: topSpacerHeight }} />}
+          {visibleRows.map((msg) => {
             const isExpanded = expandedId === msg.id;
             const hasSignals = msg.signals && Object.keys(msg.signals).length > 0;
             return (
@@ -249,6 +303,7 @@ export function LiveMessageLog() {
               </Box>
             );
           })}
+          {bottomSpacerHeight > 0 && <Box style={{ height: bottomSpacerHeight }} />}
         </Stack>
         {!isAtBottom && (
           <Button

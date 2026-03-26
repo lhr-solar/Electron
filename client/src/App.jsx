@@ -45,6 +45,7 @@ function App() {
   const navigate = useCallback((p) => {
     window.location.hash = p;
   }, []);
+  const toggleSideLog = useCallback(() => setSideLogOpen((v) => !v), []);
 
   return (
     <div style={{ height: '100vh', backgroundColor: '#0a0a0b', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -93,7 +94,7 @@ function App() {
         </Group>
         {PAGE_LAYOUTS.map(({ id, Component }) => (
           <div key={id} style={{ flex: 1, display: page === id ? 'flex' : 'none' }}>
-            <PageWithCollapsibleLog logOpen={sideLogOpen} onToggle={() => setSideLogOpen((v) => !v)}>
+            <PageWithCollapsibleLog logOpen={sideLogOpen} onToggle={toggleSideLog}>
               <Component />
             </PageWithCollapsibleLog>
           </div>
@@ -103,7 +104,7 @@ function App() {
   );
 }
 
-function PageWithCollapsibleLog({ children, logOpen, onToggle }) {
+const PageWithCollapsibleLog = React.memo(function PageWithCollapsibleLog({ children, logOpen, onToggle }) {
   const sidebarWidth = 320;
 
   return (
@@ -163,9 +164,9 @@ function PageWithCollapsibleLog({ children, logOpen, onToggle }) {
       </div>
     </div>
   );
-}
+});
 
-function NavTab({ icon, label, active, onClick }) {
+const NavTab = React.memo(function NavTab({ icon, label, active, onClick }) {
   return (
     <UnstyledButton
       onClick={onClick}
@@ -183,6 +184,6 @@ function NavTab({ icon, label, active, onClick }) {
       <Text size="sm" style={{ color: 'inherit' }}>{label}</Text>
     </UnstyledButton>
   );
-}
+});
 
 export default App;

@@ -49,16 +49,11 @@ class TelemetryService:
         incoming_signals = msg.get("signals", {})
 
         if array_index is not None:
+            # Hot path optimization: mutate cached containers in place to avoid
+            # per-message deep copies under high-rate streams.
             existing = self.message_cache[cache_key].get(can_id_hex)
             if existing and existing.get("is_array"):
-                merged_signals = {}
-                for k, v in existing["signals"].items():
-                    if isinstance(v, dict):
-                        merged_signals[k] = dict(v)
-                    elif isinstance(v, list):
-                        merged_signals[k] = {i: x for i, x in enumerate(v)}
-                    else:
-                        merged_signals[k] = {}
+                merged_signals = existing.get("signals", {})
                 indices_set = set(existing.get("indices", []))
             else:
                 merged_signals = {}
@@ -67,7 +62,9 @@ class TelemetryService:
             indices_set.add(array_index)
             for sig_name, sig_val in incoming_signals.items():
                 mapping = merged_signals.get(sig_name)
-                if not isinstance(mapping, dict):
+                if isinstance(mapping, list):
+                    mapping = {i: x for i, x in enumerate(mapping)}
+                elif not isinstance(mapping, dict):
                     mapping = {}
                 mapping[array_index] = sig_val
                 merged_signals[sig_name] = mapping
