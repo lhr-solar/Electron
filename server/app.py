@@ -476,6 +476,48 @@ async def get_dbc_schema(vehicle: str, filename: str):
         db = cantools.database.load_file(dbc_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load DBC: {e!s}")
+
+    def _infer_signal_data_type(sig):
+        """Infer a human-friendly DBC data type label for UI display.
+
+        cantools Signal exposes flags like is_float / is_signed; we use those plus
+        signal bit length to produce labels like uint8/int16/float32, etc.
+        """
+        length_bits = getattr(sig, "length", None)
+        try:
+            length_bits = int(length_bits) if length_bits is not None else None
+        except Exception:
+            length_bits = None
+
+        is_float = bool(getattr(sig, "is_float", False))
+        is_signed = bool(getattr(sig, "is_signed", False))
+        is_multiplexer = bool(getattr(sig, "is_multiplexer", False))
+
+        if is_float:
+            # Typical DBC float sizes are 16/32/64; fall back to float{bits}
+            if length_bits == 16:
+                base = "float16"
+            elif length_bits == 32:
+                base = "float32"
+            elif length_bits == 64:
+                base = "float64"
+            else:
+                base = f"float{length_bits}" if length_bits is not None else "float"
+        else:
+            if is_signed:
+                base = f"int{length_bits}" if length_bits is not None else "int"
+            else:
+                base = f"uint{length_bits}" if length_bits is not None else "unsigned int"
+
+        # Enumerations are typically backed by ints in DBC; expose category for UI.
+        if getattr(sig, "choices", None):
+            base = f"enum({base})"
+
+        if is_multiplexer:
+            base = f"mux({base})"
+
+        return base
+
     messages = []
     for msg in db.messages:
         signals = []
@@ -504,6 +546,7 @@ async def get_dbc_schema(vehicle: str, filename: str):
                     "min": getattr(sig, "minimum", None),
                     "max": getattr(sig, "maximum", None),
                     "choices": choices,
+                    "data_type": _infer_signal_data_type(sig),
                 }
             )
         messages.append(

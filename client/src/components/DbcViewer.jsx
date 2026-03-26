@@ -10,6 +10,27 @@ function api(path) {
   });
 }
 
+function formatCanIdHex(id) {
+  if (id === null || id === undefined) return '';
+  const s = String(id).trim();
+  if (!s) return '';
+
+  let n = null;
+  if (s.startsWith('0x') || s.startsWith('0X')) {
+    const parsed = parseInt(s, 16);
+    if (Number.isFinite(parsed)) n = parsed;
+  } else if (/^\d+$/.test(s)) {
+    const parsed = parseInt(s, 10);
+    if (Number.isFinite(parsed)) n = parsed;
+  } else if (/^[0-9a-fA-F]+$/.test(s)) {
+    const parsed = parseInt(s, 16);
+    if (Number.isFinite(parsed)) n = parsed;
+  }
+
+  if (n === null) return s;
+  return `0x${n.toString(16).toUpperCase().padStart(3, '0')}`;
+}
+
 export function DbcViewer() {
   const [vehicles, setVehicles] = useState([]);
   const [vehicle, setVehicle] = useState('');
@@ -174,7 +195,7 @@ export function DbcViewer() {
                   >
                     <Group gap={6} mb={4} justify="space-between">
                       <Text size="sm" fw={600} style={{ color: '#e4e4e7' }}>
-                        {m.id_hex} · {m.name}
+                        {formatCanIdHex(m.id_hex ?? m.id)} · {m.name}
                       </Text>
                       <Group gap={6}>
                         <Text size="xs" c="dimmed">
@@ -195,6 +216,21 @@ export function DbcViewer() {
                               <Text size="xs" fw={500} style={{ color: 'var(--text)' }}>
                                 {s.name}
                               </Text>
+                              {s.data_type && (
+                                <Text
+                                  size="xs"
+                                  c="dimmed"
+                                  style={{
+                                    fontFamily: 'monospace',
+                                    color: '#93c5fd',
+                                    opacity: 0.95,
+                                    marginLeft: 6,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {s.data_type}
+                                </Text>
+                              )}
                               {s.bit_range && (
                                 <Text size="xs" c="dimmed">
                                   bits {s.bit_range[0]}–{s.bit_range[1]} ({s.length} bits)
