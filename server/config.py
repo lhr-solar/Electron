@@ -36,6 +36,11 @@ class Configuration:
             "TCP_IP": "3.141.38.115",
             "TCP_PORT": 8187,
         }
+        # Cap'n Proto TCP: length-prefixed `server/util/capnp_schemas/can_frame.capnp` frames (see parser docs).
+        self.CAPNP_TCP_CONFIG = {
+            "CAPNP_TCP_IP": "127.0.0.1",
+            "CAPNP_TCP_PORT": 8190,
+        }
         self.FILE_CONFIG = {
             "REPLAY_FILE_PATH": os.path.join(self.LOG_DIR, "261_log.txt"),
         }
@@ -47,7 +52,7 @@ class Configuration:
 
     def get_bucket(self):
         """Return the InfluxDB bucket name for the current input mode."""
-        if self.INPUT_MODE == "tcp":
+        if self.INPUT_MODE in ("tcp", "capnp_tcp"):
             return "telemetry_main"
         return "debug"
 
@@ -56,14 +61,16 @@ class Configuration:
         config.update(self.INFLUX_CONFIG)
         config["INPUT_MODE"] = self.INPUT_MODE
         config.update(self.PCAN_CONFIG)  # Always include for UI
+        config.update(self.TCP_CONFIG)  # SLCAN TCP — include for UI when switching modes
+        config.update(self.CAPNP_TCP_CONFIG)  # Cap'n Proto TCP — include for UI when switching modes
         if self.INPUT_MODE in ("serial_canadapter", "serial_uart"):
             config.update(self.SERIAL_CONFIG)
         elif self.INPUT_MODE == "pcan":
             config.update(self.PCAN_CONFIG)
         elif self.INPUT_MODE == 'file':
             config.update(self.FILE_CONFIG)
-        elif self.INPUT_MODE == 'tcp':
-            config.update(self.TCP_CONFIG)
+        elif self.INPUT_MODE in ('tcp', 'capnp_tcp'):
+            pass
         else:
             logger.error(f"Invalid INPUT_MODE '{self.INPUT_MODE}' selected.")
             return None
@@ -72,7 +79,7 @@ class Configuration:
 
     def update_setting(self, key: str, value: str | int | list) -> bool:
         if key == "INPUT_MODE":
-            if value in ("serial_canadapter", "serial_uart", "pcan", "file", "tcp"):
+            if value in ("serial_canadapter", "serial_uart", "pcan", "file", "tcp", "capnp_tcp"):
                 self.INPUT_MODE = value
                 logger.info(f"Input mode updated to '{value}'")
                 return True
@@ -94,7 +101,7 @@ class Configuration:
             logger.info(f"Set PCAN_DEVICE_ID = {self.PCAN_CONFIG['PCAN_DEVICE_ID']}")
             return True
 
-        for config_dict in [self.COMMON_CONFIG, self.SERIAL_CONFIG, self.TCP_CONFIG, self.FILE_CONFIG, self.PCAN_CONFIG, self.INFLUX_CONFIG]:
+        for config_dict in [self.COMMON_CONFIG, self.SERIAL_CONFIG, self.TCP_CONFIG, self.CAPNP_TCP_CONFIG, self.FILE_CONFIG, self.PCAN_CONFIG, self.INFLUX_CONFIG]:
             if key in config_dict:
                 if key == "DBC_FILES" and not isinstance(value, list):
                     continue

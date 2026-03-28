@@ -2,6 +2,7 @@ import sys
 import asyncio
 import logging
 from server.parsers.tcp_parser import TCPParser
+from server.parsers.capnp_tcp_parser import CapnpTcpParser
 from server.parsers.serial_canadapter_parser import SerialCanAdapterParser
 from server.parsers.serial_uart_parser import SerialUartParser
 from server.parsers.file_parser import FileParser
@@ -10,7 +11,7 @@ from server.parsers._parser_abc import _Parser
 
 logger = logging.getLogger(__name__)
 
-VALID_INPUT_MODES = ("tcp", "file", "serial_canadapter", "serial_uart", "pcan")
+VALID_INPUT_MODES = ("tcp", "capnp_tcp", "file", "serial_canadapter", "serial_uart", "pcan")
 
 
 def create_async_parser(config: dict, queue: asyncio.Queue, stop_event: asyncio.Event) -> _Parser:
@@ -23,6 +24,7 @@ def create_async_parser(config: dict, queue: asyncio.Queue, stop_event: asyncio.
 
     parser_class = {
         "tcp": TCPParser,
+        "capnp_tcp": CapnpTcpParser,
         "serial_canadapter": SerialCanAdapterParser,
         "serial_uart": SerialUartParser,
         "file": FileParser,
@@ -36,7 +38,15 @@ def create_async_parser(config: dict, queue: asyncio.Queue, stop_event: asyncio.
     kwargs = {"queue": queue, "stop_event": stop_event}
 
     if input_mode == "tcp":
-        kwargs.update({"ip": config.get("TCP_IP"), "port": config.get("TCP_PORT")})
+        kwargs.update({
+            "ip": config.get("TCP_IP"),
+            "port": int(config.get("TCP_PORT") or 0) or 8187,
+        })
+    elif input_mode == "capnp_tcp":
+        kwargs.update({
+            "ip": config.get("CAPNP_TCP_IP"),
+            "port": int(config.get("CAPNP_TCP_PORT") or 0) or 8190,
+        })
     elif input_mode == "serial_canadapter":
         kwargs.update({
             "port": config.get("SERIAL_PORT"),

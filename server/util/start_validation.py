@@ -56,6 +56,22 @@ def validate_start_config() -> tuple[str | None, str | None]:
         if not os.path.isfile(path):
             return "File error", f"Replay file not found: {path}"
 
+    if input_mode in ("tcp", "capnp_tcp"):
+        if input_mode == "capnp_tcp":
+            ip = (config.get("CAPNP_TCP_IP") or "").strip()
+            port = config.get("CAPNP_TCP_PORT")
+        else:
+            ip = (config.get("TCP_IP") or "").strip()
+            port = config.get("TCP_PORT")
+        if not ip:
+            return "Network error", "IP address is required for the selected network source."
+        try:
+            p = int(port)
+            if p < 1 or p > 65535:
+                raise ValueError
+        except (TypeError, ValueError):
+            return "Network error", "Valid TCP port (1–65535) is required."
+
     if input_mode in ("serial_canadapter", "serial_uart"):
         port = config.get("SERIAL_PORT") or ""
         if not port:

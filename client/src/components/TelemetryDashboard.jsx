@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Stack, Group, Text, Select, TextInput, Button, Box, Divider, Checkbox, Switch, Grid, ScrollArea } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { socket } from '../socket';
-import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2, Database, Square, Cpu } from 'lucide-react';
+import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2, Database, Square, Cpu, Network } from 'lucide-react';
 import { LogFileManagerModal, DbcFileManagerModal } from './FileManagerModals';
 import { TcpConfigModal } from './TcpConfigModal';
 
@@ -10,9 +10,20 @@ const INPUT_MODES = [
   { value: 'serial_canadapter', label: 'Adapter' },
   { value: 'serial_uart', label: 'UART' },
   { value: 'pcan', label: 'PCAN' },
-  { value: 'tcp', label: 'TCP' },
+  { value: 'tcp', label: 'TCP SLCAN' },
+  { value: 'capnp_tcp', label: 'Cap\'n Proto' },
   { value: 'file', label: 'File' },
 ];
+
+const SOURCE_MODE_ICON_SIZE = 14;
+const SOURCE_MODE_ICONS = {
+  serial_canadapter: Usb,
+  serial_uart: Usb,
+  pcan: Cpu,
+  tcp: Wifi,
+  capnp_tcp: Network,
+  file: FileText,
+};
 
 function api(path, options = {}) {
   return fetch(path, {
@@ -25,7 +36,7 @@ function api(path, options = {}) {
   });
 }
 
-const CONFIG_KEYS = ['INPUT_MODE', 'DBC_VEHICLE', 'DBC_FILES', 'SERIAL_PORT', 'SERIAL_BAUDRATE', 'CAN_BITRATE', 'TCP_IP', 'TCP_PORT', 'REPLAY_FILE_PATH', 'INFLUX_WRITE_ENABLED', 'PCAN_CHANNEL', 'PCAN_BITRATE', 'PCAN_DEVICE_ID'];
+const CONFIG_KEYS = ['INPUT_MODE', 'DBC_VEHICLE', 'DBC_FILES', 'SERIAL_PORT', 'SERIAL_BAUDRATE', 'CAN_BITRATE', 'TCP_IP', 'TCP_PORT', 'CAPNP_TCP_IP', 'CAPNP_TCP_PORT', 'REPLAY_FILE_PATH', 'INFLUX_WRITE_ENABLED', 'PCAN_CHANNEL', 'PCAN_BITRATE', 'PCAN_DEVICE_ID'];
 
 const CAN_BITRATE_OPTIONS = [
   { value: '125000', label: '125 kbps' },
@@ -386,6 +397,24 @@ export function TelemetryDashboard() {
           </>
         );
       }
+      case 'capnp_tcp': {
+        const tcpPresetOptions = [{ value: '', label: 'Custom' }, ...tcpConfigs.map((c) => ({ value: c.id, label: `${c.name} (${c.ip}:${c.port})` }))];
+        const selectedPreset = tcpConfigs.find((c) => c.ip === config.CAPNP_TCP_IP && c.port === config.CAPNP_TCP_PORT)?.id || '';
+        return (
+          <>
+            <Text size="xs" c="dimmed" mb={4}>Length-prefixed Cap&apos;n Proto frames (see server/util/capnp_schemas/can_frame.capnp).</Text>
+            <Group gap="xs" align="flex-end">
+              <Select label="Preset" data={tcpPresetOptions} value={selectedPreset || ''} onChange={(v) => { const c = tcpConfigs.find((x) => x.id === v); if (c) { setLocalConfig('CAPNP_TCP_IP', c.ip); setLocalConfig('CAPNP_TCP_PORT', c.port); } }} searchable disabled={disabled} size="sm" style={{ flex: 1 }} />
+              <Button variant="subtle" size="sm" onClick={() => setTcpModalOpen(true)} disabled={disabled} title="Manage TCP configs"><Settings2 size={14} /></Button>
+            </Group>
+            <Group grow>
+              <TextInput label="IP" value={config.CAPNP_TCP_IP || ''} onChange={(e) => setLocalConfig('CAPNP_TCP_IP', e.target.value)} disabled={disabled} size="sm" />
+              <TextInput label="Port" type="number" value={String(config.CAPNP_TCP_PORT ?? '')} onChange={(e) => setLocalConfig('CAPNP_TCP_PORT', parseInt(e.target.value, 10) || 0)} disabled={disabled} size="sm" />
+            </Group>
+            <Button variant="subtle" size="compact-sm" onClick={() => { setLoading((l) => ({ ...l, tcpTest: true })); api('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.CAPNP_TCP_IP || '', port: config.CAPNP_TCP_PORT || 8190 }) }).then((res) => { if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' }); else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 }); }).catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' })).finally(() => setLoading((l) => ({ ...l, tcpTest: false }))); }} loading={loading.tcpTest} disabled={disabled || !config.CAPNP_TCP_IP} leftSection={<Wifi size={12} />}>Test connection</Button>
+          </>
+        );
+      }
       case 'file':
         return (
           <>
@@ -488,17 +517,36 @@ export function TelemetryDashboard() {
         </Grid.Col>
         <Grid.Col span={{ base: 12, sm: 6 }} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
           <Text size="sm" c="dimmed" mb={4}>Source</Text>
-          <Group gap={4} mb="xs" wrap="nowrap">
-            {INPUT_MODES.map((m) => (
-              <Button key={m.value} variant={inputMode === m.value ? 'filled' : 'subtle'} size="compact-xs" color="dark" onClick={() => setLocalConfig('INPUT_MODE', m.value)} disabled={status.service_running} style={inputMode === m.value ? { backgroundColor: '#27272a', color: 'var(--text)' } : { color: 'var(--text-muted)' }}>
-                {m.value === 'serial_canadapter' && <Usb size={10} style={{ marginRight: 2 }} />}
-                {m.value === 'serial_uart' && <Usb size={10} style={{ marginRight: 2 }} />}
-                {m.value === 'pcan' && <Cpu size={10} style={{ marginRight: 2 }} />}
-                {m.value === 'tcp' && <Wifi size={10} style={{ marginRight: 2 }} />}
-                {m.value === 'file' && <FileText size={10} style={{ marginRight: 2 }} />}
-                {m.label}
-              </Button>
-            ))}
+          <Group gap="xs" mb="xs" wrap="wrap" align="stretch">
+            {INPUT_MODES.map((m) => {
+              const Icon = SOURCE_MODE_ICONS[m.value];
+              return (
+                <Button
+                  key={m.value}
+                  variant={inputMode === m.value ? 'filled' : 'subtle'}
+                  size="xs"
+                  color="dark"
+                  onClick={() => setLocalConfig('INPUT_MODE', m.value)}
+                  disabled={status.service_running}
+                  leftSection={Icon ? <Icon size={SOURCE_MODE_ICON_SIZE} strokeWidth={2} style={{ flexShrink: 0 }} /> : undefined}
+                  styles={{
+                    root: {
+                      whiteSpace: 'normal',
+                      height: 'auto',
+                      minHeight: 36,
+                      alignItems: 'center',
+                      ...(inputMode === m.value
+                        ? { backgroundColor: '#27272a', color: 'var(--text)' }
+                        : { color: 'var(--text-muted)' }),
+                    },
+                    label: { whiteSpace: 'normal', lineHeight: 1.35, textAlign: 'left' },
+                    section: { flexShrink: 0 },
+                  }}
+                >
+                  {m.label}
+                </Button>
+              );
+            })}
           </Group>
           <Stack gap="xs" style={{ flex: 1, minHeight: 0 }}>
             {renderModeFields()}
