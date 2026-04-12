@@ -11,7 +11,7 @@ import './index.css';
 const theme = createTheme({
   primaryColor: 'dark',
   defaultRadius: 'xs',
-  fontFamily: 'var(--font-sans)',
+  fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
   colors: {
     dark: [
       '#e4e4e7',
@@ -60,6 +60,24 @@ const theme = createTheme({
         styles: {
           root: { borderColor: '#1f1f23', color: '#e4e4e7' },
         },
+      },
+    },
+    Checkbox: {
+      defaultProps: {
+        color: 'gray',
+        styles: (theme) => ({
+          input: {
+            backgroundColor: theme.colors.dark[6],
+            borderColor: theme.colors.dark[3],
+            '&:checked': {
+              backgroundColor: theme.colors.gray[4],
+              borderColor: theme.colors.gray[3],
+            },
+          },
+          icon: {
+            color: theme.colors.dark[9],
+          },
+        }),
       },
     },
   },

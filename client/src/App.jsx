@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Group, UnstyledButton, Text } from '@mantine/core';
-import { Settings, LayoutDashboard, FileText, ExternalLink, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { Settings, LayoutDashboard, FileText, ExternalLink, PanelRightOpen, PanelRightClose, LineChart } from 'lucide-react';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { LiveMessageLog } from './components/LiveMessageLog';
 import { SignalDashboard } from './components/SignalDashboard';
 import { DbcViewer } from './components/DbcViewer';
+import { Analytics } from './components/Analytics';
 import { socket } from './socket';
 
 const PAGE_LAYOUTS = [
   { id: 'dashboard', Component: SignalDashboard },
+  { id: 'analytics', Component: Analytics },
   { id: 'dbc-viewer', Component: DbcViewer },
 ];
 
@@ -53,6 +55,7 @@ function App() {
         gap="md"
         px="md"
         py={6}
+        wrap="nowrap"
         style={{
           borderBottom: '1px solid var(--border)',
           flexShrink: 0,
@@ -60,10 +63,40 @@ function App() {
           justifyContent: 'space-between',
         }}
       >
-        <Group gap="md">
-          <NavTab icon={<Settings size={14} />} label="Config" active={page === 'control'} onClick={() => navigate('control')} />
-          <NavTab icon={<LayoutDashboard size={14} />} label="Signals" active={page === 'dashboard'} onClick={() => navigate('dashboard')} />
-          <NavTab icon={<FileText size={14} />} label="DBC Viewer" active={page === 'dbc-viewer'} onClick={() => navigate('dbc-viewer')} />
+        <Group gap="lg" align="center" wrap="nowrap" style={{ minWidth: 0 }}>
+          <Text
+            size="lg"
+            fw={600}
+            style={{ color: '#e4e4e7', letterSpacing: '-0.02em', flexShrink: 0 }}
+          >
+            Electron
+          </Text>
+          <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+            <NavTab
+              icon={<Settings size={14} strokeWidth={1.75} />}
+              label="Config"
+              active={page === 'control'}
+              onClick={() => navigate('control')}
+            />
+            <NavTab
+              icon={<LayoutDashboard size={14} strokeWidth={1.75} />}
+              label="Signals"
+              active={page === 'dashboard'}
+              onClick={() => navigate('dashboard')}
+            />
+            <NavTab
+              icon={<LineChart size={14} strokeWidth={1.75} />}
+              label="Analytics"
+              active={page === 'analytics'}
+              onClick={() => navigate('analytics')}
+            />
+            <NavTab
+              icon={<FileText size={14} strokeWidth={1.75} />}
+              label="DBC Viewer"
+              active={page === 'dbc-viewer'}
+              onClick={() => navigate('dbc-viewer')}
+            />
+          </Group>
         </Group>
         <a
           href={grafanaActive ? grafanaUrl : undefined}
@@ -77,14 +110,11 @@ function App() {
             pointerEvents: grafanaActive ? 'auto' : 'none',
             color: 'var(--text-muted)',
             textDecoration: 'none',
+            flexShrink: 0,
           }}
         >
-          <img
-            src="/assets/grafana_logo.svg"
-            alt="Grafana"
-            style={{ height: 18, opacity: 0.9 }}
-          />
-          <ExternalLink size={14} />
+          <img src="/assets/grafana_logo.svg" alt="Grafana" style={{ height: 18, opacity: 0.9 }} />
+          <ExternalLink size={14} strokeWidth={1.75} />
         </a>
       </Group>
       <div style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
@@ -93,9 +123,9 @@ function App() {
           <LiveMessageLog />
         </Group>
         {PAGE_LAYOUTS.map(({ id, Component }) => (
-          <div key={id} style={{ flex: 1, display: page === id ? 'flex' : 'none' }}>
+          <div key={id} style={{ flex: 1, display: page === id ? 'flex' : 'none', minHeight: 0 }}>
             <PageWithCollapsibleLog logOpen={sideLogOpen} onToggle={toggleSideLog}>
-              <Component />
+              {page === id ? <Component /> : <div style={{ flex: 1, minHeight: 0 }} aria-hidden />}
             </PageWithCollapsibleLog>
           </div>
         ))}
@@ -108,7 +138,7 @@ const PageWithCollapsibleLog = React.memo(function PageWithCollapsibleLog({ chil
   const sidebarWidth = 320;
 
   return (
-    <div style={{ flex: 1, display: 'flex', position: 'relative', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', position: 'relative', minHeight: 0, minWidth: 0 }}>
       <div
         style={{
           flex: 1,
@@ -142,10 +172,11 @@ const PageWithCollapsibleLog = React.memo(function PageWithCollapsibleLog({ chil
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            color: '#a1a1aa',
             boxShadow: '0 0 12px rgba(0,0,0,0.6)',
           }}
         >
-          {logOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+          {logOpen ? <PanelRightClose size={16} strokeWidth={1.75} /> : <PanelRightOpen size={16} strokeWidth={1.75} />}
         </UnstyledButton>
       </div>
 
@@ -166,7 +197,7 @@ const PageWithCollapsibleLog = React.memo(function PageWithCollapsibleLog({ chil
   );
 });
 
-const NavTab = React.memo(function NavTab({ icon, label, active, onClick }) {
+function NavTab({ icon, label, active, onClick }) {
   return (
     <UnstyledButton
       onClick={onClick}
@@ -181,9 +212,11 @@ const NavTab = React.memo(function NavTab({ icon, label, active, onClick }) {
       }}
     >
       {icon}
-      <Text size="sm" style={{ color: 'inherit' }}>{label}</Text>
+      <Text size="sm" style={{ color: 'inherit' }}>
+        {label}
+      </Text>
     </UnstyledButton>
   );
-});
+}
 
 export default App;

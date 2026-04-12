@@ -249,7 +249,7 @@ export function SignalDashboard() {
       style={{
         flex: 1,
         height: '100%',
-        backgroundColor: '#0a0a0b',
+        backgroundColor: 'var(--bg)',
         padding: 24,
         minHeight: 0,
       }}
@@ -302,7 +302,7 @@ export function SignalDashboard() {
               minWidth: 300,
               border: '1px solid var(--border)',
               borderRadius: 8,
-              backgroundColor: '#0f0f11',
+              backgroundColor: 'var(--bg-elevated)',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
@@ -315,7 +315,7 @@ export function SignalDashboard() {
                 value={search}
                 onChange={(e) => setSearch(e.currentTarget.value)}
                 leftSection={<Search size={12} />}
-                styles={{ input: { backgroundColor: '#18181b' } }}
+                styles={{ input: { backgroundColor: 'var(--bg-hover)' } }}
               />
             </Box>
             <ScrollArea style={{ flex: 1 }} type="auto" scrollbarSize={8}>
@@ -420,7 +420,7 @@ export function SignalDashboard() {
                     style={{
                       border: '1px solid var(--border)',
                       borderRadius: 8,
-                      backgroundColor: '#0f0f11',
+                      backgroundColor: 'var(--bg-elevated)',
                       padding: 16,
                       minWidth: 360,
                     }}
@@ -441,7 +441,7 @@ export function SignalDashboard() {
                         border: '1px solid var(--border)',
                         borderRadius: 4,
                         padding: '6px 8px',
-                        backgroundColor: '#18181b',
+                        backgroundColor: 'var(--bg-hover)',
                       }}
                     >
                       <Group gap="xs" justify="space-between" wrap="nowrap">

@@ -131,6 +131,10 @@ class TelemetryService:
             logger.error("Start aborted: %s: %s", title, detail)
             return
 
+        from server.util.analytics_buffer import analytics_buffer
+
+        analytics_buffer.clear()
+
         self.last_parser_error = None
         logger.info("--- Starting Telemetry Service ---")
         

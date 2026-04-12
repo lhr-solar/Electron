@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import socketio
 from influxdb_client import InfluxDBClient
 from influxdb_client.client.exceptions import InfluxDBError
@@ -18,6 +18,8 @@ import serial.tools.list_ports
 from server.config import settings
 from server.services.telemetry import telemetry_service
 from server.util.influx_writer import InfluxDBWriter
+from server.util.analytics_buffer import analytics_buffer
+from server.util.analytics_validate import validate_views
 from server.util.vehicle_dbc_resolve import (
     get_vehicle_folders,
     resolve_vehicle as _resolve_vehicle,
@@ -43,6 +45,39 @@ class VehicleCreate(BaseModel): name: str
 class TcpConfigCreate(BaseModel): name: str; ip: str; port: int
 class TcpConfigUpdate(BaseModel): name: str; ip: str; port: int
 class TcpTestRequest(BaseModel): ip: str; port: int = 8187
+
+
+class AnalyticsStatRequest(BaseModel):
+    time_range: str = "-1h"
+    vehicle: str
+    message_id: int
+    field: str
+    stat: str
+    array_mode: str | None = None
+    array_index: int | None = None
+
+
+class AnalyticsSeriesRequest(BaseModel):
+    time_range: str = "-1h"
+    vehicle: str
+    message_id: int
+    field: str
+    array_index: int | None = None
+    limit: int = 5000
+
+
+class AnalyticsPivotRequest(BaseModel):
+    time_range: str = "-1h"
+    vehicle: str
+    message_id: int
+    fields: list[str]
+    array_index: int | None = None
+    limit: int = 3000
+
+
+class AnalyticsValidateRequest(BaseModel):
+    version: int = 1
+    views: list[dict] = Field(default_factory=list)
 
 # --- Helper Functions ---
 def move_to_trash(directory: str, filename: str):
@@ -545,6 +580,12 @@ async def get_dbc_schema(vehicle: str, filename: str):
                     "data_type": _infer_signal_data_type(sig),
                 }
             )
+        idx_sig = None
+        for sig in msg.signals:
+            ln = sig.name.lower()
+            if "idx" in ln or "index" in ln:
+                idx_sig = sig.name
+                break
         messages.append(
             {
                 "id": msg.frame_id,
@@ -553,6 +594,7 @@ async def get_dbc_schema(vehicle: str, filename: str):
                 "length": msg.length,
                 "ecu": msg.senders[0] if msg.senders else None,
                 "signals": signals,
+                "array_index_signal": idx_sig,
             }
         )
     return {"vehicle": vehicle, "filename": safe_name, "path": dbc_path, "messages": messages}
@@ -580,6 +622,87 @@ async def delete_bucket(name: str):
     if not bucket_to_delete: raise HTTPException(status_code=404, detail=f"Bucket '{name}' not found.")
     influx_client.buckets_api().delete_bucket(bucket_to_delete)
     return {"message": f"Bucket '{name}' deleted successfully."}
+
+
+@app.post("/api/analytics/stat")
+async def analytics_stat(body: AnalyticsStatRequest):
+    """Min/max over in-memory samples captured while telemetry is running (not Influx)."""
+    try:
+        r = analytics_buffer.query_stat(
+            range_value=body.time_range,
+            vehicle=body.vehicle,
+            message_id=body.message_id,
+            field=body.field,
+            stat=body.stat,
+            array_mode=body.array_mode,
+            array_index=body.array_index,
+        )
+        return {
+            "value": r.value,
+            "atIndex": r.at_index,
+            "atTime": r.at_time,
+            "samplesInAggregate": r.samples_in_aggregate,
+        }
+    except Exception:
+        logger.debug("analytics_stat failed", exc_info=True)
+        return {
+            "value": None,
+            "atIndex": None,
+            "atTime": None,
+            "samplesInAggregate": 0,
+        }
+
+
+@app.post("/api/analytics/series")
+async def analytics_series(body: AnalyticsSeriesRequest):
+    """Time series from in-memory ring buffer (live telemetry only)."""
+    try:
+        points, truncated = analytics_buffer.query_series(
+            range_value=body.time_range,
+            vehicle=body.vehicle,
+            message_id=body.message_id,
+            field=body.field,
+            array_index=body.array_index,
+            limit=body.limit,
+        )
+        return {"points": points, "truncated": truncated}
+    except Exception:
+        logger.debug("analytics_series failed", exc_info=True)
+        return {"points": [], "truncated": False}
+
+
+@app.post("/api/analytics/pivot")
+async def analytics_pivot(body: AnalyticsPivotRequest):
+    """Multi-field rows per decode time from the in-memory buffer."""
+    try:
+        rows, truncated = analytics_buffer.query_pivot_fields(
+            range_value=body.time_range,
+            vehicle=body.vehicle,
+            message_id=body.message_id,
+            fields=body.fields,
+            array_index=body.array_index,
+            limit=body.limit,
+        )
+        return {"rows": rows, "truncated": truncated}
+    except Exception:
+        logger.debug("analytics_pivot failed", exc_info=True)
+        return {"rows": [], "truncated": False}
+
+
+@app.post("/api/analytics/validate")
+async def analytics_validate(body: AnalyticsValidateRequest):
+    """Validate saved analytics views against DBC; returns errors and passing views only."""
+    try:
+        valid, errors = validate_views(body.views or [], dbc_dir=settings.DBC_DIR)
+        return {
+            "ok": len(errors) == 0,
+            "validViews": valid,
+            "errors": errors,
+        }
+    except Exception:
+        logger.debug("analytics_validate failed", exc_info=True)
+        return {"ok": False, "validViews": [], "errors": [{"path": "/", "detail": "Validation failed unexpectedly."}]}
+
 
 # --- Socket.IO and Static Files ---
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins="*")

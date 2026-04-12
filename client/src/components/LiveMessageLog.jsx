@@ -159,7 +159,7 @@ export function LiveMessageLog() {
         borderLeft: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: '#0a0a0b',
+        backgroundColor: 'var(--bg)',
         overflow: 'hidden',
       }}
     >
@@ -173,7 +173,7 @@ export function LiveMessageLog() {
           value={search}
           onChange={(e) => setSearch(e.currentTarget.value)}
           style={{ flex: 1, minWidth: 0 }}
-          styles={{ input: { backgroundColor: '#0f0f11' } }}
+          styles={{ input: { backgroundColor: 'var(--bg-elevated)' } }}
         />
         <UnstyledButton
           onClick={togglePause}
@@ -263,7 +263,7 @@ export function LiveMessageLog() {
                   border: '1px solid var(--border)',
                   borderRadius: 4,
                   padding: '6px 8px',
-                  backgroundColor: '#0f0f11',
+                  backgroundColor: 'var(--bg-elevated)',
                   cursor: 'pointer',
                 }}
                 onClick={() => setExpandedId((x) => (x === msg.id ? null : msg.id))}

@@ -464,7 +464,7 @@ export function TelemetryDashboard() {
     <Box style={dashboardLayout}>
       {/* Top: status + Start/Stop */}
       <Group gap="sm" mb="sm" wrap="wrap" justify="space-between" align="center">
-        <Group gap="xs" style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px' }}>
+        <Group gap="xs" style={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 12px' }}>
           <Circle size={7} fill={backendConnected ? STATUS_GREEN : STATUS_GRAY} />
           <Text size="sm" c="dimmed">{backendConnected ? 'Backend' : 'Off'}</Text>
           <Circle size={7} fill={status.service_running ? STATUS_GREEN : STATUS_GRAY} />
@@ -536,7 +536,7 @@ export function TelemetryDashboard() {
                       minHeight: 36,
                       alignItems: 'center',
                       ...(inputMode === m.value
-                        ? { backgroundColor: '#27272a', color: 'var(--text)' }
+                        ? { backgroundColor: 'var(--bg-hover)', color: 'var(--text)' }
                         : { color: 'var(--text-muted)' }),
                     },
                     label: { whiteSpace: 'normal', lineHeight: 1.35, textAlign: 'left' },

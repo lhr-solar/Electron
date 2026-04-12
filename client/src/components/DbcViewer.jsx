@@ -1,6 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Group, Stack, Text, Select, ScrollArea } from '@mantine/core';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Box, Group, Stack, Text, Select, ScrollArea, TextInput, UnstyledButton, Checkbox } from '@mantine/core';
 import { Car, FileText } from 'lucide-react';
+import {
+  ECU_NONE,
+  formatCanIdHex,
+  messageMatchesSearch,
+  buildEcuOptions,
+  sortMessages,
+  messageMatchesEcuFilter,
+} from '../dbc/dbcSearch';
 
 function api(path) {
   return fetch(path).then(async (res) => {
@@ -10,25 +18,224 @@ function api(path) {
   });
 }
 
-function formatCanIdHex(id) {
-  if (id === null || id === undefined) return '';
-  const s = String(id).trim();
-  if (!s) return '';
+/** @param {unknown} v */
+function fmt(v) {
+  if (v === null || v === undefined) return '—';
+  if (typeof v === 'boolean') return v ? 'yes' : 'no';
+  if (typeof v === 'number' && Number.isNaN(v)) return '—';
+  return String(v);
+}
 
-  let n = null;
-  if (s.startsWith('0x') || s.startsWith('0X')) {
-    const parsed = parseInt(s, 16);
-    if (Number.isFinite(parsed)) n = parsed;
-  } else if (/^\d+$/.test(s)) {
-    const parsed = parseInt(s, 10);
-    if (Number.isFinite(parsed)) n = parsed;
-  } else if (/^[0-9a-fA-F]+$/.test(s)) {
-    const parsed = parseInt(s, 16);
-    if (Number.isFinite(parsed)) n = parsed;
+/** @param {{ id?: number; id_hex?: string }} m @param {'hex' | 'decimal'} idFormat */
+function formatMessageId(m, idFormat) {
+  if (idFormat === 'decimal') return String(m.id ?? '');
+  return formatCanIdHex(m.id_hex ?? m.id);
+}
+
+/** @param {Record<string, unknown>} s */
+function bitRangeLine(s) {
+  const br = s.bit_range;
+  if (Array.isArray(br) && br.length >= 2) {
+    return `${br[0]}–${br[1]} (${s.length ?? '?'} bits)`;
   }
+  if (s.start_bit != null && s.length != null) {
+    const end = Number(s.start_bit) + Number(s.length) - 1;
+    return `${s.start_bit}–${end} (${s.length} bits)`;
+  }
+  return null;
+}
 
-  if (n === null) return s;
-  return `0x${n.toString(16).toUpperCase().padStart(3, '0')}`;
+const SORT_OPTIONS = [
+  { value: 'id-asc', label: 'ID · ascending' },
+  { value: 'id-desc', label: 'ID · descending' },
+  { value: 'name-asc', label: 'Name · A–Z' },
+  { value: 'name-desc', label: 'Name · Z–A' },
+];
+
+const SEARCH_FIELD_ROWS = [
+  ['ids', 'CAN IDs'],
+  ['ecus', 'Sender ECUs'],
+  ['msgNames', 'Messages & comments'],
+  ['sigNames', 'Signals & enums'],
+];
+
+/** @param {{ active: boolean; children: React.ReactNode; onClick: () => void }} p */
+function MiniToggle({ active, children, onClick }) {
+  return (
+    <UnstyledButton
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '4px 10px',
+        borderRadius: 4,
+        fontSize: 12,
+        border: '1px solid var(--border)',
+        backgroundColor: active ? '#27272a' : 'transparent',
+        color: active ? '#e4e4e7' : '#71717a',
+      }}
+    >
+      {children}
+    </UnstyledButton>
+  );
+}
+
+/** @param {{ children: React.ReactNode; onClick: () => void }} p */
+function MiniLinkButton({ children, onClick }) {
+  return (
+    <UnstyledButton
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '2px 6px',
+        fontSize: 12,
+        color: '#71717a',
+      }}
+    >
+      {children}
+    </UnstyledButton>
+  );
+}
+
+/** @param {{ label: string; active: boolean; onClick: () => void }} p */
+function EcuPill({ label, active, onClick }) {
+  return (
+    <UnstyledButton
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '4px 10px',
+        borderRadius: 4,
+        fontSize: 12,
+        border: '1px solid var(--border)',
+        backgroundColor: active ? '#27272a' : 'transparent',
+        color: active ? '#e4e4e7' : '#71717a',
+      }}
+    >
+      {label}
+    </UnstyledButton>
+  );
+}
+
+/** @param {{ msg: Record<string, unknown>; idFormat: 'hex' | 'decimal' }} p */
+function DbcMessageCard({ msg, idFormat }) {
+  const name = String(msg.name ?? '');
+  const dlc = msg.length;
+  const ecu = msg.ecu;
+  const signals = Array.isArray(msg.signals) ? msg.signals : [];
+  const idStr = formatMessageId(msg, idFormat);
+
+  return (
+    <Box
+      style={{
+        border: '1px solid var(--border)',
+        borderRadius: 6,
+        padding: 10,
+        backgroundColor: '#18181b',
+      }}
+    >
+      <Group gap={6} mb={4} justify="space-between" wrap="nowrap" align="flex-start">
+        <Text size="sm" fw={600} style={{ color: '#e4e4e7', wordBreak: 'break-word' }}>
+          <Text span ff="monospace" style={{ color: '#a1a1aa', marginRight: 6 }}>
+            {idStr}
+          </Text>
+          · {name}
+        </Text>
+        <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
+          <Text size="xs" c="dimmed">
+            DLC {fmt(dlc)}
+          </Text>
+          {ecu ? (
+            <Text size="xs" c="dimmed" style={{ opacity: 0.85 }}>
+              ECU: {ecu}
+            </Text>
+          ) : (
+            <Text size="xs" c="dimmed" fs="italic">
+              no sender
+            </Text>
+          )}
+        </Group>
+      </Group>
+      {signals.length > 0 ? (
+        <Stack gap={6} mt={6}>
+          {signals.map((s) => {
+            if (!s || typeof s !== 'object') return null;
+            const sig = /** @type {Record<string, unknown>} */ (s);
+            const bits = bitRangeLine(sig);
+            const choices = sig.choices;
+            const choiceEntries =
+              choices && typeof choices === 'object' && !Array.isArray(choices)
+                ? Object.entries(choices)
+                : [];
+            return (
+              <Box
+                key={String(sig.name)}
+                pt={6}
+                style={{ borderTop: '1px solid var(--border)' }}
+              >
+                <Group gap={6} wrap="wrap" mb={2}>
+                  <Text size="xs" fw={500} style={{ color: 'var(--text)' }}>
+                    {String(sig.name ?? '')}
+                  </Text>
+                  {sig.data_type ? (
+                    <Text size="xs" c="dimmed">
+                      {String(sig.data_type)}
+                    </Text>
+                  ) : null}
+                  {bits ? (
+                    <Text size="xs" c="dimmed">
+                      bits {bits}
+                    </Text>
+                  ) : null}
+                  {sig.unit ? (
+                    <Text size="xs" c="dimmed">
+                      unit {String(sig.unit)}
+                    </Text>
+                  ) : null}
+                </Group>
+                {(sig.scale != null ||
+                  sig.offset != null ||
+                  sig.min != null ||
+                  sig.max != null) && (
+                  <Text size="xs" ff="monospace" c="dimmed" mt={2}>
+                    {[
+                      sig.scale != null ? `scale=${fmt(sig.scale)}` : null,
+                      sig.offset != null ? `offset=${fmt(sig.offset)}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    {(sig.min != null || sig.max != null) && (
+                      <>
+                        {(sig.scale != null || sig.offset != null) ? ' · ' : ''}
+                        range [{fmt(sig.min)}, {fmt(sig.max)}]
+                      </>
+                    )}
+                  </Text>
+                )}
+                {choiceEntries.length > 0 ? (
+                  <Text size="xs" c="dimmed" mt={4}>
+                    values:{' '}
+                    {choiceEntries.map(([val, label]) => (
+                      <Text span key={val} mr="xs">
+                        <Text span ff="monospace" c="dimmed">
+                          {val}
+                        </Text>
+                        {' = '}
+                        {String(label)}
+                      </Text>
+                    ))}
+                  </Text>
+                ) : null}
+              </Box>
+            );
+          })}
+        </Stack>
+      ) : (
+        <Text size="xs" c="dimmed" mt={4}>
+          No signals defined.
+        </Text>
+      )}
+    </Box>
+  );
 }
 
 export function DbcViewer() {
@@ -38,6 +245,17 @@ export function DbcViewer() {
   const [dbc, setDbc] = useState('');
   const [schema, setSchema] = useState(null);
   const [loadingSchema, setLoadingSchema] = useState(false);
+
+  const [search, setSearch] = useState('');
+  const [searchIn, setSearchIn] = useState({
+    ids: true,
+    ecus: true,
+    msgNames: true,
+    sigNames: true,
+  });
+  const [selectedEcus, setSelectedEcus] = useState(() => new Set());
+  const [messageSort, setMessageSort] = useState('id-asc');
+  const [idSearchFormat, setIdSearchFormat] = useState(/** @type {'hex' | 'decimal'} */ ('hex'));
 
   const loadVehicles = useCallback(() => {
     api('/api/dbc/vehicles')
@@ -60,20 +278,17 @@ export function DbcViewer() {
       .catch(() => setDbcFiles([]));
   }, []);
 
-  const loadSchema = useCallback(
-    (v, filename) => {
-      if (!v || !filename) {
-        setSchema(null);
-        return;
-      }
-      setLoadingSchema(true);
-      api(`/api/dbc/vehicles/${encodeURIComponent(v)}/files/${encodeURIComponent(filename)}/schema`)
-        .then(setSchema)
-        .catch(() => setSchema(null))
-        .finally(() => setLoadingSchema(false));
-    },
-    []
-  );
+  const loadSchema = useCallback((v, filename) => {
+    if (!v || !filename) {
+      setSchema(null);
+      return;
+    }
+    setLoadingSchema(true);
+    api(`/api/dbc/vehicles/${encodeURIComponent(v)}/files/${encodeURIComponent(filename)}/schema`)
+      .then(setSchema)
+      .catch(() => setSchema(null))
+      .finally(() => setLoadingSchema(false));
+  }, []);
 
   useEffect(() => {
     loadVehicles();
@@ -99,17 +314,70 @@ export function DbcViewer() {
     }
   }, [vehicle, dbc, loadSchema]);
 
-  const vehicleOptions = vehicles.map((v) => ({ value: v, label: v }));
-  const dbcOptions = dbcFiles.map((f) => ({
-    value: f.name,
-    label: f.source === 'embedded' ? `${f.name} *` : f.name,
-  }));
+  const messages = useMemo(() => {
+    if (!schema?.messages) return [];
+    return [...schema.messages].filter((m) => m && typeof m === 'object');
+  }, [schema]);
+
+  const ecuOptions = useMemo(() => buildEcuOptions(messages), [messages]);
+
+  useEffect(() => {
+    setSelectedEcus(new Set(ecuOptions));
+  }, [vehicle, dbc, ecuOptions]);
+
+  const filteredMessages = useMemo(() => {
+    return messages.filter(
+      (m) => messageMatchesEcuFilter(m, selectedEcus) && messageMatchesSearch(m, search, searchIn, idSearchFormat)
+    );
+  }, [messages, selectedEcus, search, searchIn, idSearchFormat]);
+
+  const sortedMessages = useMemo(() => sortMessages(filteredMessages, messageSort), [filteredMessages, messageSort]);
+
+  const toggleEcu = (id) => {
+    setSelectedEcus((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+
+  const selectAllEcus = () => setSelectedEcus(new Set(ecuOptions));
+  const deselectAllEcus = () => setSelectedEcus(new Set());
+
+  const selectAllSearchFields = () =>
+    setSearchIn({ ids: true, ecus: true, msgNames: true, sigNames: true });
+  const deselectAllSearchFields = () =>
+    setSearchIn({ ids: false, ecus: false, msgNames: false, sigNames: false });
+
+  const toggleSearchField = (key) => {
+    setSearchIn((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const uniqueNodes = useMemo(() => {
+    const s = new Set();
+    for (const m of messages) {
+      if (m?.ecu) s.add(m.ecu);
+    }
+    return Array.from(s).sort();
+  }, [messages]);
+
+  const vehicleOptions = useMemo(() => vehicles.map((v) => ({ value: v, label: v })), [vehicles]);
+  const dbcOptions = useMemo(
+    () =>
+      dbcFiles.map((f) => ({
+        value: f.name,
+        label: f.source === 'embedded' ? `${f.name} *` : f.name,
+      })),
+    [dbcFiles]
+  );
 
   return (
     <Box
       style={{
         flex: 1,
         height: '100%',
+        minHeight: 0,
         padding: 24,
         backgroundColor: '#0a0a0b',
         overflow: 'hidden',
@@ -121,14 +389,36 @@ export function DbcViewer() {
         <Text size="md" fw={600} style={{ color: '#e4e4e7' }}>
           DBC Viewer
         </Text>
-        <Group gap="sm" align="flex-end">
+        {schema ? (
+          <Text size="sm" c="dimmed">
+            <Text span ff="monospace" fz="sm">
+              {schema.filename}
+            </Text>
+            {' · '}
+            {schema.vehicle} · {messages.length} messages
+            {uniqueNodes.length > 0 && (
+              <>
+                {' · '}
+                {uniqueNodes.length} sender{uniqueNodes.length !== 1 ? 's' : ''}
+              </>
+            )}
+          </Text>
+        ) : (
+          <Text size="sm" c="dimmed">
+            Select a vehicle and DBC file
+          </Text>
+        )}
+
+        <Group gap="sm" align="flex-end" wrap="wrap">
           <Select
             label="Vehicle"
             placeholder="Select vehicle"
             data={vehicleOptions}
             value={vehicle || null}
-            onChange={setVehicle}
+            onChange={(v) => setVehicle(v ?? '')}
             size="sm"
+            clearable
+            searchable
             leftSection={<Car size={14} style={{ color: 'var(--text-muted)' }} />}
             style={{ width: 220 }}
           />
@@ -137,18 +427,91 @@ export function DbcViewer() {
             placeholder={vehicle ? 'Select DBC' : 'Select vehicle first'}
             data={dbcOptions}
             value={dbc || null}
-            onChange={setDbc}
+            onChange={(v) => setDbc(v ?? '')}
             size="sm"
+            clearable
+            searchable
             leftSection={<FileText size={14} style={{ color: 'var(--text-muted)' }} />}
             style={{ width: 260 }}
             disabled={!vehicle || dbcOptions.length === 0}
           />
+          <TextInput
+            label="Search"
+            placeholder="IDs, ECUs, messages, signals, enums…"
+            value={search}
+            onChange={(e) => setSearch(e.currentTarget.value)}
+            autoComplete="off"
+            size="sm"
+            style={{ flex: '1 1 200px', minWidth: 160, maxWidth: 420 }}
+          />
+          <Select
+            label="Sort"
+            data={SORT_OPTIONS}
+            value={messageSort}
+            onChange={(v) => setMessageSort(v ?? 'id-asc')}
+            size="sm"
+            style={{ width: 160 }}
+          />
         </Group>
-        {vehicle && (
+
+        {vehicle ? (
           <Text size="xs" c="dimmed">
             * = Embedded Sharepoint DBC
           </Text>
-        )}
+        ) : null}
+
+        <Group gap="md" align="center" wrap="wrap">
+          <Text size="xs" c="dimmed" style={{ minWidth: 64 }}>
+            Search in
+          </Text>
+          {SEARCH_FIELD_ROWS.map(([key, label]) => (
+            <Checkbox
+              key={key}
+              label={label}
+              checked={searchIn[key]}
+              onChange={() => toggleSearchField(key)}
+              size="xs"
+              styles={{ label: { color: '#a1a1aa' } }}
+            />
+          ))}
+          <Group gap={4}>
+            <MiniLinkButton onClick={selectAllSearchFields}>All</MiniLinkButton>
+            <MiniLinkButton onClick={deselectAllSearchFields}>None</MiniLinkButton>
+          </Group>
+        </Group>
+
+        <Group gap="sm" align="center" wrap="wrap">
+          <Text size="xs" c="dimmed">
+            ECUs
+          </Text>
+          <Text size="xs" c="dimmed" fs="italic">
+            from senders
+          </Text>
+          <MiniLinkButton onClick={selectAllEcus}>All</MiniLinkButton>
+          <MiniLinkButton onClick={deselectAllEcus}>None</MiniLinkButton>
+          <Group gap={6} wrap="wrap" style={{ flex: 1 }}>
+            {ecuOptions.map((id) => (
+              <EcuPill
+                key={id}
+                label={id === ECU_NONE ? '— no sender' : id}
+                active={selectedEcus.has(id)}
+                onClick={() => toggleEcu(id)}
+              />
+            ))}
+          </Group>
+        </Group>
+
+        <Group gap="sm" align="center" wrap="wrap">
+          <Text size="xs" c="dimmed">
+            CAN ID
+          </Text>
+          <MiniToggle active={idSearchFormat === 'hex'} onClick={() => setIdSearchFormat('hex')}>
+            Hex
+          </MiniToggle>
+          <MiniToggle active={idSearchFormat === 'decimal'} onClick={() => setIdSearchFormat('decimal')}>
+            Decimal
+          </MiniToggle>
+        </Group>
       </Stack>
 
       <Box
@@ -166,10 +529,10 @@ export function DbcViewer() {
           <Box p="md">
             <Text size="sm" c="dimmed">
               {loadingSchema
-                ? 'Loading DBC schema...'
+                ? 'Loading DBC schema…'
                 : dbc
-                ? 'Failed to load schema or no messages found.'
-                : 'Select a vehicle and DBC file to view details.'}
+                  ? 'Failed to load schema or no messages found.'
+                  : 'Select a vehicle and DBC file to view details.'}
             </Text>
           </Box>
         )}
@@ -177,106 +540,29 @@ export function DbcViewer() {
           <ScrollArea style={{ height: '100%' }} type="auto" scrollbarSize={8}>
             <Box p="md">
               <Text size="sm" c="dimmed" mb="sm">
-                {schema.filename} · {schema.vehicle}
+                Messages ({sortedMessages.length})
               </Text>
               <Stack gap="sm">
-                {[...schema.messages]
-                  .slice()
-                  .sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
-                  .map((m) => (
-                  <Box
-                    key={m.id}
-                    style={{
-                      border: '1px solid var(--border)',
-                      borderRadius: 6,
-                      padding: 10,
-                      backgroundColor: '#18181b',
-                    }}
-                  >
-                    <Group gap={6} mb={4} justify="space-between">
-                      <Text size="sm" fw={600} style={{ color: '#e4e4e7' }}>
-                        {formatCanIdHex(m.id_hex ?? m.id)} · {m.name}
-                      </Text>
-                      <Group gap={6}>
-                        <Text size="xs" c="dimmed">
-                          DLC {m.length}
-                        </Text>
-                        {m.ecu && (
-                          <Text size="xs" c="dimmed" style={{ opacity: 0.7 }}>
-                            ECU: {m.ecu}
-                          </Text>
-                        )}
-                      </Group>
-                    </Group>
-                    {m.signals.length > 0 ? (
-                      <Stack gap={4} mt={6}>
-                        {m.signals.map((s) => (
-                          <Box key={s.name}>
-                            <Group gap={6} wrap="wrap" mb={2}>
-                              <Text size="xs" fw={500} style={{ color: 'var(--text)' }}>
-                                {s.name}
-                              </Text>
-                              {s.data_type && (
-                                <Text
-                                  size="xs"
-                                  c="dimmed"
-                                  style={{
-                                    fontFamily: 'monospace',
-                                    color: '#93c5fd',
-                                    opacity: 0.95,
-                                    marginLeft: 6,
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {s.data_type}
-                                </Text>
-                              )}
-                              {s.bit_range && (
-                                <Text size="xs" c="dimmed">
-                                  bits {s.bit_range[0]}–{s.bit_range[1]} ({s.length} bits)
-                                </Text>
-                              )}
-                              {s.unit && (
-                                <Text size="xs" c="dimmed">
-                                  unit: {s.unit}
-                                </Text>
-                              )}
-                            </Group>
-                            {(s.scale != null || s.offset != null || s.min != null || s.max != null) && (
-                              <Text
-                                size="xs"
-                                c="dimmed"
-                                style={{ marginLeft: 8, fontFamily: 'monospace', opacity: 0.85 }}
-                              >
-                                {[
-                                  s.scale != null ? `scale=${s.scale}` : null,
-                                  s.offset != null ? `offset=${s.offset}` : null,
-                                  s.min != null ? `min=${s.min}` : null,
-                                  s.max != null ? `max=${s.max}` : null,
-                                ]
-                                  .filter(Boolean)
-                                  .join(', ')}
-                              </Text>
-                            )}
-                            {s.choices && (
-                              <Text size="xs" c="dimmed" style={{ marginLeft: 8 }}>
-                                values:{' '}
-                                {Object.entries(s.choices)
-                                  .map(([val, label]) => `${val}=${label}`)
-                                  .join(', ')}
-                              </Text>
-                            )}
-                          </Box>
-                        ))}
-                      </Stack>
-                    ) : (
-                      <Text size="xs" c="dimmed">
-                        No signals defined.
-                      </Text>
-                    )}
-                  </Box>
-                ))}
+                {sortedMessages.length === 0 ? (
+                  <Text size="sm" c="dimmed">
+                    No messages match ECU and search filters.
+                  </Text>
+                ) : (
+                  sortedMessages.map((m) => (
+                    <DbcMessageCard key={`${m.id}-${m.name}`} msg={m} idFormat={idSearchFormat} />
+                  ))
+                )}
               </Stack>
+              {uniqueNodes.length > 0 && (
+                <Box mt="lg" pt="md" style={{ borderTop: '1px solid var(--border)' }}>
+                  <Text size="xs" c="dimmed" mb={6}>
+                    Senders ({uniqueNodes.length})
+                  </Text>
+                  <Text size="sm" style={{ color: '#e4e4e7' }}>
+                    {uniqueNodes.join(', ')}
+                  </Text>
+                </Box>
+              )}
             </Box>
           </ScrollArea>
         )}
@@ -284,4 +570,3 @@ export function DbcViewer() {
     </Box>
   );
 }
-
