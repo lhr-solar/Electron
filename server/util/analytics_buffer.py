@@ -57,8 +57,9 @@ def _frame_id_from_payload(can_id_hex: str) -> int | None:
         return None
 
 
-def _numeric_signals(signals: dict[str, Any]) -> dict[str, float]:
-    out: dict[str, float] = {}
+def _analytics_signals(signals: dict[str, Any]) -> dict[str, Any]:
+    """Values for the ring buffer: numbers and DBC value-table (enum) string labels."""
+    out: dict[str, Any] = {}
     for k, v in (signals or {}).items():
         if isinstance(v, bool):
             continue
@@ -67,7 +68,36 @@ def _numeric_signals(signals: dict[str, Any]) -> dict[str, float]:
                 out[str(k)] = float(v)
             except (TypeError, ValueError, OverflowError):
                 continue
+        elif isinstance(v, str):
+            s = v.strip()
+            if s:
+                out[str(k)] = s
     return out
+
+
+def _float_for_stat(raw: Any) -> float | None:
+    """Min/max stats are numeric only (skip enums / strings)."""
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, str):
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _pivot_scalar(v: Any) -> Any:
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, str):
+        return v
+    try:
+        return float(v)
+    except (TypeError, ValueError, OverflowError):
+        return str(v) if v is not None else None
 
 
 @dataclass
@@ -81,16 +111,22 @@ class StatResult:
 class AnalyticsBuffer:
     """
     Per (vehicle, frame_id) deque of decoded frames: {ts_ns, array_index, signals}.
+
+    Array min/max uses latest value per index per field, updated only when new frames arrive
+    (not ring rescan). all_indices and single_index both read from that map.
     """
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._buffers: dict[tuple[str, int], deque[dict[str, Any]]] = {}
+        # (vehicle, message_id, field) -> array_index -> (value, ts_ns) — last sample per slot
+        self._array_field_latest: dict[tuple[str, int, str], dict[int, tuple[float, int]]] = {}
 
     def clear(self) -> None:
         try:
             with self._lock:
                 self._buffers.clear()
+                self._array_field_latest.clear()
         except Exception as e:
             logger.debug("analytics_buffer.clear: %s", e, exc_info=True)
 
@@ -108,7 +144,7 @@ class AnalyticsBuffer:
                 ts_ns = int(ts) if ts is not None else time.time_ns()
             except (TypeError, ValueError, OverflowError):
                 ts_ns = time.time_ns()
-            sigs = _numeric_signals(payload.get("signals") or {})
+            sigs = _analytics_signals(payload.get("signals") or {})
             if not sigs:
                 return
             arr = payload.get("array_index")
@@ -122,6 +158,14 @@ class AnalyticsBuffer:
             with self._lock:
                 dq = self._buffers.setdefault(key, deque(maxlen=MAX_SAMPLES_PER_MESSAGE))
                 dq.append(row)
+                if arr is not None:
+                    for fname, raw in sigs.items():
+                        fv = _float_for_stat(raw)
+                        if fv is None:
+                            continue
+                        fn = str(fname)
+                        latest = self._array_field_latest.setdefault((vehicle, fid, fn), {})
+                        latest[int(arr)] = (fv, ts_ns)
         except Exception as e:
             logger.debug("analytics_buffer.record skipped: %s", e, exc_info=True)
 
@@ -163,8 +207,14 @@ class AnalyticsBuffer:
         try:
             if stat not in ("min", "max"):
                 return StatResult(None, None, None, 0)
-            rows = self._rows_in_window(vehicle, message_id, range_value)
             want_max = stat == "max"
+            veh = (vehicle or "").strip()
+            try:
+                mid = int(message_id)
+            except (TypeError, ValueError, OverflowError):
+                return StatResult(None, None, None, 0)
+            fn = str(field)
+            cutoff = self._cutoff_ns(range_value)
 
             def consider(r: dict[str, Any]) -> tuple[float, int | None, int] | None:
                 try:
@@ -179,6 +229,7 @@ class AnalyticsBuffer:
                     return None
 
             if array_mode is None:
+                rows = self._rows_in_window(vehicle, message_id, range_value)
                 candidates: list[tuple[float, int | None, int]] = []
                 for r in rows:
                     if r.get("array_index") is not None:
@@ -188,27 +239,32 @@ class AnalyticsBuffer:
                         candidates.append(c)
                 return self._reduce_stat(candidates, want_max)
 
+            # Array: latest value per index from record(); single_index picks one slot.
             if array_mode == "single_index":
                 try:
                     ix = int(array_index) if array_index is not None else 0
                 except (TypeError, ValueError, OverflowError):
                     ix = 0
-                candidates = []
-                for r in rows:
-                    if r.get("array_index") != ix:
-                        continue
-                    c = consider(r)
-                    if c:
-                        candidates.append(c)
+                with self._lock:
+                    latest = self._array_field_latest.get((veh, mid, fn))
+                    if not latest or ix not in latest:
+                        return StatResult(None, None, None, 0)
+                    v, ts = latest[ix]
+                    if int(ts) < cutoff:
+                        return StatResult(None, None, None, 0)
+                    candidates = [(v, ix, ts)]
                 return self._reduce_stat(candidates, want_max)
 
-            candidates = []
-            for r in rows:
-                if r.get("array_index") is None:
-                    continue
-                c = consider(r)
-                if c:
-                    candidates.append(c)
+            # all_indices: min/max across each slot's latest value (stale slots excluded by cutoff).
+            with self._lock:
+                latest = self._array_field_latest.get((veh, mid, fn))
+                if not latest:
+                    return StatResult(None, None, None, 0)
+                candidates = [
+                    (v, idx, ts)
+                    for idx, (v, ts) in latest.items()
+                    if int(ts) >= cutoff
+                ]
             return self._reduce_stat(candidates, want_max)
         except Exception as e:
             logger.debug("analytics_buffer.query_stat: %s", e, exc_info=True)
@@ -267,8 +323,12 @@ class AnalyticsBuffer:
                     continue
                 try:
                     ts_i = int(r["ts_ns"])
-                    fv = float(sigs[field])
-                    points.append({"t": _iso_ns(ts_i), "v": fv})
+                    raw = sigs[field]
+                    if isinstance(raw, str):
+                        points.append({"t": _iso_ns(ts_i), "v": raw})
+                    else:
+                        fv = float(raw)
+                        points.append({"t": _iso_ns(ts_i), "v": fv})
                 except Exception:
                     continue
             truncated = len(points) > lim
@@ -308,8 +368,7 @@ class AnalyticsBuffer:
                     ts_i = int(r["ts_ns"])
                     row: dict[str, Any] = {"t": _iso_ns(ts_i)}
                     for f in fields:
-                        v = sigs.get(f)
-                        row[f] = float(v) if v is not None else None
+                        row[f] = _pivot_scalar(sigs.get(f))
                     out.append(row)
                 except Exception:
                     continue

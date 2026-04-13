@@ -5,9 +5,9 @@ import React, { useMemo } from 'react';
  * @param {{ points: { t: string; v: number }[]; width?: number; height?: number; stroke?: string }} p
  */
 export function SimpleLineChart({ points, width = 520, height = 200, stroke = '#a1a1aa' }) {
-  const { pathD, minV, maxV } = useMemo(() => {
+  const { pathD, lastV } = useMemo(() => {
     const valid = (points || []).filter((p) => p && Number.isFinite(p.v) && p.t);
-    if (!valid.length) return { pathD: '', minV: 0, maxV: 1 };
+    if (!valid.length) return { pathD: '', minV: 0, maxV: 1, lastV: null };
     const ts = valid.map((p) => Date.parse(p.t)).filter(Number.isFinite);
     const vs = valid.map((p) => p.v);
     const minT = Math.min(...ts);
@@ -35,7 +35,9 @@ export function SimpleLineChart({ points, width = 520, height = 200, stroke = '#
         return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join('');
-    return { pathD: d, minV, maxV };
+    const last = valid[valid.length - 1];
+    const lastV = last && Number.isFinite(last.v) ? last.v : null;
+    return { pathD: d, minV, maxV, lastV };
   }, [points, width, height]);
 
   if (!points?.length || !pathD) {
@@ -52,11 +54,8 @@ export function SimpleLineChart({ points, width = 520, height = 200, stroke = '#
     <svg width={width} height={height} style={{ display: 'block', maxWidth: '100%' }}>
       <rect x={0} y={0} width={width} height={height} fill="#0a0a0b" rx={4} />
       <path d={pathD} fill="none" stroke={stroke} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-      <text x={8} y={14} fill="#71717a" fontSize="10" fontFamily="monospace">
-        max {maxV.toPrecision(4)}
-      </text>
-      <text x={8} y={height - 8} fill="#71717a" fontSize="10" fontFamily="monospace">
-        min {minV.toPrecision(4)}
+      <text x={8} y={height - 8} fill="#a1a1aa" fontSize="11" fontFamily="monospace">
+        current {lastV != null && Number.isFinite(lastV) ? lastV.toPrecision(4) : '—'}
       </text>
     </svg>
   );

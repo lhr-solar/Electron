@@ -9,13 +9,14 @@ import {
   Paper,
   ScrollArea,
   Select,
+  SimpleGrid,
   Stack,
   Table,
   Text,
 } from '@mantine/core';
 import { useDisclosure, useLocalStorage } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { Pencil, Plus, Trash2, Upload, Download } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, Plus, Trash2, Upload, Download } from 'lucide-react';
 import { mergePivotByFrameSignal } from '../analytics/mergeByFrame';
 import { SimpleLineChart } from './SimpleLineChart';
 import { socket } from '../socket';
@@ -67,6 +68,81 @@ function formatValueCompact(v) {
   return String(v);
 }
 
+/** Readout: show DBC value-table labels (strings) or formatted numbers. */
+function formatReadoutValue(v) {
+  if (v == null) return '—';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' && Number.isFinite(v)) return formatValueCompact(v);
+  const n = Number(v);
+  if (Number.isFinite(n)) return formatValueCompact(n);
+  return String(v);
+}
+
+/** ISO / epoch timestamps from analytics APIs → locale date + time (e.g. Mar 27, 2026, 3:45:30 PM). */
+function formatAnalyticsTime(isoOrString) {
+  if (isoOrString == null || isoOrString === '') return '';
+  const s = String(isoOrString);
+  const ms = Date.parse(s);
+  if (!Number.isFinite(ms)) return s;
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+    }).format(new Date(ms));
+  } catch {
+    return s;
+  }
+}
+
+const ANALYTICS_READOUT_VALUE_SX = {
+  fontSize: 'clamp(2.5rem, 8vw, 4rem)',
+  fontWeight: 700,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+  lineHeight: 1.15,
+  color: '#e8e8ed',
+  letterSpacing: '-0.02em',
+  wordBreak: 'break-all',
+};
+
+const ANALYTICS_READOUT_UNIT_SX = {
+  color: '#c8c8d0',
+  fontSize: 'clamp(1rem, 2.8vw, 1.4rem)',
+  fontWeight: 500,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+};
+
+/** Large min / max / readout value block with optional unit, index line, and time. */
+function AnalyticsBigReadout({ valueDisplay, unit, indexLine, timeLine, footerHint }) {
+  const missing = valueDisplay === '—';
+  return (
+    <Box mt="md" py="xl" px="md" style={{ textAlign: 'center' }}>
+      <Group justify="center" align="baseline" gap="sm" wrap="wrap">
+        <Text style={ANALYTICS_READOUT_VALUE_SX}>{valueDisplay}</Text>
+        {unit ? (
+          <Text component="span" style={ANALYTICS_READOUT_UNIT_SX}>
+            {unit}
+          </Text>
+        ) : null}
+      </Group>
+      {indexLine != null && indexLine !== '' ? (
+        <Text size="xs" mt="sm" style={{ color: '#b0b0b8' }}>
+          {indexLine}
+        </Text>
+      ) : null}
+      {timeLine ? (
+        <Text size="xs" mt={indexLine ? 'xs' : 'md'} style={{ color: '#9898a3' }}>
+          {formatAnalyticsTime(timeLine)}
+        </Text>
+      ) : null}
+      {footerHint && missing ? (
+        <Text size="xs" mt="md" style={{ color: '#9898a3' }}>
+          {footerHint}
+        </Text>
+      ) : null}
+    </Box>
+  );
+}
+
 function formatPivotRowSignalsCell(row, frameSignalName) {
   if (!row || typeof row !== 'object') return '—';
   const parts = [];
@@ -98,6 +174,7 @@ function defaultView(vehicleHint = '') {
     syncFrameSignalName: '',
     syncMessageIds: [],
     syncGraphArrayIndex: 0,
+    signalUnit: '',
   };
 }
 
@@ -338,10 +415,13 @@ export function Analytics() {
       return;
     }
     const msg = messages.find((m) => m.id === editing.messageId);
+    const sigs = sortSignalsByStartBit(msg?.signals || []);
+    const sigMeta = sigs.find((s) => s.name === editing.signalName);
     const next = {
       ...editing,
       messageName: msg?.name || editing.messageName || '',
       isArrayMessage: !!msg?.array_index_signal,
+      signalUnit: sigMeta?.unit ? String(sigMeta.unit) : '',
     };
     setViews((prev) => {
       const i = prev.findIndex((x) => x.id === next.id);
@@ -357,6 +437,17 @@ export function Analytics() {
   };
 
   const removeView = (id) => setViews((prev) => prev.filter((x) => x.id !== id));
+
+  const moveView = (index, delta) => {
+    setViews((prev) => {
+      const list = prev || [];
+      const j = index + delta;
+      if (j < 0 || j >= list.length) return list;
+      const next = [...list];
+      [next[index], next[j]] = [next[j], next[index]];
+      return next;
+    });
+  };
 
   const downloadJson = () => {
     const blob = new Blob([JSON.stringify({ version: 1, views }, null, 2)], { type: 'application/json' });
@@ -409,43 +500,47 @@ export function Analytics() {
   return (
     <Box
       style={{
-        flex: 1,
+        height: '100%',
         minHeight: 0,
-        overflow: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
         backgroundColor: '#0a0a0b',
-        padding: 16,
       }}
     >
-      <Group justify="space-between" mb="md" wrap="wrap">
-        <Text fw={600} size="lg" style={{ color: '#e4e4e7' }}>
-          Analytics
-        </Text>
-        <Group gap="xs">
-          <Button leftSection={<Plus size={16} />} size="sm" variant="light" onClick={openNew}>
-            Add view
-          </Button>
-          <Button leftSection={<Download size={16} />} size="sm" variant="default" onClick={downloadJson}>
-            Download JSON
-          </Button>
-          <label style={{ cursor: 'pointer' }}>
-            <input
-              type="file"
-              accept="application/json,.json"
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = '';
-                if (f) onUploadFile(f);
-              }}
-            />
-            <Button component="span" leftSection={<Upload size={16} />} size="sm" variant="default">
-              Upload JSON
+      <Box px="md" pt="md" style={{ flexShrink: 0 }}>
+        <Group justify="space-between" mb="md" wrap="wrap">
+          <Text fw={600} size="lg" style={{ color: '#e4e4e7' }}>
+            Analytics
+          </Text>
+          <Group gap="xs">
+            <Button leftSection={<Plus size={16} />} size="sm" variant="light" onClick={openNew}>
+              Add view
             </Button>
-          </label>
+            <Button leftSection={<Download size={16} />} size="sm" variant="default" onClick={downloadJson}>
+              Download JSON
+            </Button>
+            <label style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept="application/json,.json"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (f) onUploadFile(f);
+                }}
+              />
+              <Button component="span" leftSection={<Upload size={16} />} size="sm" variant="default">
+                Upload JSON
+              </Button>
+            </label>
+          </Group>
         </Group>
-      </Group>
+      </Box>
 
       {uploadErrors.length > 0 && (
+        <Box px="md" style={{ flexShrink: 0 }}>
         <Paper withBorder p="sm" mb="md" style={{ borderColor: '#b45309', background: '#1a1206' }}>
           <Text size="sm" fw={600} mb="xs" c="orange">
             Validation errors
@@ -474,25 +569,43 @@ export function Analytics() {
             </Button>
           )}
         </Paper>
+        </Box>
       )}
 
-      <Stack gap="md">
+      <Box
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          WebkitOverflowScrolling: 'touch',
+          paddingLeft: 16,
+          paddingRight: 16,
+          paddingBottom: 16,
+        }}
+      >
         {(views || []).length === 0 ? (
           <Text c="dimmed" size="sm">
             No views yet. Add a view for live min / max / graph, large readout, or FrameID sync.
           </Text>
         ) : (
-          (views || []).map((v) => (
-            <AnalyticsViewCard
-              key={v.id}
-              view={v}
-              liveTick={liveTick}
-              onEdit={() => openEdit(v)}
-              onDelete={() => removeView(v.id)}
-            />
-          ))
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md" verticalSpacing="md" style={{ minWidth: 0 }}>
+            {(views || []).map((v, index) => (
+              <AnalyticsViewCard
+                key={v.id}
+                view={v}
+                liveTick={liveTick}
+                viewIndex={index}
+                viewCount={(views || []).length}
+                onMoveUp={() => moveView(index, -1)}
+                onMoveDown={() => moveView(index, 1)}
+                onEdit={() => openEdit(v)}
+                onDelete={() => removeView(v.id)}
+              />
+            ))}
+          </SimpleGrid>
         )}
-      </Stack>
+      </Box>
 
       <Modal opened={opened} onClose={close} title={editing?.id && views?.some((x) => x.id === editing.id) ? 'Edit view' : 'New view'} size="lg">
         {editing && (
@@ -739,10 +852,45 @@ function AnalyticsViewCard(props) {
   return <StandardAnalyticsViewCard {...props} />;
 }
 
-function StandardAnalyticsViewCard({ view, liveTick, onEdit, onDelete }) {
+function StandardAnalyticsViewCard({
+  view,
+  liveTick,
+  onEdit,
+  onDelete,
+  viewIndex,
+  viewCount,
+  onMoveUp,
+  onMoveDown,
+}) {
   const [stat, setStat] = useState(null);
   const [series, setSeries] = useState([]);
   const [err, setErr] = useState(null);
+  const [unitLabel, setUnitLabel] = useState(() => view.signalUnit || '');
+
+  useEffect(() => {
+    setUnitLabel(view.signalUnit || '');
+  }, [view.signalUnit]);
+
+  useEffect(() => {
+    if (view.signalUnit) return;
+    if (!view.vehicle || !view.dbcFilename || view.messageId == null || !view.signalName) return;
+    let cancelled = false;
+    apiJson(
+      `/api/dbc/vehicles/${encodeURIComponent(view.vehicle)}/files/${encodeURIComponent(view.dbcFilename)}/schema`
+    )
+      .then((schema) => {
+        if (cancelled) return;
+        const msg = schema?.messages?.find((m) => m.id === view.messageId);
+        const sig = msg?.signals?.find((s) => s.name === view.signalName);
+        setUnitLabel(sig?.unit ? String(sig.unit) : '');
+      })
+      .catch(() => {
+        if (!cancelled) setUnitLabel('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view.vehicle, view.dbcFilename, view.messageId, view.signalName, view.signalUnit]);
 
   const run = useCallback(
     async (opts = { silent: false }) => {
@@ -819,17 +967,44 @@ function StandardAnalyticsViewCard({ view, liveTick, onEdit, onDelete }) {
   }, [liveTick, run]);
 
   return (
-    <Paper withBorder p="md" radius="md" style={{ background: '#0f0f11', borderColor: 'var(--border)' }}>
+    <Paper
+      withBorder
+      p="md"
+      radius="md"
+      style={{ background: '#0f0f11', borderColor: 'var(--border)', minWidth: 0, maxWidth: '100%' }}
+    >
       <Group justify="space-between" align="flex-start" wrap="nowrap" mb="xs">
         <Box style={{ minWidth: 0 }}>
-          <Text fw={600} size="sm" truncate>
+          <Text fw={600} size="sm" truncate style={{ color: '#e4e4e7' }}>
             {view.viewType === 'readout' ? 'Readout' : view.viewType.toUpperCase()} · {view.signalName}
           </Text>
-          <Text size="xs" c="dimmed" truncate>
+          <Text size="xs" truncate style={{ color: '#a1a1aa' }}>
             {view.vehicle} / {view.dbcFilename} / {view.messageName || view.messageId}
           </Text>
         </Box>
         <Group gap={4} wrap="nowrap">
+          {viewCount > 1 && (
+            <>
+              <ActionIcon
+                variant="default"
+                size="sm"
+                disabled={viewIndex <= 0}
+                onClick={onMoveUp}
+                title="Move up"
+              >
+                <ChevronUp size={14} />
+              </ActionIcon>
+              <ActionIcon
+                variant="default"
+                size="sm"
+                disabled={viewIndex >= viewCount - 1}
+                onClick={onMoveDown}
+                title="Move down"
+              >
+                <ChevronDown size={14} />
+              </ActionIcon>
+            </>
+          )}
           <ActionIcon variant="default" size="sm" onClick={onEdit} title="Edit">
             <Pencil size={14} />
           </ActionIcon>
@@ -843,38 +1018,22 @@ function StandardAnalyticsViewCard({ view, liveTick, onEdit, onDelete }) {
           {err}
         </Text>
       )}
-      {stat && (
-        <Text size="sm" style={{ fontFamily: 'monospace' }}>
-          value={stat.value == null ? '—' : String(stat.value)} · atIndex={stat.atIndex ?? '—'} · samples={stat.samplesInAggregate ?? 0}
-        </Text>
+      {(view.viewType === 'min' || view.viewType === 'max') && stat && (
+        <AnalyticsBigReadout
+          valueDisplay={stat.value == null ? '—' : formatReadoutValue(stat.value)}
+          unit={unitLabel}
+          indexLine={stat.atIndex != null ? `Index ${stat.atIndex}` : null}
+          timeLine={stat.atTime ? String(stat.atTime) : null}
+        />
       )}
       {view.viewType === 'readout' && (
-        <Box mt="md" py="xl" px="md" style={{ textAlign: 'center' }}>
-          <Text
-            style={{
-              fontSize: 'clamp(2.5rem, 8vw, 4rem)',
-              fontWeight: 700,
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-              lineHeight: 1.15,
-              color: '#fafafa',
-              letterSpacing: '-0.02em',
-              wordBreak: 'break-all',
-            }}
-          >
-            {series[0]?.v != null && Number.isFinite(Number(series[0].v))
-              ? formatValueCompact(Number(series[0].v))
-              : '—'}
-          </Text>
-          {series[0]?.t ? (
-            <Text size="xs" c="dimmed" mt="md">
-              {String(series[0].t)}
-            </Text>
-          ) : !series.length ? (
-            <Text size="xs" c="dimmed" mt="md">
-              No samples in buffer yet for this signal.
-            </Text>
-          ) : null}
-        </Box>
+        <AnalyticsBigReadout
+          valueDisplay={formatReadoutValue(series[0]?.v)}
+          unit={unitLabel}
+          indexLine={null}
+          timeLine={series[0]?.t ? String(series[0].t) : null}
+          footerHint={!series.length ? 'No samples in buffer yet for this signal.' : null}
+        />
       )}
       {view.viewType === 'graph' && series.length > 0 && (
         <Box mt="sm" style={{ overflowX: 'auto' }}>
@@ -885,7 +1044,16 @@ function StandardAnalyticsViewCard({ view, liveTick, onEdit, onDelete }) {
   );
 }
 
-function SyncAnalyticsViewCard({ view, liveTick, onEdit, onDelete }) {
+function SyncAnalyticsViewCard({
+  view,
+  liveTick,
+  onEdit,
+  onDelete,
+  viewIndex,
+  viewCount,
+  onMoveUp,
+  onMoveDown,
+}) {
   const [mergedRows, setMergedRows] = useState([]);
   const [pivotTruncated, setPivotTruncated] = useState(false);
   const [err, setErr] = useState(null);
@@ -951,7 +1119,12 @@ function SyncAnalyticsViewCard({ view, liveTick, onEdit, onDelete }) {
   const idsLabel = (view.syncMessageIds || []).map((id) => canIdHex(id)).join(', ');
 
   return (
-    <Paper withBorder p="md" radius="md" style={{ background: '#0f0f11', borderColor: 'var(--border)' }}>
+    <Paper
+      withBorder
+      p="md"
+      radius="md"
+      style={{ background: '#0f0f11', borderColor: 'var(--border)', minWidth: 0, maxWidth: '100%' }}
+    >
       <Group justify="space-between" align="flex-start" wrap="nowrap" mb="xs">
         <Box style={{ minWidth: 0 }}>
           <Text fw={600} size="sm" truncate>
@@ -963,6 +1136,28 @@ function SyncAnalyticsViewCard({ view, liveTick, onEdit, onDelete }) {
           </Text>
         </Box>
         <Group gap={4} wrap="nowrap">
+          {viewCount > 1 && (
+            <>
+              <ActionIcon
+                variant="default"
+                size="sm"
+                disabled={viewIndex <= 0}
+                onClick={onMoveUp}
+                title="Move up"
+              >
+                <ChevronUp size={14} />
+              </ActionIcon>
+              <ActionIcon
+                variant="default"
+                size="sm"
+                disabled={viewIndex >= viewCount - 1}
+                onClick={onMoveDown}
+                title="Move down"
+              >
+                <ChevronDown size={14} />
+              </ActionIcon>
+            </>
+          )}
           <ActionIcon variant="default" size="sm" onClick={onEdit} title="Edit">
             <Pencil size={14} />
           </ActionIcon>

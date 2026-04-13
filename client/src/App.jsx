@@ -143,6 +143,10 @@ const PageWithCollapsibleLog = React.memo(function PageWithCollapsibleLog({ chil
         style={{
           flex: 1,
           minWidth: 0,
+          minHeight: 0,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
           transition: 'margin-right 200ms ease',
           marginRight: logOpen ? sidebarWidth : 0,
         }}

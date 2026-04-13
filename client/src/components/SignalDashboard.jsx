@@ -2,7 +2,43 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, useDeferredVa
 import { Box, Text, Stack, Group, TextInput, ActionIcon, Button, Checkbox, Divider, ScrollArea } from '@mantine/core';
 import { Search, RotateCcw, Pause, Play } from 'lucide-react';
 import { socket } from '../socket';
+
 const UI_FLUSH_INTERVAL_MS = 80;
+const LS_CAN_KEYS = 'electrol_signal_dashboard_v1_can_keys';
+const LS_ECUS = 'electrol_signal_dashboard_v1_ecus';
+const LS_SEARCH = 'electrol_signal_dashboard_v1_search';
+
+function loadJsonKey(key, fallbackUndefined) {
+  try {
+    const s = localStorage.getItem(key);
+    if (s === null) return fallbackUndefined;
+    return JSON.parse(s);
+  } catch {
+    return fallbackUndefined;
+  }
+}
+
+function loadStringKey(key, fallback) {
+  try {
+    const s = localStorage.getItem(key);
+    if (s === null) return fallback;
+    return s;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Checkbox styles for dark sidebar: visible border + light check icon. */
+const filterCheckboxStyles = {
+  input: {
+    backgroundColor: 'var(--bg-hover)',
+    borderColor: '#52525b',
+    cursor: 'pointer',
+  },
+  icon: {
+    color: '#fafafa',
+  },
+};
 
 function formatTime(timestampNs) {
   const ms = Number(timestampNs) / 1e6;
@@ -36,14 +72,39 @@ function formatValue3(value) {
 
 export function SignalDashboard() {
   const [cache, setCache] = useState({});
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => loadStringKey(LS_SEARCH, ''));
   const [paused, setPaused] = useState(false);
-  const [selectedIdKeys, setSelectedIdKeys] = useState([]);
-  const [selectedEcus, setSelectedEcus] = useState([]);
+  /** `undefined` = first visit, not hydrated yet; then array (possibly empty). */
+  const [selectedIdKeys, setSelectedIdKeys] = useState(() => loadJsonKey(LS_CAN_KEYS, undefined));
+  const [selectedEcus, setSelectedEcus] = useState(() => loadJsonKey(LS_ECUS, undefined));
   const pausedRef = useRef(false);
-  const idsInitializedRef = useRef(false);
-  const ecusInitializedRef = useRef(false);
   const pendingBatchesRef = useRef([]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_SEARCH, search);
+    } catch {
+      /* ignore */
+    }
+  }, [search]);
+
+  useEffect(() => {
+    if (selectedIdKeys === undefined) return;
+    try {
+      localStorage.setItem(LS_CAN_KEYS, JSON.stringify(selectedIdKeys));
+    } catch {
+      /* ignore */
+    }
+  }, [selectedIdKeys]);
+
+  useEffect(() => {
+    if (selectedEcus === undefined) return;
+    try {
+      localStorage.setItem(LS_ECUS, JSON.stringify(selectedEcus));
+    } catch {
+      /* ignore */
+    }
+  }, [selectedEcus]);
 
   const mergeIntoCache = useCallback((msgs) => {
     if (pausedRef.current) return;
@@ -179,15 +240,16 @@ export function SignalDashboard() {
   );
 
   useEffect(() => {
-    const allowed = new Set(idOptions.map((o) => o.key));
     const allIds = idOptions.map((o) => o.key);
-    if (!idsInitializedRef.current) {
-      idsInitializedRef.current = true;
-      setSelectedIdKeys(allIds);
+    // While cache is still empty after remount (e.g. tab switch), do not prune — would wipe localStorage keys.
+    if (allIds.length === 0) {
       return;
     }
-    // Keep explicit user choices; only prune IDs that no longer exist.
+    const allowed = new Set(allIds);
     setSelectedIdKeys((prev) => {
+      if (prev === undefined) {
+        return allIds;
+      }
       const next = prev.filter((k) => allowed.has(k));
       if (next.length === prev.length && next.every((k, i) => k === prev[i])) {
         return prev;
@@ -197,14 +259,14 @@ export function SignalDashboard() {
   }, [idOptions]);
 
   useEffect(() => {
-    const allowed = new Set(ecuOptions);
-    if (!ecusInitializedRef.current) {
-      ecusInitializedRef.current = true;
-      setSelectedEcus(ecuOptions);
+    if (ecuOptions.length === 0) {
       return;
     }
-    // Keep explicit user choices; only prune ECUs that no longer exist.
+    const allowed = new Set(ecuOptions);
     setSelectedEcus((prev) => {
+      if (prev === undefined) {
+        return [...ecuOptions];
+      }
       const next = prev.filter((e) => allowed.has(e));
       if (next.length === prev.length && next.every((e, i) => e === prev[i])) {
         return prev;
@@ -213,8 +275,19 @@ export function SignalDashboard() {
     });
   }, [ecuOptions]);
 
-  const selectedIdsSet = useMemo(() => new Set(selectedIdKeys), [selectedIdKeys]);
-  const selectedEcusSet = useMemo(() => new Set(selectedEcus), [selectedEcus]);
+  const selectedIdsSet = useMemo(() => {
+    if (selectedIdKeys === undefined) {
+      return new Set(idOptions.map((o) => o.key));
+    }
+    return new Set(selectedIdKeys);
+  }, [selectedIdKeys, idOptions]);
+
+  const selectedEcusSet = useMemo(() => {
+    if (selectedEcus === undefined) {
+      return new Set(ecuOptions);
+    }
+    return new Set(selectedEcus);
+  }, [selectedEcus, ecuOptions]);
 
   const filteredEntries = useMemo(
     () =>
@@ -345,14 +418,17 @@ export function SignalDashboard() {
                     <Checkbox
                       key={o.key}
                       size="xs"
+                      color="teal"
+                      styles={filterCheckboxStyles}
                       checked={selectedIdsSet.has(o.key)}
                       onChange={(e) => {
                         const checked = e.currentTarget.checked;
                         setSelectedIdKeys((prev) => {
+                          const base = prev === undefined ? idOptions.map((x) => x.key) : [...prev];
                           if (checked) {
-                            return prev.includes(o.key) ? prev : [...prev, o.key];
+                            return base.includes(o.key) ? base : [...base, o.key];
                           }
-                          return prev.filter((k) => k !== o.key);
+                          return base.filter((k) => k !== o.key);
                         });
                       }}
                       label={
@@ -391,14 +467,17 @@ export function SignalDashboard() {
                     <Checkbox
                       key={ecu}
                       size="xs"
+                      color="teal"
+                      styles={filterCheckboxStyles}
                       checked={selectedEcusSet.has(ecu)}
                       onChange={(e) => {
                         const checked = e.currentTarget.checked;
                         setSelectedEcus((prev) => {
+                          const base = prev === undefined ? [...ecuOptions] : [...prev];
                           if (checked) {
-                            return prev.includes(ecu) ? prev : [...prev, ecu];
+                            return base.includes(ecu) ? base : [...base, ecu];
                           }
-                          return prev.filter((x) => x !== ecu);
+                          return base.filter((x) => x !== ecu);
                         });
                       }}
                       label={<Text size="xs" style={{ color: '#d4d4d8' }}>{ecu}</Text>}
