@@ -2,12 +2,14 @@ import asyncio
 import logging
 import os
 import shutil
+import time
 import urllib.request
 import urllib.error
 import uvicorn
 from contextlib import asynccontextmanager
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException, Body
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import socketio
@@ -35,6 +37,27 @@ influx_client: InfluxDBClient | None = None
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 STATIC_CLIENT_DIR = os.path.join(_PROJECT_ROOT, "client", "dist")
 EMBEDDED_DBC_DIR = os.path.join(_PROJECT_ROOT, "Embedded-Sharepoint", "can", "dbc")
+TRUTHY_VALUES = {"1", "true", "yes", "on"}
+SERVE_STATIC_CLIENT = os.environ.get("SERVE_STATIC_CLIENT", "1").strip().lower() in TRUTHY_VALUES
+STATUS_HEALTH_TTL_SEC = float(os.environ.get("STATUS_HEALTH_TTL_SEC", "2.0"))
+
+def _parse_origins(raw: str):
+    raw = (raw or "*").strip()
+    if raw == "*":
+        return ["*"]
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
+HTTP_CORS_ORIGINS = _parse_origins(os.environ.get("CORS_ORIGINS", "*"))
+ALLOW_CREDENTIALS = HTTP_CORS_ORIGINS != ["*"]
+SOCKET_CORS_ORIGINS = os.environ.get("SOCKET_CORS_ORIGINS", os.environ.get("CORS_ORIGINS", "*")).strip()
+if SOCKET_CORS_ORIGINS != "*":
+    SOCKET_CORS_ORIGINS = [x.strip() for x in SOCKET_CORS_ORIGINS.split(",") if x.strip()]
+
+_status_health_cache = {
+    "checked_at": 0.0,
+    "influx_connected": False,
+    "grafana_active": False,
+}
 
 # --- Pydantic Models ---
 class Bucket(BaseModel): name: str
@@ -105,26 +128,45 @@ def _check_grafana_health():
             pass
     return False
 
+async def _get_cached_health(force_refresh: bool = False):
+    now = time.monotonic()
+    expired = (now - _status_health_cache["checked_at"]) >= STATUS_HEALTH_TTL_SEC
+    if force_refresh or expired:
+        _status_health_cache["influx_connected"] = (
+            await asyncio.to_thread(influx_client.ping) if influx_client else False
+        )
+        _status_health_cache["grafana_active"] = await asyncio.to_thread(_check_grafana_health)
+        _status_health_cache["checked_at"] = now
+    return _status_health_cache["influx_connected"], _status_health_cache["grafana_active"]
+
+async def build_status_payload(force_health_refresh: bool = False):
+    parser_status = telemetry_service.get_parser_status()
+    influx_connected, grafana_active = await _get_cached_health(force_refresh=force_health_refresh)
+    return {
+        "service_running": telemetry_service.running,
+        "influx_connected": influx_connected,
+        "grafana_active": grafana_active,
+        "grafana_url": os.environ.get("GRAFANA_URL", "http://127.0.0.1:3000"),
+        "parser_status": parser_status.get("status", "idle") if parser_status else "idle",
+        "parser_connection_state": parser_status.get("connection_state") if parser_status else None,
+        "error_message": parser_status.get("error_message") if parser_status else None,
+        "dbc_errors": telemetry_service.get_dbc_errors(),
+        "influx_bucket": settings.get_bucket(),
+        "vehicle": settings.COMMON_CONFIG.get("DBC_VEHICLE", ""),
+    }
+
+async def emit_status_update(force_health_refresh: bool = False, to: str | None = None):
+    status = await build_status_payload(force_health_refresh=force_health_refresh)
+    if to:
+        await sio.emit("status", status, to=to)
+        return
+    await sio.emit("status", status)
+
 # --- Background Tasks & Lifespan ---
 async def send_status_updates(sio: socketio.AsyncServer):
     while True:
-        parser_status = telemetry_service.get_parser_status()
-        influx_connected = await asyncio.to_thread(influx_client.ping) if influx_client else False
-        grafana_active = await asyncio.to_thread(_check_grafana_health)
-        status = {
-            "service_running": telemetry_service.running,
-            "influx_connected": influx_connected,
-            "grafana_active": grafana_active,
-            "grafana_url": os.environ.get("GRAFANA_URL", "http://127.0.0.1:3000"),
-            "parser_status": parser_status.get("status", "idle") if parser_status else "idle",
-            "parser_connection_state": parser_status.get("connection_state") if parser_status else None,
-            "error_message": parser_status.get("error_message") if parser_status else None,
-            "dbc_errors": telemetry_service.get_dbc_errors(),
-            "influx_bucket": settings.get_bucket(),
-            "vehicle": settings.COMMON_CONFIG.get("DBC_VEHICLE", ""),
-        }
-        await sio.emit('status', status)
-        await asyncio.sleep(1)
+        await emit_status_update()
+        await asyncio.sleep(0.25)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -158,6 +200,13 @@ async def lifespan(app: FastAPI):
 
 # --- FastAPI App ---
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=HTTP_CORS_ORIGINS,
+    allow_credentials=ALLOW_CREDENTIALS,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- API Endpoints ---
 def _validate_and_raise():
@@ -182,13 +231,15 @@ async def start_service():
     if influx_write_enabled:
         target_bucket = config.get("INFLUX_BUCKET", "debug")
         writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
-    asyncio.create_task(telemetry_service.start(writer, sio=sio))
-    return {"message": "Telemetry service starting."}
+    await telemetry_service.start(writer, sio=sio)
+    await emit_status_update(force_health_refresh=True)
+    return {"message": "Telemetry service started." if telemetry_service.running else "Telemetry service did not start."}
 
 @app.post("/api/stop")
 async def stop_service():
     if not telemetry_service.running: raise HTTPException(status_code=400, detail="Service is not running.")
     await telemetry_service.stop()
+    await emit_status_update(force_health_refresh=True)
     return {"message": "Telemetry service stopped."}
 
 @app.post("/api/restart")
@@ -206,8 +257,26 @@ async def restart_service():
     if influx_write_enabled:
         target_bucket = config.get("INFLUX_BUCKET", "debug")
         writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
-    asyncio.create_task(telemetry_service.start(writer, sio=sio))
+    await telemetry_service.start(writer, sio=sio)
+    await emit_status_update(force_health_refresh=True)
     return {"message": "Telemetry service restarted."}
+
+@app.get("/api/health")
+async def api_health():
+    status = await build_status_payload(force_health_refresh=False)
+    return {"ok": True, "status": status}
+
+@app.get("/api/runtime-info")
+async def runtime_info():
+    return {
+        "serve_static_client": SERVE_STATIC_CLIENT,
+        "data_dirs": {
+            "app_data_dir": settings.APP_DATA_DIR,
+            "dbc_dir": settings.DBC_DIR,
+            "log_dir": settings.LOG_DIR,
+            "trash_dir": settings.TRASH_DIR,
+        },
+    }
 
 @app.get("/api/config")
 async def get_config():
@@ -705,17 +774,18 @@ async def analytics_validate(body: AnalyticsValidateRequest):
 
 
 # --- Socket.IO and Static Files ---
-sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins="*")
-if os.path.isdir(STATIC_CLIENT_DIR):
+sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins=SOCKET_CORS_ORIGINS)
+if SERVE_STATIC_CLIENT and os.path.isdir(STATIC_CLIENT_DIR):
     app.mount("/", StaticFiles(directory=STATIC_CLIENT_DIR, html=True), name="static")
     logger.info(f"Serving static client from {STATIC_CLIENT_DIR}")
 else:
-    logger.warning(f"Static client not found at {STATIC_CLIENT_DIR}. Run 'cd client && npm run build' to build the client.")
+    logger.info("Static client serving is disabled or client build not found.")
 asgi_app = socketio.ASGIApp(sio, app)
 
 @sio.event
 async def connect(sid, environ):
     logger.info(f"Client connected: {sid}")
+    await emit_status_update(force_health_refresh=True, to=sid)
     cache = telemetry_service.get_cache()
     if cache:
         await sio.emit("signal_cache", cache, to=sid)

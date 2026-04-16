@@ -20,6 +20,7 @@ import { ChevronDown, ChevronUp, Pencil, Plus, Trash2, Upload, Download } from '
 import { mergePivotByFrameSignal } from '../analytics/mergeByFrame';
 import { SimpleLineChart } from './SimpleLineChart';
 import { socket } from '../socket';
+import { apiJson } from '../lib/api';
 
 const LS_KEY = 'electrol_analytics_views_v1';
 /** Ring-buffer window for analytics APIs (not shown in UI). */
@@ -27,16 +28,6 @@ const ANALYTICS_TIME_RANGE = '-1h';
 
 function uid() {
   return globalThis.crypto?.randomUUID?.() ?? `v-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-async function apiJson(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || data.message || res.statusText);
-  return data;
 }
 
 /** DBC layout order: ascending start bit, then name. */

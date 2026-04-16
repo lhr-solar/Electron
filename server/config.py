@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 from dotenv import load_dotenv
 
@@ -7,10 +8,14 @@ logger = logging.getLogger(__name__)
 
 class Configuration:
     def __init__(self):
+        self.IS_FROZEN = bool(getattr(sys, "frozen", False))
+        self.APP_NAME = os.environ.get("APP_NAME", "ElectronTelemetry")
+        self.APP_DATA_DIR = self._resolve_app_data_dir()
+
         # --- Environment-based Paths ---
-        self.DBC_DIR = os.environ.get("DBC_DIR", "dbc")
-        self.LOG_DIR = os.environ.get("LOG_DIR", "logs")
-        self.TRASH_DIR = os.environ.get("TRASH_DIR", ".trash")
+        self.DBC_DIR = self._resolve_runtime_path("DBC_DIR", "dbc")
+        self.LOG_DIR = self._resolve_runtime_path("LOG_DIR", "logs")
+        self.TRASH_DIR = self._resolve_runtime_path("TRASH_DIR", ".trash")
 
         # --- Default Settings ---
         self.DEFAULT_DBC_VEHICLE = os.environ.get("DEFAULT_DBC_VEHICLE", "Mcqueen")
@@ -49,6 +54,25 @@ class Configuration:
             "PCAN_BITRATE": 250000,
             "PCAN_DEVICE_ID": None,  # Optional: select by device ID instead of channel
         }
+
+    def _resolve_app_data_dir(self):
+        explicit = os.environ.get("APP_DATA_DIR")
+        if explicit:
+            return explicit
+        if os.name == "nt":
+            base = os.environ.get("APPDATA") or os.path.expanduser("~")
+            return os.path.join(base, self.APP_NAME)
+        if sys.platform == "darwin":
+            return os.path.join(os.path.expanduser("~/Library/Application Support"), self.APP_NAME)
+        return os.path.join(os.path.expanduser("~/.local/share"), self.APP_NAME)
+
+    def _resolve_runtime_path(self, env_key: str, default_relative: str):
+        explicit = os.environ.get(env_key)
+        if explicit:
+            return explicit
+        if self.IS_FROZEN:
+            return os.path.join(self.APP_DATA_DIR, default_relative)
+        return default_relative
 
     def get_bucket(self):
         """Return the InfluxDB bucket name for the current input mode."""

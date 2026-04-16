@@ -2,17 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Modal, Box, Text, Stack, Group, Button, TextInput, ActionIcon } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { Trash2, Pencil, Plus, Wifi } from 'lucide-react';
-
-function api(path, options = {}) {
-  return fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  }).then(async (res) => {
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || data.message || res.statusText);
-    return data;
-  });
-}
+import { apiJson } from '../lib/api';
 
 export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentPort }) {
   const [list, setList] = useState([]);
@@ -25,7 +15,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
   const [pendingDelete, setPendingDelete] = useState(null);
 
   const load = useCallback(() => {
-    api('/api/tcp/configs')
+    apiJson('/api/tcp/configs')
       .then(setList)
       .catch((e) => notifications.show({ title: 'TCP configs', message: e.message, color: 'red' }));
   }, []);
@@ -66,7 +56,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
       notifications.show({ title: 'Validation', message: 'Valid port required (1-65535)', color: 'red' });
       return;
     }
-    api('/api/tcp/configs', { method: 'POST', body: JSON.stringify({ name: formName.trim(), ip: formIp.trim(), port }) })
+    apiJson('/api/tcp/configs', { method: 'POST', body: JSON.stringify({ name: formName.trim(), ip: formIp.trim(), port }) })
       .then((created) => {
         setList((prev) => [...prev, created]);
         setAdding(false);
@@ -89,7 +79,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
       notifications.show({ title: 'Validation', message: 'Valid port required (1-65535)', color: 'red' });
       return;
     }
-    api(`/api/tcp/configs/${editingId}`, { method: 'PUT', body: JSON.stringify({ name: formName.trim(), ip: formIp.trim(), port }) })
+    apiJson(`/api/tcp/configs/${editingId}`, { method: 'PUT', body: JSON.stringify({ name: formName.trim(), ip: formIp.trim(), port }) })
       .then((updated) => {
         setList((prev) => prev.map((c) => (c.id === editingId ? updated : c)));
         setEditingId(null);
@@ -107,7 +97,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
     if (!pendingDelete) return;
     const { id, name } = pendingDelete;
     setPendingDelete(null);
-    api(`/api/tcp/configs/${id}`, { method: 'DELETE' })
+    apiJson(`/api/tcp/configs/${id}`, { method: 'DELETE' })
       .then(() => {
         setList((prev) => prev.filter((x) => x.id !== id));
         onRefresh?.();
@@ -118,7 +108,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
 
   const testConnection = (ip, port) => {
     setTesting(true);
-    api('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: ip.trim(), port: parseInt(port, 10) || 8187 }) })
+    apiJson('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: ip.trim(), port: parseInt(port, 10) || 8187 }) })
       .then((res) => {
         if (res.ok) {
           notifications.show({ title: 'Connection test', message: res.message, color: 'green' });

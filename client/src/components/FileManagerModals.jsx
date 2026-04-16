@@ -2,17 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Modal, Box, Text, Stack, Group, Button, TextInput, Select, ActionIcon } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { Upload, Trash2, Pencil, Check, X, Plus, FolderPlus } from 'lucide-react';
-
-function api(path, options = {}) {
-  return fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  }).then(async (res) => {
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || data.message || res.statusText);
-    return data;
-  });
-}
+import { apiJson, buildApiUrl } from '../lib/api';
 
 function DropZone({ accept, onFiles }) {
   const [dragOver, setDragOver] = useState(false);
@@ -156,7 +146,7 @@ export function LogFileManagerModal({ opened, onClose, onFilesChanged }) {
   const [loading, setLoading] = useState(false);
 
   const loadFiles = useCallback(() => {
-    api('/api/files/log')
+    apiJson('/api/files/log')
       .then((list) => setFiles(list || []))
       .catch((e) => notifications.show({ title: 'Error', message: e.message, color: 'red' }));
   }, []);
@@ -171,7 +161,7 @@ export function LogFileManagerModal({ opened, onClose, onFilesChanged }) {
       const formData = new FormData();
       formData.append('file', file);
       try {
-        await fetch('/api/files/log', { method: 'POST', body: formData });
+        await fetch(buildApiUrl('/api/files/log'), { method: 'POST', body: formData });
       } catch (e) {
         notifications.show({ title: 'Upload failed', message: e.message, color: 'red' });
       }
@@ -183,7 +173,7 @@ export function LogFileManagerModal({ opened, onClose, onFilesChanged }) {
 
   const handleDelete = async (filename) => {
     try {
-      await api('/api/files/log', {
+      await apiJson('/api/files/log', {
         method: 'DELETE',
         body: JSON.stringify({ filename }),
       });
@@ -196,7 +186,7 @@ export function LogFileManagerModal({ opened, onClose, onFilesChanged }) {
 
   const handleRename = async (oldName, newName) => {
     try {
-      await api('/api/files/log/rename', {
+      await apiJson('/api/files/log/rename', {
         method: 'PUT',
         body: JSON.stringify({ old_name: oldName, new_name: newName }),
       });
@@ -248,7 +238,7 @@ export function DbcFileManagerModal({ opened, onClose, vehicles, currentVehicle,
 
   const loadFiles = useCallback((vehicle) => {
     if (!vehicle) { setFiles([]); return; }
-    api(`/api/dbc/vehicles/${encodeURIComponent(vehicle)}/files`)
+    apiJson(`/api/dbc/vehicles/${encodeURIComponent(vehicle)}/files`)
       .then((list) => setFiles((list || []).map((entry) => (
         typeof entry === 'string' ? { name: entry, source: 'local' } : entry
       ))))
@@ -272,7 +262,7 @@ export function DbcFileManagerModal({ opened, onClose, vehicles, currentVehicle,
       const formData = new FormData();
       formData.append('file', file);
       try {
-        await fetch(`/api/dbc/vehicles/${encodeURIComponent(selectedVehicle)}/files`, {
+        await fetch(buildApiUrl(`/api/dbc/vehicles/${encodeURIComponent(selectedVehicle)}/files`), {
           method: 'POST',
           body: formData,
         });
@@ -287,7 +277,7 @@ export function DbcFileManagerModal({ opened, onClose, vehicles, currentVehicle,
 
   const handleDelete = async (filename) => {
     try {
-      await api(`/api/dbc/vehicles/${encodeURIComponent(selectedVehicle)}/files`, {
+      await apiJson(`/api/dbc/vehicles/${encodeURIComponent(selectedVehicle)}/files`, {
         method: 'DELETE',
         body: JSON.stringify({ filename }),
       });
@@ -300,7 +290,7 @@ export function DbcFileManagerModal({ opened, onClose, vehicles, currentVehicle,
 
   const handleRename = async (oldName, newName) => {
     try {
-      await api(`/api/dbc/vehicles/${encodeURIComponent(selectedVehicle)}/files/rename`, {
+      await apiJson(`/api/dbc/vehicles/${encodeURIComponent(selectedVehicle)}/files/rename`, {
         method: 'PUT',
         body: JSON.stringify({ old_name: oldName, new_name: newName }),
       });
@@ -315,7 +305,7 @@ export function DbcFileManagerModal({ opened, onClose, vehicles, currentVehicle,
     const name = newVehicleName.trim();
     if (!name) return;
     try {
-      await api('/api/dbc/vehicles', {
+      await apiJson('/api/dbc/vehicles', {
         method: 'POST',
         body: JSON.stringify({ name }),
       });

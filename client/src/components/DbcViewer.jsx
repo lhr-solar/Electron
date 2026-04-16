@@ -9,14 +9,7 @@ import {
   sortMessages,
   messageMatchesEcuFilter,
 } from '../dbc/dbcSearch';
-
-function api(path) {
-  return fetch(path).then(async (res) => {
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || data.message || res.statusText);
-    return data;
-  });
-}
+import { apiJson } from '../lib/api';
 
 /** @param {unknown} v */
 function fmt(v) {
@@ -258,7 +251,7 @@ export function DbcViewer() {
   const [idSearchFormat, setIdSearchFormat] = useState(/** @type {'hex' | 'decimal'} */ ('hex'));
 
   const loadVehicles = useCallback(() => {
-    api('/api/dbc/vehicles')
+    apiJson('/api/dbc/vehicles')
       .then(setVehicles)
       .catch(() => setVehicles([]));
   }, []);
@@ -268,7 +261,7 @@ export function DbcViewer() {
       setDbcFiles([]);
       return;
     }
-    api(`/api/dbc/vehicles/${encodeURIComponent(v)}/files`)
+    apiJson(`/api/dbc/vehicles/${encodeURIComponent(v)}/files`)
       .then((files) => {
         const list = (files || []).map((entry) =>
           typeof entry === 'string' ? { name: entry, source: 'local' } : entry
@@ -284,7 +277,7 @@ export function DbcViewer() {
       return;
     }
     setLoadingSchema(true);
-    api(`/api/dbc/vehicles/${encodeURIComponent(v)}/files/${encodeURIComponent(filename)}/schema`)
+    apiJson(`/api/dbc/vehicles/${encodeURIComponent(v)}/files/${encodeURIComponent(filename)}/schema`)
       .then(setSchema)
       .catch(() => setSchema(null))
       .finally(() => setLoadingSchema(false));

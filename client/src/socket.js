@@ -1,8 +1,9 @@
 import { io } from 'socket.io-client';
+import { socketBaseUrl } from './lib/api';
 
-// "undefined" means the URL will be computed from the `window.location` object
-const URL = process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:4000';
+// undefined means deriving the URL from window.location.
+const URL = socketBaseUrl || undefined;
 
 export const socket = io(URL, {
-    autoConnect: true,
+  autoConnect: true,
 });

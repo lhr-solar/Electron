@@ -5,6 +5,7 @@ import { socket } from '../socket';
 import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2, Database, Square, Cpu, Network } from 'lucide-react';
 import { LogFileManagerModal, DbcFileManagerModal } from './FileManagerModals';
 import { TcpConfigModal } from './TcpConfigModal';
+import { apiJson, backendDownloadUrl } from '../lib/api';
 
 const INPUT_MODES = [
   { value: 'serial_canadapter', label: 'Adapter' },
@@ -24,17 +25,6 @@ const SOURCE_MODE_ICONS = {
   capnp_tcp: Network,
   file: FileText,
 };
-
-function api(path, options = {}) {
-  return fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  }).then(async (res) => {
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || data.message || res.statusText);
-    return data;
-  });
-}
 
 const CONFIG_KEYS = ['INPUT_MODE', 'DBC_VEHICLE', 'DBC_FILES', 'SERIAL_PORT', 'SERIAL_BAUDRATE', 'CAN_BITRATE', 'TCP_IP', 'TCP_PORT', 'CAPNP_TCP_IP', 'CAPNP_TCP_PORT', 'REPLAY_FILE_PATH', 'INFLUX_WRITE_ENABLED', 'PCAN_CHANNEL', 'PCAN_BITRATE', 'PCAN_DEVICE_ID'];
 
@@ -111,7 +101,7 @@ export function TelemetryDashboard() {
   const inputMode = config?.INPUT_MODE || 'tcp';
 
   const loadConfig = useCallback(() => {
-    api('/api/config')
+    apiJson('/api/config')
       .then((data) => {
         setConfig(data);
         setSavedConfig(data);
@@ -120,44 +110,44 @@ export function TelemetryDashboard() {
   }, []);
 
   const loadSerialPorts = useCallback(() => {
-    api('/api/serial-ports')
+    apiJson('/api/serial-ports')
       .then((ports) => setSerialPorts(ports.map((p) => ({ value: p.device, label: `${p.device} — ${p.description}` }))))
       .catch((e) => notifications.show({ title: 'Serial ports', message: e.message, color: 'red' }));
   }, []);
 
   const loadLogFiles = useCallback(() => {
-    api('/api/files/log')
+    apiJson('/api/files/log')
       .then((files) => setLogFiles((files || []).map((f) => ({ value: f, label: f }))))
       .catch((e) => notifications.show({ title: 'Log files', message: e.message, color: 'red' }));
   }, []);
 
   const loadPcanChannels = useCallback(() => {
-    api('/api/pcan/channels')
+    apiJson('/api/pcan/channels')
       .then((channels) => setPcanChannels(channels || []))
       .catch((e) => notifications.show({ title: 'PCAN channels', message: e.message, color: 'red' }));
   }, []);
 
   const loadPcanPrereq = useCallback(() => {
-    api('/api/pcan/prerequisites')
+    apiJson('/api/pcan/prerequisites')
       .then(setPcanPrereq)
       .catch(() => setPcanPrereq({ ok: false, message: 'Failed to check', platform: 'unknown', hint: null }));
   }, []);
 
   const loadTcpConfigs = useCallback(() => {
-    api('/api/tcp/configs')
+    apiJson('/api/tcp/configs')
       .then(setTcpConfigs)
       .catch(() => setTcpConfigs([]));
   }, []);
 
   const loadVehicles = useCallback(() => {
-    api('/api/dbc/vehicles')
+    apiJson('/api/dbc/vehicles')
       .then(setVehicles)
       .catch((e) => notifications.show({ title: 'DBC vehicles', message: e.message, color: 'red' }));
   }, []);
 
   const loadDbcFilesForVehicle = useCallback((vehicle) => {
     if (!vehicle) return setDbcFilesForVehicle([]);
-    api(`/api/dbc/vehicles/${encodeURIComponent(vehicle)}/files`)
+    apiJson(`/api/dbc/vehicles/${encodeURIComponent(vehicle)}/files`)
       .then((list) => {
         const normalized = (list || []).map((entry) =>
           typeof entry === 'string' ? { name: entry, source: 'local' } : entry
@@ -286,7 +276,7 @@ export function TelemetryDashboard() {
     setLoading((l) => ({ ...l, save: true }));
     const keysToSave = CONFIG_KEYS.filter((k) => config[k] !== undefined);
     const saveAll = keysToSave.reduce((acc, key) => acc.then(() =>
-      api('/api/config', { method: 'POST', body: JSON.stringify({ key, value: config[key] }) })
+      apiJson('/api/config', { method: 'POST', body: JSON.stringify({ key, value: config[key] }) })
     ), Promise.resolve());
     saveAll
       .then(() => {
@@ -307,23 +297,31 @@ export function TelemetryDashboard() {
 
   const handleStart = () => {
     setLoading((l) => ({ ...l, start: true }));
-    api('/api/start', { method: 'POST' })
+    setStatus((prev) => ({ ...prev, service_running: true }));
+    apiJson('/api/start', { method: 'POST' })
       .then(() => notifications.show({ title: 'Service', message: 'Started', color: 'green' }))
-      .catch((e) => showApiError(e, 'Start failed'))
+      .catch((e) => {
+        setStatus((prev) => ({ ...prev, service_running: false }));
+        showApiError(e, 'Start failed');
+      })
       .finally(() => setLoading((l) => ({ ...l, start: false })));
   };
 
   const handleStop = () => {
     setLoading((l) => ({ ...l, stop: true }));
-    api('/api/stop', { method: 'POST' })
+    setStatus((prev) => ({ ...prev, service_running: false }));
+    apiJson('/api/stop', { method: 'POST' })
       .then(() => notifications.show({ title: 'Service', message: 'Stopped', color: 'green' }))
-      .catch((e) => showApiError(e, 'Stop failed'))
+      .catch((e) => {
+        setStatus((prev) => ({ ...prev, service_running: true }));
+        showApiError(e, 'Stop failed');
+      })
       .finally(() => setLoading((l) => ({ ...l, stop: false })));
   };
 
   const handleRestart = () => {
     setLoading((l) => ({ ...l, restart: true }));
-    api('/api/restart', { method: 'POST' })
+    apiJson('/api/restart', { method: 'POST' })
       .then(() => notifications.show({ title: 'Service', message: 'Restarted', color: 'green' }))
       .catch((e) => showApiError(e, 'Restart failed'))
       .finally(() => setLoading((l) => ({ ...l, restart: false })));
@@ -393,7 +391,7 @@ export function TelemetryDashboard() {
               <TextInput label="IP" value={config.TCP_IP || ''} onChange={(e) => setLocalConfig('TCP_IP', e.target.value)} disabled={disabled} size="sm" />
               <TextInput label="Port" type="number" value={String(config.TCP_PORT || '')} onChange={(e) => setLocalConfig('TCP_PORT', parseInt(e.target.value, 10) || 0)} disabled={disabled} size="sm" />
             </Group>
-            <Button variant="subtle" size="compact-sm" onClick={() => { setLoading((l) => ({ ...l, tcpTest: true })); api('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.TCP_IP || '', port: config.TCP_PORT || 8187 }) }).then((res) => { if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' }); else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 }); }).catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' })).finally(() => setLoading((l) => ({ ...l, tcpTest: false }))); }} loading={loading.tcpTest} disabled={disabled || !config.TCP_IP} leftSection={<Wifi size={12} />}>Test connection</Button>
+            <Button variant="subtle" size="compact-sm" onClick={() => { setLoading((l) => ({ ...l, tcpTest: true })); apiJson('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.TCP_IP || '', port: config.TCP_PORT || 8187 }) }).then((res) => { if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' }); else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 }); }).catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' })).finally(() => setLoading((l) => ({ ...l, tcpTest: false }))); }} loading={loading.tcpTest} disabled={disabled || !config.TCP_IP} leftSection={<Wifi size={12} />}>Test connection</Button>
           </>
         );
       }
@@ -411,7 +409,7 @@ export function TelemetryDashboard() {
               <TextInput label="IP" value={config.CAPNP_TCP_IP || ''} onChange={(e) => setLocalConfig('CAPNP_TCP_IP', e.target.value)} disabled={disabled} size="sm" />
               <TextInput label="Port" type="number" value={String(config.CAPNP_TCP_PORT ?? '')} onChange={(e) => setLocalConfig('CAPNP_TCP_PORT', parseInt(e.target.value, 10) || 0)} disabled={disabled} size="sm" />
             </Group>
-            <Button variant="subtle" size="compact-sm" onClick={() => { setLoading((l) => ({ ...l, tcpTest: true })); api('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.CAPNP_TCP_IP || '', port: config.CAPNP_TCP_PORT || 8190 }) }).then((res) => { if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' }); else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 }); }).catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' })).finally(() => setLoading((l) => ({ ...l, tcpTest: false }))); }} loading={loading.tcpTest} disabled={disabled || !config.CAPNP_TCP_IP} leftSection={<Wifi size={12} />}>Test connection</Button>
+            <Button variant="subtle" size="compact-sm" onClick={() => { setLoading((l) => ({ ...l, tcpTest: true })); apiJson('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.CAPNP_TCP_IP || '', port: config.CAPNP_TCP_PORT || 8190 }) }).then((res) => { if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' }); else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 }); }).catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' })).finally(() => setLoading((l) => ({ ...l, tcpTest: false }))); }} loading={loading.tcpTest} disabled={disabled || !config.CAPNP_TCP_IP} leftSection={<Wifi size={12} />}>Test connection</Button>
           </>
         );
       }
@@ -447,6 +445,7 @@ export function TelemetryDashboard() {
   const hasValidDbc = hasDbcFiles && hasDbcSelection;
   const saveEnabled = hasUnsavedChanges && !status.service_running && backendConnected && hasValidDbc;
   const startEnabled = !status.service_running && hasValidDbc;
+  const canDownloadBackend = !backendConnected && !!backendDownloadUrl;
 
   const dashboardLayout = {
     display: 'flex',
@@ -481,6 +480,31 @@ export function TelemetryDashboard() {
           <Button variant="filled" size="sm" leftSection={<Square size={12} fill="currentColor" />} onClick={handleStop} loading={loading.stop} disabled={!status.service_running} bg={status.service_running ? STOP_RED : STATUS_GRAY} c={status.service_running ? 'white' : '#a1a1aa'}>Stop</Button>
         </Group>
       </Group>
+      {canDownloadBackend && (
+        <Box
+          mb="sm"
+          p="xs"
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            backgroundColor: '#111114',
+          }}
+        >
+          <Group justify="space-between" wrap="wrap" gap="xs">
+            <Text size="sm" c="dimmed">Backend is offline. Download the desktop backend executable.</Text>
+            <Button
+              component="a"
+              href={backendDownloadUrl}
+              target="_blank"
+              rel="noreferrer"
+              size="xs"
+              variant="light"
+            >
+              Download backend
+            </Button>
+          </Group>
+        </Box>
+      )}
 
       {/* Main: 2 columns — scroll this area only if needed; footer stays visible */}
       <Grid gutter="md" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>

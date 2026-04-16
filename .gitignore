@@ -1,6 +1,8 @@
 .idea
 */.idea
 build/
+artifacts/
+*.spec
 logs
 **/__pycache__
 */venv
