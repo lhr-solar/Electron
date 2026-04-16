@@ -9,16 +9,16 @@ const normalizeBase = (value) => {
 
 const explicitApiBase = normalizeBase(import.meta.env.VITE_API_BASE_URL);
 const explicitSocketUrl = normalizeBase(import.meta.env.VITE_SOCKET_URL);
+const localBackendBase = 'http://localhost:4000';
 
-export const apiBaseUrl = explicitApiBase;
-export const socketBaseUrl = explicitSocketUrl || explicitApiBase;
+export const apiBaseUrl = explicitApiBase || localBackendBase;
+export const socketBaseUrl = explicitSocketUrl || apiBaseUrl;
 export const backendDownloadUrl = normalizeBase(import.meta.env.VITE_BACKEND_DOWNLOAD_URL);
 
 export function buildApiUrl(path) {
   if (!path.startsWith('/')) {
     throw new Error(`API path must start with '/': ${path}`);
   }
-  if (!apiBaseUrl) return path;
   return `${apiBaseUrl}${path}`;
 }
 
