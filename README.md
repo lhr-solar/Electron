@@ -129,6 +129,7 @@ Local cross-compiling is not supported by PyInstaller. To build both at once, us
 1. Create/publish a GitHub Release (tag like `v1.2.0`) **or** run workflow dispatch.
 2. Workflow `.github/workflows/release-backend.yml` builds on `macos-latest` and `windows-latest` in parallel.
 3. On release events, both `.zip` files are uploaded automatically as release assets.
+4. Windows builds are usually slower than macOS (PyInstaller analysis); workflow enables pip caching to reduce setup time.
 
 You can also build a named local release package:
 
@@ -144,11 +145,19 @@ In normal source/dev mode, defaults remain project-local:
 - `logs/`
 - `.trash/`
 
-In packaged executable mode, defaults move to OS app-data folders:
+In packaged executable mode, defaults move to a user workspace:
 
-- Windows: `%APPDATA%/ElectronTelemetry`
-- macOS: `~/Library/Application Support/ElectronTelemetry`
-- Linux: `~/.local/share/ElectronTelemetry`
+- Windows: `~/Documents/Electron`
+- macOS: `~/Documents/Electron`
+- Linux: `~/Documents/Electron`
+
+On first run the backend bootstraps this folder and logs setup progress in terminal:
+
+- creates `dbc/`, `logs/`, `.trash/`
+- initializes `Embedded-Sharepoint/`
+  - copies bundled data when present
+  - or clones from `EMBEDDED_SHAREPOINT_GIT_URL` when configured
+  - or falls back to an empty scaffold with error logs
 
 You can override with:
 
@@ -156,6 +165,10 @@ You can override with:
 - `DBC_DIR`
 - `LOG_DIR`
 - `TRASH_DIR`
+- `ELECTRON_HOME`
+- `FORCE_USER_WORKSPACE`
+- `EMBEDDED_SHAREPOINT_DIR`
+- `EMBEDDED_SHAREPOINT_GIT_URL`
 
 ## Backend / Frontend Deployment Pattern
 
