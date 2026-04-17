@@ -10,6 +10,9 @@ def _project_root():
 
 
 def get_embedded_dbc_dir():
+    from_env = os.environ.get("EMBEDDED_DBC_DIR", "").strip()
+    if from_env:
+        return from_env
     return os.path.join(_project_root(), "Embedded-Sharepoint", "can", "dbc")
 
 

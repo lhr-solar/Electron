@@ -28,9 +28,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: server/requirements.txt
 
       - name: Install backend dependencies
         run: python -m pip install -r server/requirements.txt pyinstaller
+
+      - name: Build note
+        shell: bash
+        run: |
+          echo "PyInstaller on Windows can take longer (often 8-15 minutes) due binary analysis."
+          echo "Dependency cache is enabled to reduce setup time."
 
       - name: Resolve release name
         id: meta

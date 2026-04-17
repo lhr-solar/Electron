@@ -1,6 +1,8 @@
 import os
 import sys
 import logging
+import shutil
+import subprocess
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,12 +12,26 @@ class Configuration:
     def __init__(self):
         self.IS_FROZEN = bool(getattr(sys, "frozen", False))
         self.APP_NAME = os.environ.get("APP_NAME", "ElectronTelemetry")
+        self.PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        self.BUNDLE_ROOT = self._resolve_bundle_root()
+        self.USER_WORKSPACE_DIR = self._resolve_user_workspace_dir()
+        self.USE_USER_WORKSPACE = self.IS_FROZEN or (
+            os.environ.get("FORCE_USER_WORKSPACE", "").strip().lower() in {"1", "true", "yes", "on"}
+        )
         self.APP_DATA_DIR = self._resolve_app_data_dir()
 
         # --- Environment-based Paths ---
         self.DBC_DIR = self._resolve_runtime_path("DBC_DIR", "dbc")
         self.LOG_DIR = self._resolve_runtime_path("LOG_DIR", "logs")
         self.TRASH_DIR = self._resolve_runtime_path("TRASH_DIR", ".trash")
+        self.EMBEDDED_SHAREPOINT_DIR = self._resolve_runtime_path("EMBEDDED_SHAREPOINT_DIR", "Embedded-Sharepoint")
+        self.EMBEDDED_DBC_DIR = os.path.join(self.EMBEDDED_SHAREPOINT_DIR, "can", "dbc")
+
+        if self.USE_USER_WORKSPACE:
+            self._bootstrap_user_workspace()
+
+        # Expose for utility modules that do not import settings directly.
+        os.environ.setdefault("EMBEDDED_DBC_DIR", self.EMBEDDED_DBC_DIR)
 
         # --- Default Settings ---
         self.DEFAULT_DBC_VEHICLE = os.environ.get("DEFAULT_DBC_VEHICLE", "Mcqueen")
@@ -59,6 +75,8 @@ class Configuration:
         explicit = os.environ.get("APP_DATA_DIR")
         if explicit:
             return explicit
+        if self.USE_USER_WORKSPACE:
+            return self.USER_WORKSPACE_DIR
         if os.name == "nt":
             base = os.environ.get("APPDATA") or os.path.expanduser("~")
             return os.path.join(base, self.APP_NAME)
@@ -66,13 +84,79 @@ class Configuration:
             return os.path.join(os.path.expanduser("~/Library/Application Support"), self.APP_NAME)
         return os.path.join(os.path.expanduser("~/.local/share"), self.APP_NAME)
 
+    def _resolve_bundle_root(self):
+        # PyInstaller extracts bundled files into _MEIPASS at runtime.
+        bundle_root = getattr(sys, "_MEIPASS", None)
+        if bundle_root:
+            return str(bundle_root)
+        return self.PROJECT_ROOT
+
+    def _resolve_documents_dir(self):
+        if os.name == "nt":
+            home = os.environ.get("USERPROFILE") or os.path.expanduser("~")
+        else:
+            home = os.path.expanduser("~")
+        return os.path.join(home, "Documents")
+
+    def _resolve_user_workspace_dir(self):
+        explicit = os.environ.get("ELECTRON_HOME")
+        if explicit:
+            return explicit
+        return os.path.join(self._resolve_documents_dir(), "Electron")
+
     def _resolve_runtime_path(self, env_key: str, default_relative: str):
         explicit = os.environ.get(env_key)
         if explicit:
             return explicit
-        if self.IS_FROZEN:
-            return os.path.join(self.APP_DATA_DIR, default_relative)
+        if self.USE_USER_WORKSPACE:
+            return os.path.join(self.USER_WORKSPACE_DIR, default_relative)
         return default_relative
+
+    def _bootstrap_user_workspace(self):
+        logger.info("Using user workspace: %s", self.USER_WORKSPACE_DIR)
+        logger.info("First-time setup check: preparing support directories.")
+        for path in [self.USER_WORKSPACE_DIR, self.DBC_DIR, self.LOG_DIR, self.TRASH_DIR]:
+            try:
+                os.makedirs(path, exist_ok=True)
+            except OSError as exc:
+                logger.exception("Failed to create directory '%s': %s", path, exc)
+        self._ensure_embedded_sharepoint()
+
+    def _ensure_embedded_sharepoint(self):
+        if os.path.isdir(self.EMBEDDED_SHAREPOINT_DIR):
+            logger.info("Embedded-Sharepoint found at %s", self.EMBEDDED_SHAREPOINT_DIR)
+            return
+
+        logger.info("Embedded-Sharepoint missing; initializing first-run data.")
+        bundled_copy = os.path.join(self.BUNDLE_ROOT, "Embedded-Sharepoint")
+        git_url = os.environ.get("EMBEDDED_SHAREPOINT_GIT_URL", "").strip()
+
+        try:
+            if os.path.isdir(bundled_copy):
+                logger.info("Copying Embedded-Sharepoint from bundled resources.")
+                shutil.copytree(bundled_copy, self.EMBEDDED_SHAREPOINT_DIR)
+                return
+        except Exception as exc:
+            logger.exception("Failed to copy bundled Embedded-Sharepoint: %s", exc)
+
+        if git_url:
+            logger.info("Cloning Embedded-Sharepoint from %s", git_url)
+            try:
+                subprocess.run(
+                    ["git", "clone", "--depth", "1", git_url, self.EMBEDDED_SHAREPOINT_DIR],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                return
+            except Exception as exc:
+                logger.exception("Failed to clone Embedded-Sharepoint: %s", exc)
+
+        logger.warning("Falling back to empty Embedded-Sharepoint scaffold.")
+        try:
+            os.makedirs(self.EMBEDDED_DBC_DIR, exist_ok=True)
+        except OSError as exc:
+            logger.exception("Failed to create embedded DBC fallback dir: %s", exc)
 
     def get_bucket(self):
         """Return the InfluxDB bucket name for the current input mode."""

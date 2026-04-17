@@ -97,6 +97,7 @@ export function TelemetryDashboard() {
   const [dbcModalOpen, setDbcModalOpen] = useState(false);
   const [tcpModalOpen, setTcpModalOpen] = useState(false);
   const [tcpConfigs, setTcpConfigs] = useState([]);
+  const canDownloadBackend = !backendConnected && !!backendDownloadUrl;
 
   const inputMode = config?.INPUT_MODE || 'tcp';
 
@@ -327,10 +328,64 @@ export function TelemetryDashboard() {
       .finally(() => setLoading((l) => ({ ...l, restart: false })));
   };
 
+  const dashboardLayout = {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+    maxWidth: 920,
+    margin: '0 auto',
+    width: '100%',
+    padding: 'var(--mantine-spacing-md)',
+  };
+
   if (!config) {
     return (
-      <Box p="xl" style={{ color: 'var(--text-muted)' }}>
-        Loading…
+      <Box style={dashboardLayout}>
+        <Box
+          style={{
+            flex: 1,
+            minHeight: 0,
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            backgroundColor: '#0f0f11',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            padding: 24,
+          }}
+        >
+          <Text size="sm" c="dimmed">
+            {backendConnected ? 'Loading configuration...' : 'Backend not connected'}
+          </Text>
+        </Box>
+        {canDownloadBackend && (
+          <Box
+            mt="sm"
+            p="xs"
+            style={{
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              backgroundColor: '#111114',
+            }}
+          >
+            <Group justify="space-between" wrap="wrap" gap="xs">
+              <Text size="sm" c="dimmed">Backend is offline. Download the desktop backend executable.</Text>
+              <Button
+                component="a"
+                href={backendDownloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                size="xs"
+                variant="light"
+              >
+                Download backend
+              </Button>
+            </Group>
+          </Box>
+        )}
       </Box>
     );
   }
@@ -444,20 +499,7 @@ export function TelemetryDashboard() {
     dbcFilesForVehicle.every((e) => Array.isArray(config?.DBC_FILES) && config.DBC_FILES.includes(e.name));
   const hasValidDbc = hasDbcFiles && hasDbcSelection;
   const saveEnabled = hasUnsavedChanges && !status.service_running && backendConnected && hasValidDbc;
-  const startEnabled = !status.service_running && hasValidDbc;
-  const canDownloadBackend = !backendConnected && !!backendDownloadUrl;
-
-  const dashboardLayout = {
-    display: 'flex',
-    flexDirection: 'column',
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-    maxWidth: 920,
-    margin: '0 auto',
-    width: '100%',
-    padding: 'var(--mantine-spacing-md)',
-  };
+  const startEnabled = backendConnected && !status.service_running && hasValidDbc;
 
   return (
     <Box style={dashboardLayout}>

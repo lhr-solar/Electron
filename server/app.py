@@ -36,7 +36,6 @@ influx_client: InfluxDBClient | None = None
 # Path to built static client (project root / client / dist)
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 STATIC_CLIENT_DIR = os.path.join(_PROJECT_ROOT, "client", "dist")
-EMBEDDED_DBC_DIR = os.path.join(_PROJECT_ROOT, "Embedded-Sharepoint", "can", "dbc")
 TRUTHY_VALUES = {"1", "true", "yes", "on"}
 SERVE_STATIC_CLIENT = os.environ.get("SERVE_STATIC_CLIENT", "1").strip().lower() in TRUTHY_VALUES
 STATUS_HEALTH_TTL_SEC = float(os.environ.get("STATUS_HEALTH_TTL_SEC", "2.0"))
@@ -172,6 +171,8 @@ async def send_status_updates(sio: socketio.AsyncServer):
 async def lifespan(app: FastAPI):
     global influx_client
     logger.info("--- Application starting up... ---")
+    logger.info("Runtime directories: DBC=%s LOG=%s TRASH=%s EMBEDDED=%s",
+                settings.DBC_DIR, settings.LOG_DIR, settings.TRASH_DIR, settings.EMBEDDED_DBC_DIR)
     
     # Check and create directories
     for dir_key in ["DBC_DIR", "LOG_DIR", "TRASH_DIR"]:
@@ -316,7 +317,7 @@ async def list_dbc_files(vehicle: str):
         raise HTTPException(status_code=404, detail="Vehicle not found.")
     result = {}
     if emb_actual is not None:
-        emb_dir = os.path.join(EMBEDDED_DBC_DIR, emb_actual)
+        emb_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
         if os.path.isdir(emb_dir):
             for f in os.listdir(emb_dir):
                 full = os.path.join(emb_dir, f)
@@ -516,7 +517,7 @@ async def delete_dbc_file(vehicle: str, action: FileAction):
     if not safe_name or safe_name in (".", "..") or any(sep in safe_name for sep in ("/", "\\")):
         raise HTTPException(status_code=400, detail="Invalid filename.")
     if emb_actual is not None:
-        emb_dir = os.path.join(EMBEDDED_DBC_DIR, emb_actual)
+        emb_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
         if os.path.isdir(emb_dir):
             for f in os.listdir(emb_dir):
                 if f.lower() == safe_name.lower():
@@ -543,7 +544,7 @@ async def rename_dbc_file(vehicle: str, body: FileRename):
         if not nm or nm in (".", "..") or any(sep in nm for sep in ("/", "\\")):
             raise HTTPException(status_code=400, detail="Invalid filename.")
     if emb_actual is not None:
-        emb_dir = os.path.join(EMBEDDED_DBC_DIR, emb_actual)
+        emb_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
         if os.path.isdir(emb_dir):
             for f in os.listdir(emb_dir):
                 if f.lower() == old_name.lower():
