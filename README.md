@@ -142,6 +142,7 @@ node scripts/run-python.js scripts/build_backend.py --release-name v1.2.0
 In normal source/dev mode, defaults remain project-local:
 
 - `dbc/`
+- `mdc/`
 - `logs/`
 - `.trash/`
 
@@ -153,7 +154,7 @@ In packaged executable mode, defaults move to a user workspace:
 
 On first run the backend bootstraps this folder and logs setup progress in terminal:
 
-- creates `dbc/`, `logs/`, `.trash/`
+- creates `dbc/`, `mdc/`, `logs/`, `.trash/`
 - initializes `Embedded-Sharepoint/`
   - copies bundled data when present
   - or clones from `EMBEDDED_SHAREPOINT_GIT_URL` when configured
@@ -163,6 +164,7 @@ You can override with:
 
 - `APP_DATA_DIR`
 - `DBC_DIR`
+- `MDC_DIR`
 - `LOG_DIR`
 - `TRASH_DIR`
 - `ELECTRON_HOME`
@@ -177,6 +179,16 @@ You can override with:
 - Distribute backend executable separately (downloads/releases/internal portal).
 - Set `VITE_BACKEND_DOWNLOAD_URL` in frontend deployment.
 - When frontend cannot connect to backend, UI shows a **Download backend** button.
+
+## DBC Editor + MDC
+
+The DBC Editor includes a project-style `.mdc` save format (similar to CANdb++ workflow):
+
+- Save current multi-network editor model to `.mdc`
+- Open `.mdc` back into the editor later
+- Export one `.dbc` per network from the `.mdc` model (prevents ID collisions across networks)
+
+MDC files are stored in `mdc/` by default (or `MDC_DIR`).
 
 ## Access (Local)
 

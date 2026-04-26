@@ -22,6 +22,7 @@ class Configuration:
 
         # --- Environment-based Paths ---
         self.DBC_DIR = self._resolve_runtime_path("DBC_DIR", "dbc")
+        self.MDC_DIR = self._resolve_runtime_path("MDC_DIR", "mdc")
         self.LOG_DIR = self._resolve_runtime_path("LOG_DIR", "logs")
         self.TRASH_DIR = self._resolve_runtime_path("TRASH_DIR", ".trash")
         self.EMBEDDED_SHAREPOINT_DIR = self._resolve_runtime_path("EMBEDDED_SHAREPOINT_DIR", "Embedded-Sharepoint")
@@ -115,7 +116,7 @@ class Configuration:
     def _bootstrap_user_workspace(self):
         logger.info("Using user workspace: %s", self.USER_WORKSPACE_DIR)
         logger.info("First-time setup check: preparing support directories.")
-        for path in [self.USER_WORKSPACE_DIR, self.DBC_DIR, self.LOG_DIR, self.TRASH_DIR]:
+        for path in [self.USER_WORKSPACE_DIR, self.DBC_DIR, self.MDC_DIR, self.LOG_DIR, self.TRASH_DIR]:
             try:
                 os.makedirs(path, exist_ok=True)
             except OSError as exc:

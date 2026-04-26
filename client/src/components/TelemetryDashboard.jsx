@@ -3,7 +3,7 @@ import { Stack, Group, Text, Select, TextInput, Button, Box, Divider, Checkbox, 
 import { notifications } from '@mantine/notifications';
 import { socket } from '../socket';
 import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2, Database, Square, Cpu, Network } from 'lucide-react';
-import { LogFileManagerModal, DbcFileManagerModal } from './FileManagerModals';
+import { LogFileManagerModal } from './FileManagerModals';
 import { TcpConfigModal } from './TcpConfigModal';
 import { apiJson, backendDownloadUrl } from '../lib/api';
 
@@ -74,6 +74,11 @@ function statusEquals(a, b) {
   );
 }
 
+function isBackendOfflineError(error) {
+  const msg = String(error?.message || '');
+  return /failed to fetch|networkerror|load failed|err_connection_refused|fetch failed/i.test(msg);
+}
+
 export function TelemetryDashboard() {
   const [config, setConfig] = useState(null);
   const [savedConfig, setSavedConfig] = useState(null);
@@ -94,10 +99,14 @@ export function TelemetryDashboard() {
   });
   const [loading, setLoading] = useState({ start: false, stop: false, restart: false, save: false, tcpTest: false });
   const [logModalOpen, setLogModalOpen] = useState(false);
-  const [dbcModalOpen, setDbcModalOpen] = useState(false);
   const [tcpModalOpen, setTcpModalOpen] = useState(false);
   const [tcpConfigs, setTcpConfigs] = useState([]);
   const canDownloadBackend = !backendConnected && !!backendDownloadUrl;
+
+  const notifyApiError = useCallback((title, error) => {
+    if (!backendConnected && isBackendOfflineError(error)) return;
+    notifications.show({ title, message: error.message, color: 'red' });
+  }, [backendConnected]);
 
   const inputMode = config?.INPUT_MODE || 'tcp';
 
@@ -107,26 +116,26 @@ export function TelemetryDashboard() {
         setConfig(data);
         setSavedConfig(data);
       })
-      .catch((e) => notifications.show({ title: 'Config', message: e.message, color: 'red' }));
-  }, []);
+      .catch((e) => notifyApiError('Config', e));
+  }, [notifyApiError]);
 
   const loadSerialPorts = useCallback(() => {
     apiJson('/api/serial-ports')
       .then((ports) => setSerialPorts(ports.map((p) => ({ value: p.device, label: `${p.device} — ${p.description}` }))))
-      .catch((e) => notifications.show({ title: 'Serial ports', message: e.message, color: 'red' }));
-  }, []);
+      .catch((e) => notifyApiError('Serial ports', e));
+  }, [notifyApiError]);
 
   const loadLogFiles = useCallback(() => {
     apiJson('/api/files/log')
       .then((files) => setLogFiles((files || []).map((f) => ({ value: f, label: f }))))
-      .catch((e) => notifications.show({ title: 'Log files', message: e.message, color: 'red' }));
-  }, []);
+      .catch((e) => notifyApiError('Log files', e));
+  }, [notifyApiError]);
 
   const loadPcanChannels = useCallback(() => {
     apiJson('/api/pcan/channels')
       .then((channels) => setPcanChannels(channels || []))
-      .catch((e) => notifications.show({ title: 'PCAN channels', message: e.message, color: 'red' }));
-  }, []);
+      .catch((e) => notifyApiError('PCAN channels', e));
+  }, [notifyApiError]);
 
   const loadPcanPrereq = useCallback(() => {
     apiJson('/api/pcan/prerequisites')
@@ -143,8 +152,8 @@ export function TelemetryDashboard() {
   const loadVehicles = useCallback(() => {
     apiJson('/api/dbc/vehicles')
       .then(setVehicles)
-      .catch((e) => notifications.show({ title: 'DBC vehicles', message: e.message, color: 'red' }));
-  }, []);
+      .catch((e) => notifyApiError('DBC vehicles', e));
+  }, [notifyApiError]);
 
   const loadDbcFilesForVehicle = useCallback((vehicle) => {
     if (!vehicle) return setDbcFilesForVehicle([]);
@@ -157,9 +166,9 @@ export function TelemetryDashboard() {
       })
       .catch((e) => {
         setDbcFilesForVehicle([]);
-        notifications.show({ title: 'DBC files', message: e.message, color: 'red' });
+        notifyApiError('DBC files', e);
       });
-  }, []);
+  }, [notifyApiError]);
 
   useEffect(() => {
     loadConfig();
@@ -556,10 +565,7 @@ export function TelemetryDashboard() {
           {config.DBC_VEHICLE && (
             dbcFilesForVehicle.length > 0 ? (
               <>
-                <Group gap="xs" mb={4} justify="space-between">
-                  <Text size="sm" c="dimmed">DBC files</Text>
-                  <Button variant="subtle" size="compact-sm" onClick={() => setDbcModalOpen(true)} style={{ color: 'var(--text-muted)' }} leftSection={<Settings2 size={12} />}>Edit</Button>
-                </Group>
+                <Text size="sm" c="dimmed" mb={4}>DBC files</Text>
                 <Checkbox label={<Text size="sm" c="dimmed">Select all</Text>} size="sm" checked={allDbcSelected} onChange={(e) => { if (e.currentTarget.checked) setLocalConfig('DBC_FILES', dbcFilesForVehicle.map((f) => f.name)); else setLocalConfig('DBC_FILES', []); }} disabled={status.service_running} mb={4} />
                 <ScrollArea h={140} type="auto" scrollbarSize={6} style={{ flex: '0 1 auto' }}>
                   <Stack gap={2}>
@@ -634,14 +640,6 @@ export function TelemetryDashboard() {
         opened={logModalOpen}
         onClose={() => setLogModalOpen(false)}
         onFilesChanged={loadLogFiles}
-      />
-      <DbcFileManagerModal
-        opened={dbcModalOpen}
-        onClose={() => setDbcModalOpen(false)}
-        vehicles={vehicles}
-        currentVehicle={config.DBC_VEHICLE}
-        onFilesChanged={() => loadDbcFilesForVehicle(config.DBC_VEHICLE)}
-        onVehiclesChanged={loadVehicles}
       />
       <TcpConfigModal
         opened={tcpModalOpen}

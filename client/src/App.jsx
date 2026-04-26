@@ -5,13 +5,16 @@ import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { LiveMessageLog } from './components/LiveMessageLog';
 import { SignalDashboard } from './components/SignalDashboard';
 import { DbcViewer } from './components/DbcViewer';
+import { DbcEditor } from './components/DbcEditor';
 import { Analytics } from './components/Analytics';
 import { socket } from './socket';
+import { backendDownloadUrl } from './lib/api';
 
 const PAGE_LAYOUTS = [
   { id: 'dashboard', Component: SignalDashboard },
   { id: 'analytics', Component: Analytics },
   { id: 'dbc-viewer', Component: DbcViewer },
+  { id: 'dbc-editor', Component: DbcEditor },
 ];
 
 function getPage() {
@@ -24,11 +27,23 @@ function App() {
   const [grafanaActive, setGrafanaActive] = useState(false);
   const [grafanaUrl, setGrafanaUrl] = useState('http://127.0.0.1:3000');
   const [sideLogOpen, setSideLogOpen] = useState(false);
+  const [backendConnected, setBackendConnected] = useState(socket.connected);
 
   useEffect(() => {
     const onHashChange = () => setPage(getPage());
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  useEffect(() => {
+    const onConnect = () => setBackendConnected(true);
+    const onDisconnect = () => setBackendConnected(false);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+    };
   }, []);
 
   useEffect(() => {
@@ -96,6 +111,12 @@ function App() {
               active={page === 'dbc-viewer'}
               onClick={() => navigate('dbc-viewer')}
             />
+            <NavTab
+              icon={<FileText size={14} strokeWidth={1.75} />}
+              label="DBC Editor"
+              active={page === 'dbc-editor'}
+              onClick={() => navigate('dbc-editor')}
+            />
           </Group>
         </Group>
         <a
@@ -117,6 +138,24 @@ function App() {
           <ExternalLink size={14} strokeWidth={1.75} />
         </a>
       </Group>
+      {!backendConnected && backendDownloadUrl && (
+        <Group
+          gap="xs"
+          px="md"
+          py={6}
+          wrap="nowrap"
+          style={{
+            borderBottom: '1px solid var(--border)',
+            backgroundColor: '#111114',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Text size="sm" c="dimmed">Backend not connected. Download the latest desktop backend to continue.</Text>
+          <a href={backendDownloadUrl} target="_blank" rel="noreferrer" style={{ color: '#93c5fd', textDecoration: 'none', fontSize: 13 }}>
+            Download backend
+          </a>
+        </Group>
+      )}
       <div style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
         <Group align="stretch" gap={0} wrap="nowrap" style={{ flex: 1, display: page === 'control' ? 'flex' : 'none' }}>
           <TelemetryDashboard />

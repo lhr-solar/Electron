@@ -1,8 +1,10 @@
 import asyncio
+import json
 import logging
 import os
 import shutil
 import time
+from collections import OrderedDict
 import urllib.request
 import urllib.error
 import uvicorn
@@ -101,6 +103,68 @@ class AnalyticsValidateRequest(BaseModel):
     version: int = 1
     views: list[dict] = Field(default_factory=list)
 
+
+class EditorSignal(BaseModel):
+    name: str
+    start: int
+    length: int
+    byte_order: str = "little_endian"
+    is_signed: bool = False
+    scale: float = 1.0
+    offset: float = 0.0
+    minimum: float | None = None
+    maximum: float | None = None
+    unit: str | None = None
+    receivers: list[str] = Field(default_factory=list)
+    choices: dict[str, str] | None = None
+    comment: str | None = None
+    is_multiplexer: bool = False
+    multiplexer_ids: list[int] | None = None
+    multiplexer_signal: str | None = None
+
+
+class EditorSignalGroup(BaseModel):
+    name: str
+    repetitions: int = 1
+    signal_names: list[str] = Field(default_factory=list)
+
+
+class EditorMessage(BaseModel):
+    id: int
+    name: str
+    length: int
+    is_extended_frame: bool = False
+    is_fd: bool = False
+    cycle_time: int | None = None
+    senders: list[str] = Field(default_factory=list)
+    comment: str | None = None
+    protocol: str | None = None
+    signals: list[EditorSignal] = Field(default_factory=list)
+    signal_groups: list[EditorSignalGroup] = Field(default_factory=list)
+
+
+class EditorNetwork(BaseModel):
+    name: str
+    nodes: list[str] = Field(default_factory=list)
+    messages: list[EditorMessage] = Field(default_factory=list)
+
+
+class EditorDatabasePayload(BaseModel):
+    version: int = 1
+    networks: list[EditorNetwork] = Field(default_factory=list)
+
+
+class MdcSaveRequest(BaseModel):
+    vehicle: str | None = None
+    source_filename: str | None = None
+    model: EditorDatabasePayload
+
+
+class MdcExportRequest(BaseModel):
+    vehicle: str
+    base_name: str
+    model: EditorDatabasePayload
+
 # --- Helper Functions ---
 def move_to_trash(directory: str, filename: str):
     trash_dir = settings.TRASH_DIR
@@ -126,6 +190,130 @@ def _check_grafana_health():
         except (urllib.error.URLError, OSError):
             pass
     return False
+
+
+def _resolve_existing_dbc_path(vehicle: str, filename: str):
+    """Resolve to an existing .dbc file. Embedded-Sharepoint path wins when both exist (same as runtime)."""
+    if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
+        raise HTTPException(status_code=400, detail="Invalid vehicle name.")
+    safe_name = os.path.basename(filename)
+    if not safe_name or safe_name in (".", "..") or any(sep in safe_name for sep in ("/", "\\")):
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    if not safe_name.lower().endswith(".dbc"):
+        safe_name = f"{safe_name}.dbc"
+
+    _, emb_actual, local_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
+    if emb_actual is None and local_actual is None:
+        raise HTTPException(status_code=404, detail="Vehicle not found.")
+
+    if emb_actual is not None:
+        emb_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
+        if os.path.isdir(emb_dir):
+            for existing in os.listdir(emb_dir):
+                if existing.lower() == safe_name.lower() and existing.lower().endswith(".dbc"):
+                    return os.path.join(emb_dir, existing), existing
+
+    if local_actual is not None:
+        local_dir = os.path.join(settings.DBC_DIR, local_actual)
+        if os.path.isdir(local_dir):
+            for existing in os.listdir(local_dir):
+                if existing.lower() == safe_name.lower() and existing.lower().endswith(".dbc"):
+                    return os.path.join(local_dir, existing), existing
+
+    raise HTTPException(status_code=404, detail="DBC not found.")
+
+
+def _signal_to_editor(sig):
+    conversion = getattr(sig, "conversion", None)
+    scale = float(getattr(conversion, "scale", 1.0)) if conversion is not None else 1.0
+    offset = float(getattr(conversion, "offset", 0.0)) if conversion is not None else 0.0
+    choices_obj = getattr(conversion, "choices", None) if conversion is not None else None
+    choices = None
+    if choices_obj:
+        choices = {str(int(k)): str(v) for k, v in choices_obj.items()}
+
+    return {
+        "name": sig.name,
+        "start": int(getattr(sig, "start", 0)),
+        "length": int(getattr(sig, "length", 1)),
+        "byte_order": getattr(sig, "byte_order", "little_endian"),
+        "is_signed": bool(getattr(sig, "is_signed", False)),
+        "scale": scale,
+        "offset": offset,
+        "minimum": getattr(sig, "minimum", None),
+        "maximum": getattr(sig, "maximum", None),
+        "unit": getattr(sig, "unit", None),
+        "receivers": list(getattr(sig, "receivers", []) or []),
+        "choices": choices,
+        "comment": getattr(sig, "comment", None),
+        "is_multiplexer": bool(getattr(sig, "is_multiplexer", False)),
+        "multiplexer_ids": list(getattr(sig, "multiplexer_ids", []) or []) or None,
+        "multiplexer_signal": getattr(sig, "multiplexer_signal", None),
+    }
+
+
+def _message_to_editor(msg):
+    groups = []
+    for grp in (getattr(msg, "signal_groups", None) or []):
+        groups.append({
+            "name": grp.name,
+            "repetitions": int(getattr(grp, "repetitions", 1) or 1),
+            "signal_names": list(getattr(grp, "signal_names", []) or []),
+        })
+    return {
+        "id": int(msg.frame_id),
+        "name": msg.name,
+        "length": int(msg.length),
+        "is_extended_frame": bool(getattr(msg, "is_extended_frame", False)),
+        "is_fd": bool(getattr(msg, "is_fd", False)),
+        "cycle_time": getattr(msg, "cycle_time", None),
+        "senders": list(getattr(msg, "senders", []) or []),
+        "comment": getattr(msg, "comment", None),
+        "protocol": getattr(msg, "protocol", None),
+        "signals": [_signal_to_editor(sig) for sig in (msg.signals or [])],
+        "signal_groups": groups,
+    }
+
+
+def _build_editor_model(db):
+    grouped = {}
+    network_nodes = {}
+    global_nodes = {str(getattr(n, "name", "")).strip() for n in (getattr(db, "nodes", None) or [])}
+    global_nodes.discard("")
+    for msg in db.messages:
+        network = (getattr(msg, "bus_name", None) or "CAN").strip() or "CAN"
+        grouped.setdefault(network, []).append(_message_to_editor(msg))
+        nodes = network_nodes.setdefault(network, set())
+        for snd in (getattr(msg, "senders", None) or []):
+            if snd:
+                nodes.add(str(snd))
+        for sig in (getattr(msg, "signals", None) or []):
+            for rcv in (getattr(sig, "receivers", None) or []):
+                if rcv:
+                    nodes.add(str(rcv))
+    networks = []
+    for network_name in sorted(grouped.keys(), key=lambda x: x.lower()):
+        messages = sorted(grouped[network_name], key=lambda m: (m["id"], m["name"].lower()))
+        nodes = sorted(set(network_nodes.get(network_name, set())) | global_nodes, key=str.lower)
+        networks.append({"name": network_name, "nodes": nodes, "messages": messages})
+    return {"version": 1, "networks": networks}
+
+
+def _safe_filename(name: str, ext: str):
+    base = os.path.basename((name or "").strip())
+    if not base or base in (".", ".."):
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    if any(sep in base for sep in ("/", "\\")):
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    if not base.lower().endswith(ext.lower()):
+        base = base + ext
+    return base
+
+
+def _safe_slug(name: str):
+    cleaned = "".join(ch if (ch.isalnum() or ch in ("-", "_")) else "_" for ch in (name or "").strip())
+    cleaned = cleaned.strip("_")
+    return cleaned or "network"
 
 async def _get_cached_health(force_refresh: bool = False):
     now = time.monotonic()
@@ -171,11 +359,11 @@ async def send_status_updates(sio: socketio.AsyncServer):
 async def lifespan(app: FastAPI):
     global influx_client
     logger.info("--- Application starting up... ---")
-    logger.info("Runtime directories: DBC=%s LOG=%s TRASH=%s EMBEDDED=%s",
-                settings.DBC_DIR, settings.LOG_DIR, settings.TRASH_DIR, settings.EMBEDDED_DBC_DIR)
+    logger.info("Runtime directories: DBC=%s MDC=%s LOG=%s TRASH=%s EMBEDDED=%s",
+                settings.DBC_DIR, settings.MDC_DIR, settings.LOG_DIR, settings.TRASH_DIR, settings.EMBEDDED_DBC_DIR)
     
     # Check and create directories
-    for dir_key in ["DBC_DIR", "LOG_DIR", "TRASH_DIR"]:
+    for dir_key in ["DBC_DIR", "MDC_DIR", "LOG_DIR", "TRASH_DIR"]:
         dir_path = getattr(settings, dir_key)
         if not os.path.exists(dir_path):
             logger.warning(f"Directory '{dir_path}' not found. Creating it.")
@@ -466,8 +654,13 @@ async def create_vehicle(body: VehicleCreate):
     name = body.name.strip()
     if not name or ".." in name or "/" in name or "\\" in name:
         raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    path = os.path.join(settings.DBC_DIR, name)
-    if os.path.exists(path): raise HTTPException(status_code=409, detail=f"Vehicle '{name}' already exists.")
+    _, emb_e, loc_e = _resolve_vehicle(name, settings.DBC_DIR)
+    if emb_e is not None or loc_e is not None:
+        raise HTTPException(status_code=409, detail=f"Vehicle '{name}' already exists.")
+    os.makedirs(settings.EMBEDDED_DBC_DIR, exist_ok=True)
+    path = os.path.join(settings.EMBEDDED_DBC_DIR, name)
+    if os.path.exists(path):
+        raise HTTPException(status_code=409, detail=f"Vehicle '{name}' already exists.")
     os.makedirs(path)
     return {"message": f"Vehicle '{name}' created."}
 
@@ -478,9 +671,11 @@ async def upload_dbc_file(vehicle: str, file: UploadFile = File(...), overwrite:
     display, emb_actual, local_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
     if display is None:
         raise HTTPException(status_code=404, detail="Vehicle not found.")
-    # Use local folder if present, else create with display name (Embedded-Sharepoint spelling)
-    local_dir_name = local_actual if local_actual is not None else display
-    dir_path = os.path.join(settings.DBC_DIR, local_dir_name)
+    if emb_actual is not None:
+        dir_path = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
+    else:
+        local_dir_name = local_actual if local_actual is not None else display
+        dir_path = os.path.join(settings.DBC_DIR, local_dir_name)
     if not os.path.isdir(dir_path):
         os.makedirs(dir_path, exist_ok=True)
     safe_name = os.path.basename(file.filename)
@@ -507,58 +702,37 @@ async def upload_dbc_file(vehicle: str, file: UploadFile = File(...), overwrite:
 async def delete_dbc_file(vehicle: str, action: FileAction):
     if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
         raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    _, emb_actual, local_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
-    if local_actual is None:
-        raise HTTPException(status_code=404, detail="Vehicle not found.")
-    dir_path = os.path.join(settings.DBC_DIR, local_actual)
-    if not os.path.isdir(dir_path):
-        raise HTTPException(status_code=404, detail="Vehicle not found.")
     safe_name = os.path.basename(action.filename)
     if not safe_name or safe_name in (".", "..") or any(sep in safe_name for sep in ("/", "\\")):
         raise HTTPException(status_code=400, detail="Invalid filename.")
-    if emb_actual is not None:
-        emb_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
-        if os.path.isdir(emb_dir):
-            for f in os.listdir(emb_dir):
-                if f.lower() == safe_name.lower():
-                    raise HTTPException(status_code=403, detail="Cannot delete DBC from Embedded-Sharepoint.")
-    file_path = os.path.join(dir_path, safe_name)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found.")
-    move_to_trash(dir_path, safe_name)
-    return {"message": f"File '{safe_name}' moved to trash."}
+    dbc_path, actual = _resolve_existing_dbc_path(vehicle, safe_name)
+    dir_path = os.path.dirname(dbc_path)
+    move_to_trash(dir_path, actual)
+    return {"message": f"File '{actual}' moved to trash."}
 
 @app.put("/api/dbc/vehicles/{vehicle}/files/rename")
 async def rename_dbc_file(vehicle: str, body: FileRename):
     if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
         raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    _, emb_actual, local_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
-    if local_actual is None:
-        raise HTTPException(status_code=404, detail="Vehicle not found.")
-    dir_path = os.path.join(settings.DBC_DIR, local_actual)
-    if not os.path.isdir(dir_path):
-        raise HTTPException(status_code=404, detail="Vehicle not found.")
     old_name = os.path.basename(body.old_name)
     new_name = os.path.basename(body.new_name)
     for nm in (old_name, new_name):
         if not nm or nm in (".", "..") or any(sep in nm for sep in ("/", "\\")):
             raise HTTPException(status_code=400, detail="Invalid filename.")
-    if emb_actual is not None:
-        emb_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
-        if os.path.isdir(emb_dir):
-            for f in os.listdir(emb_dir):
-                if f.lower() == old_name.lower():
-                    raise HTTPException(status_code=403, detail="Cannot rename DBC from Embedded-Sharepoint.")
-    old_path = os.path.join(dir_path, old_name)
+    if not new_name.lower().endswith(".dbc"):
+        new_name = f"{new_name}.dbc"
+    dbc_path, old_actual = _resolve_existing_dbc_path(vehicle, old_name)
+    dir_path = os.path.dirname(dbc_path)
+    old_path = os.path.join(dir_path, old_actual)
     new_path = os.path.join(dir_path, new_name)
     if not os.path.exists(old_path):
         raise HTTPException(status_code=404, detail="File not found.")
     existing = await list_dbc_files(vehicle)
     lower_names = {entry["name"].lower() for entry in existing}
-    if new_name.lower() in lower_names:
+    if new_name.lower() in lower_names and new_name.lower() != old_actual.lower():
         raise HTTPException(status_code=409, detail=f"DBC '{new_name}' already exists.")
     os.rename(old_path, new_path)
-    return {"message": f"Renamed '{old_name}' to '{new_name}'."}
+    return {"message": f"Renamed '{old_actual}' to '{new_name}'."}
 
 
 @app.get("/api/dbc/vehicles/{vehicle}/files/{filename}/schema")
@@ -668,6 +842,192 @@ async def get_dbc_schema(vehicle: str, filename: str):
             }
         )
     return {"vehicle": vehicle, "filename": safe_name, "path": dbc_path, "messages": messages}
+
+
+@app.get("/api/dbc/vehicles/{vehicle}/files/{filename}/editor-model")
+async def get_dbc_editor_model(vehicle: str, filename: str):
+    """Return DBC as editor model (read-only import; use MDC for saving edits)."""
+    dbc_path, safe_name = _resolve_existing_dbc_path(vehicle, filename)
+    try:
+        import cantools
+        db = cantools.database.load_file(dbc_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load DBC: {e!s}")
+
+    model = _build_editor_model(db)
+    model.update({"vehicle": vehicle, "filename": safe_name, "path": dbc_path})
+    return model
+
+
+def _editor_model_to_cantools_messages(model: EditorDatabasePayload):
+    from cantools.database.can import Message, Signal
+    from cantools.database.can.node import Node
+    from cantools.database.can.signal_group import SignalGroup
+    from cantools.database.conversion import BaseConversion
+
+    messages = []
+    node_names = set()
+    for net in model.networks:
+        network_name = (net.name or "CAN").strip() or "CAN"
+        for n in (net.nodes or []):
+            n = str(n).strip()
+            if n:
+                node_names.add(n)
+        for msg in net.messages:
+            signals = []
+            for sig in msg.signals:
+                choices = None
+                if sig.choices:
+                    choices = OrderedDict()
+                    for k, v in sig.choices.items():
+                        choices[int(k)] = str(v)
+                conversion = BaseConversion.factory(
+                    scale=float(sig.scale),
+                    offset=float(sig.offset),
+                    choices=choices,
+                )
+                signals.append(
+                    Signal(
+                        name=sig.name,
+                        start=int(sig.start),
+                        length=int(sig.length),
+                        byte_order=sig.byte_order,
+                        is_signed=bool(sig.is_signed),
+                        conversion=conversion,
+                        minimum=sig.minimum,
+                        maximum=sig.maximum,
+                        unit=sig.unit,
+                        comment=sig.comment,
+                        receivers=list(sig.receivers or []),
+                        is_multiplexer=bool(sig.is_multiplexer),
+                        multiplexer_ids=list(sig.multiplexer_ids or []) or None,
+                        multiplexer_signal=sig.multiplexer_signal,
+                    )
+                )
+            signal_groups = []
+            for grp in (msg.signal_groups or []):
+                signal_groups.append(
+                    SignalGroup(
+                        name=grp.name,
+                        repetitions=int(grp.repetitions or 1),
+                        signal_names=list(grp.signal_names or []),
+                    )
+                )
+            messages.append(
+                Message(
+                    frame_id=int(msg.id),
+                    name=msg.name,
+                    length=int(msg.length),
+                    signals=signals,
+                    cycle_time=msg.cycle_time,
+                    senders=list(msg.senders or []),
+                    comment=msg.comment,
+                    is_extended_frame=bool(msg.is_extended_frame),
+                    is_fd=bool(msg.is_fd),
+                    bus_name=network_name,
+                    protocol=msg.protocol,
+                    signal_groups=signal_groups,
+                )
+            )
+            for snd in (msg.senders or []):
+                if snd:
+                    node_names.add(str(snd))
+            for sig in msg.signals:
+                for rcv in (sig.receivers or []):
+                    if rcv:
+                        node_names.add(str(rcv))
+    nodes = [Node(name=n) for n in sorted(node_names, key=str.lower)]
+    return messages, nodes
+
+
+@app.get("/api/mdc/files")
+async def list_mdc_files():
+    if not os.path.isdir(settings.MDC_DIR):
+        return []
+    files = []
+    for f in os.listdir(settings.MDC_DIR):
+        full = os.path.join(settings.MDC_DIR, f)
+        if os.path.isfile(full) and f.lower().endswith(".mdc"):
+            files.append(f)
+    return sorted(files, key=str.lower)
+
+
+@app.get("/api/mdc/files/{filename}")
+async def load_mdc_file(filename: str):
+    safe_name = _safe_filename(filename, ".mdc")
+    path = os.path.join(settings.MDC_DIR, safe_name)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="MDC file not found.")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="Invalid MDC content.")
+        data["filename"] = safe_name
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to load MDC: {e!s}")
+
+
+@app.put("/api/mdc/files/{filename}")
+async def save_mdc_file(filename: str, body: MdcSaveRequest):
+    safe_name = _safe_filename(filename, ".mdc")
+    os.makedirs(settings.MDC_DIR, exist_ok=True)
+    path = os.path.join(settings.MDC_DIR, safe_name)
+    payload = {
+        "type": "electron.mdc",
+        "version": 1,
+        "vehicle": body.vehicle,
+        "source_filename": body.source_filename,
+        "model": body.model.model_dump(),
+    }
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        return {"ok": True, "filename": safe_name, "path": path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save MDC: {e!s}")
+
+
+@app.post("/api/mdc/export-dbc")
+async def export_mdc_to_dbcs(body: MdcExportRequest):
+    try:
+        import cantools
+        from cantools.database.can import Database
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DBC export dependencies unavailable: {e!s}")
+
+    vehicle = body.vehicle.strip()
+    if not vehicle or any(x in vehicle for x in ("..", "/", "\\")):
+        raise HTTPException(status_code=400, detail="Invalid vehicle.")
+
+    base_name = _safe_slug(body.base_name)
+    _, emb_actual, loc_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
+    if emb_actual is None and loc_actual is None:
+        raise HTTPException(status_code=404, detail="Vehicle not found.")
+    if emb_actual is not None:
+        export_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
+    else:
+        export_dir = os.path.join(settings.DBC_DIR, loc_actual)
+    os.makedirs(export_dir, exist_ok=True)
+
+    exported = []
+    for net in body.model.networks:
+        net_name = (net.name or "CAN").strip() or "CAN"
+        try:
+            one_network_model = EditorDatabasePayload(version=1, networks=[net])
+            messages, nodes = _editor_model_to_cantools_messages(one_network_model)
+            db = Database(messages=messages, nodes=nodes, strict=True)
+            out_name = f"{base_name}__{_safe_slug(net_name)}.dbc"
+            out_path = os.path.join(export_dir, out_name)
+            cantools.database.dump_file(db, out_path)
+            exported.append({"network": net_name, "filename": out_name, "path": out_path})
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed exporting network '{net_name}': {e!s}")
+
+    return {"ok": True, "vehicle": vehicle, "exported": exported}
 
 @app.get("/api/influx/buckets")
 async def list_buckets():
