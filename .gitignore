@@ -44,6 +44,6 @@ artifacts/
 .env.local
 .env.*.local
 
-electron-agent-vault
+electron-agent-vault/
 
 .cursor/plans

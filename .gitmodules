@@ -1,4 +1,4 @@
 [submodule "Embedded-Sharepoint"]
 	path = Embedded-Sharepoint
 	url = https://github.com/lhr-solar/Embedded-Sharepoint
-	branch = custom_mdc
+	branch = afternoon-refactor
