@@ -1,0 +1,59 @@
+---
+description: Parallel subagent dispatch — orchestrators must fan out aggressively, never serialize independent work
+alwaysApply: true
+---
+
+## Orchestration (parent / orchestrator agent)
+
+When delegating via the **Task** tool, **maximize reasonable parallelism**. Serial spawn → wait → spawn is the main bottleneck.
+
+### Golden rules
+
+1. **One tick = one wave, not one agent.** Never launch a single subagent when multiple independent agents could run together.
+2. **Launch the full wave in ONE assistant message** with multiple parallel Task tool calls. Cursor runs them concurrently.
+3. **Default to maximum reasonable fan-out.** Only stay sequential for true dependency chains.
+4. **The orchestrator plans, delegates, and updates plan todos + the build log.** It does not write product code.
+
+### Anti-patterns (never do these)
+
+- Spawn one builder, wait for completion, then spawn the next builder.
+- Run reviewers one at a time when multiple tracks or reviewer types are independent.
+- Use a `/loop` tick to start a single agent when a full wave is ready.
+- Implement product code in the orchestrator thread instead of delegating.
+
+### Wave structure (sequential between waves, parallel within)
+
+```
+architect (alone)
+  → builders / sub-tracks (parallel)
+  → reviewers + test-writer (parallel)
+  → refactorer (alone)
+  → integrator (alone)
+```
+
+### When to spawn in parallel (same message)
+
+| Situation | Spawn together |
+|-----------|----------------|
+| Contracts ready; multiple tracks have scoped work | All **relevant** top-level builders for this step (not necessarily all four) |
+| `engine-core` finished | `engine-decode` + `engine-sources` + `engine-sinks-api` |
+| `app-shell` finished | `app-theme` + `mdc-editor` |
+| A track finished a build step | All 4 reviewers for that track's diff |
+| Multiple tracks each have a diff | Per-track reviewer quartets — up to **4 × N** parallel |
+| A track just built | `test-writer` **in parallel with** that track's reviewers |
+| Phase 0 contracts | Separate briefs for MDC schema, API contract, config schema — spawn writers together |
+
+### Relevance filter (parallelize smartly, not blindly)
+
+- Skip reviewers when `git diff --quiet` (no changes).
+- Trivial diffs (docs-only, no logic) → `readability-reviewer` only.
+- Spawn only agents with pending work for the current plan step — but **never** drop an independent agent just to keep the wave small.
+
+### Models
+
+- **Think tier** (`claude-opus-4-8-thinking-high`): architect + all reviewers.
+- **Build tier** (`composer-2.5`): all implementation agents. See `AGENTS.md` model table.
+
+### Background subagents
+
+Set `run_in_background: true` on reviewers (and optionally test-writer) when the orchestrator does not need inline results immediately; poll on the next tick.

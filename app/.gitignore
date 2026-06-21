@@ -1,0 +1,7 @@
+node_modules
+dist
+.vite
+
+# Tauri / Rust build artifacts
+src-tauri/target
+src-tauri/gen

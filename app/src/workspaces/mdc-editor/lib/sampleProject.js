@@ -1,0 +1,715 @@
+// AUTO-DERIVED sample for offline rendering: a frozen copy of
+// Embedded-Sharepoint/can/mdc/examples/lhr-ev1/project.mdc.json (read-only, outside app/). The editor
+// loads this when the backend REST spec endpoint is unavailable so the lhr-ev1
+// example always renders. Refresh by re-running the copy step in the editor task.
+
+export const SAMPLE_PROJECT = {
+  "$schema": "https://lhrsolar.org/lhrs-mdc/3.0.0/mdc.schema.json",
+  "schemaVersion": "3.0.0",
+  "id": "lhr_ev1",
+  "networks": [
+    {
+      "id": "powertrain",
+      "name": "Powertrain CAN FD",
+      "comment": "500 kbit/s arbitration, 2 Mbit/s data.",
+      "filename": "powertrain.mdc.json",
+      "baudrate": 500000,
+      "fd_baudrate": 2000000,
+      "samplePoint": 80,
+      "attributes": {
+        "SystemOwner": "powertrain-team",
+        "BusType": "CAN FD"
+      },
+      "nodes": [
+        {
+          "name": "BMS",
+          "comment": "Battery management system."
+        },
+        {
+          "name": "MCU",
+          "comment": "Motor control unit / inverter."
+        },
+        {
+          "name": "VCU",
+          "comment": "Vehicle control unit."
+        }
+      ],
+      "valueTables": [
+        {
+          "name": "PackState",
+          "description": "BMS contactor state machine.",
+          "entries": [
+            {
+              "value": 0,
+              "label": "Idle"
+            },
+            {
+              "value": 1,
+              "label": "Precharge"
+            },
+            {
+              "value": 2,
+              "label": "Closed"
+            },
+            {
+              "value": 3,
+              "label": "Fault",
+              "description": "Contactors open due to fault."
+            }
+          ]
+        }
+      ],
+      "messages": [
+        {
+          "name": "BMS_Status",
+          "comment": "High-voltage pack summary.",
+          "frame_id": 256,
+          "is_extended_frame": false,
+          "is_fd": true,
+          "length": 16,
+          "transport": "single",
+          "cycle_time": 100,
+          "senders": [
+            "BMS"
+          ],
+          "signals": [
+            {
+              "name": "PackVoltage",
+              "comment": "DC bus voltage.",
+              "start": 0,
+              "length": 16,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "scale": 0.01,
+              "offset": 0,
+              "unit": "V",
+              "minimum": 0,
+              "maximum": 655.35,
+              "receivers": [
+                "VCU",
+                "MCU"
+              ],
+              "display": {
+                "precision": 1,
+                "chartType": "line",
+                "color": "#d62728",
+                "dashboardGroup": "HV Battery"
+              },
+              "alarms": [
+                {
+                  "id": "pack_voltage_outside",
+                  "name": "Pack voltage out of range",
+                  "op": "outside",
+                  "thresholds": [
+                    300,
+                    420
+                  ],
+                  "severity": "critical",
+                  "message": "HV pack voltage outside 300-420 V.",
+                  "hysteresis": 2
+                }
+              ],
+              "spn": 1234
+            },
+            {
+              "name": "PackCurrent",
+              "comment": "DC bus current; positive = discharge.",
+              "start": 16,
+              "length": 16,
+              "byte_order": "little_endian",
+              "is_signed": true,
+              "is_float": false,
+              "scale": 0.1,
+              "offset": 0,
+              "unit": "A",
+              "minimum": -3276.8,
+              "maximum": 3276.7,
+              "display": {
+                "precision": 1,
+                "chartType": "line",
+                "dashboardGroup": "HV Battery"
+              }
+            },
+            {
+              "name": "SOC",
+              "comment": "State of charge.",
+              "start": 32,
+              "length": 8,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "scale": 0.5,
+              "offset": 0,
+              "unit": "%",
+              "minimum": 0,
+              "maximum": 100,
+              "initial": 50,
+              "display": {
+                "precision": 0,
+                "format": "percent",
+                "chartType": "gauge",
+                "scaleMin": 0,
+                "scaleMax": 100,
+                "dashboardGroup": "HV Battery"
+              },
+              "alarms": [
+                {
+                  "id": "soc_low",
+                  "name": "SOC low",
+                  "op": "lt",
+                  "threshold": 10,
+                  "severity": "warning",
+                  "message": "Battery below 10%.",
+                  "hysteresis": 2
+                },
+                {
+                  "id": "soc_critical",
+                  "name": "SOC critical",
+                  "op": "lt",
+                  "threshold": 5,
+                  "severity": "critical",
+                  "message": "Battery below 5%."
+                }
+              ]
+            },
+            {
+              "name": "TempMax",
+              "comment": "Hottest cell temperature.",
+              "start": 40,
+              "length": 8,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "scale": 1,
+              "offset": -40,
+              "unit": "degC",
+              "minimum": -40,
+              "maximum": 215,
+              "display": {
+                "precision": 0,
+                "chartType": "stat"
+              },
+              "alarms": [
+                {
+                  "id": "overtemp",
+                  "name": "Pack over-temperature",
+                  "op": "gt",
+                  "threshold": 55,
+                  "severity": "critical",
+                  "message": "Pack temperature above 55 C."
+                }
+              ]
+            },
+            {
+              "name": "PackState",
+              "comment": "Contactor state machine.",
+              "start": 48,
+              "length": 4,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "conversion": {
+                "kind": "table"
+              },
+              "unit": "",
+              "valueTableRef": "PackState",
+              "invalid": 15,
+              "display": {
+                "format": "enum",
+                "chartType": "state",
+                "dashboardGroup": "HV Battery"
+              },
+              "alarms": [
+                {
+                  "id": "pack_state_changed",
+                  "name": "Pack state changed",
+                  "op": "change",
+                  "severity": "info",
+                  "message": "BMS contactor state transition."
+                }
+              ]
+            },
+            {
+              "name": "ChargeEnabled",
+              "comment": "Charging permitted flag; uses the project-shared OnOff table (no network-local OnOff, so resolution falls back to project scope).",
+              "start": 52,
+              "length": 1,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "conversion": {
+                "kind": "table"
+              },
+              "unit": "",
+              "valueTableRef": "OnOff",
+              "display": {
+                "format": "boolean",
+                "chartType": "state",
+                "dashboardGroup": "HV Battery"
+              }
+            }
+          ],
+          "send_type": "Cyclic"
+        },
+        {
+          "name": "MCU_Drive",
+          "comment": "Inverter drive state.",
+          "frame_id": 512,
+          "is_extended_frame": false,
+          "is_fd": true,
+          "length": 8,
+          "send_type": "Cyclic",
+          "cycle_time": 10,
+          "senders": [
+            "MCU"
+          ],
+          "signals": [
+            {
+              "name": "MotorRPM",
+              "start": 0,
+              "length": 16,
+              "byte_order": "little_endian",
+              "is_signed": true,
+              "is_float": false,
+              "scale": 1,
+              "offset": 0,
+              "unit": "rpm",
+              "minimum": -32768,
+              "maximum": 32767,
+              "display": {
+                "chartType": "line",
+                "dashboardGroup": "Drive"
+              }
+            },
+            {
+              "name": "MotorTemp",
+              "start": 16,
+              "length": 8,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "scale": 1,
+              "offset": -40,
+              "unit": "degC"
+            },
+            {
+              "name": "InverterState",
+              "comment": "Inverter mode (inline choices).",
+              "start": 24,
+              "length": 4,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "conversion": {
+                "kind": "table"
+              },
+              "unit": "",
+              "choices": [
+                {
+                  "value": 0,
+                  "label": "Standby"
+                },
+                {
+                  "value": 1,
+                  "label": "Ready"
+                },
+                {
+                  "value": 2,
+                  "label": "Drive"
+                },
+                {
+                  "value": 3,
+                  "label": "Fault"
+                }
+              ],
+              "display": {
+                "format": "enum",
+                "chartType": "state"
+              }
+            },
+            {
+              "name": "Torque",
+              "comment": "Estimated shaft torque (rational conversion: physical = raw / 10).",
+              "start": 32,
+              "length": 16,
+              "byte_order": "little_endian",
+              "is_signed": true,
+              "is_float": false,
+              "conversion": {
+                "kind": "rational",
+                "numerator": [
+                  1,
+                  0
+                ],
+                "denominator": [
+                  10
+                ],
+                "offset": 0
+              },
+              "unit": "Nm",
+              "minimum": -3276.8,
+              "maximum": 3276.7,
+              "display": {
+                "precision": 1,
+                "chartType": "line",
+                "dashboardGroup": "Drive"
+              }
+            }
+          ],
+          "computedSignals": [
+            {
+              "name": "MechPower",
+              "comment": "Mechanical shaft power from this message's own signals: torque * angular speed.",
+              "expr": "Torque * MotorRPM * 0.10472",
+              "dependsOn": [
+                "Torque",
+                "MotorRPM"
+              ],
+              "is_signed": false,
+              "is_float": true,
+              "unit": "W",
+              "display": {
+                "precision": 0,
+                "chartType": "line",
+                "dashboardGroup": "Drive"
+              }
+            }
+          ]
+        },
+        {
+          "name": "BMS_CellArray",
+          "comment": "Per-cell voltage/temperature telemetry. One frame is sent per cell: `CellIndex` selects the cell and `CellVoltage`/`CellTemp` carry that cell's values. The consumer reconstructs a 96-element array (see message-level `array`).",
+          "frame_id": 257,
+          "is_extended_frame": false,
+          "is_fd": true,
+          "length": 8,
+          "transport": "single",
+          "cycle_time": 10,
+          "senders": [
+            "BMS"
+          ],
+          "multiplexing": {
+            "multiplexed": true,
+            "multiplexorSignal": "CellIndex"
+          },
+          "array": {
+            "indexSignal": "CellIndex",
+            "size": 96,
+            "elementSignals": [
+              "CellVoltage",
+              "CellTemp"
+            ],
+            "storage": "series_per_index"
+          },
+          "signals": [
+            {
+              "name": "CellIndex",
+              "comment": "Index of the cell described by this frame (0..95).",
+              "start": 0,
+              "length": 8,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "unit": "",
+              "minimum": 0,
+              "maximum": 95,
+              "is_multiplexer": true
+            },
+            {
+              "name": "CellVoltage",
+              "comment": "Voltage of the cell selected by CellIndex.",
+              "start": 8,
+              "length": 16,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "scale": 0.0001,
+              "offset": 0,
+              "unit": "V",
+              "minimum": 0,
+              "maximum": 5,
+              "display": {
+                "precision": 4,
+                "chartType": "heatmap",
+                "dashboardGroup": "HV Cells"
+              },
+              "alarms": [
+                {
+                  "id": "cell_undervoltage",
+                  "name": "Cell undervoltage",
+                  "op": "lt",
+                  "threshold": 2.8,
+                  "severity": "critical",
+                  "message": "A cell dropped below 2.8 V.",
+                  "hysteresis": 0.05
+                }
+              ]
+            },
+            {
+              "name": "CellTemp",
+              "comment": "Temperature of the cell selected by CellIndex.",
+              "start": 24,
+              "length": 8,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "scale": 1,
+              "offset": -40,
+              "unit": "degC",
+              "minimum": -40,
+              "maximum": 215,
+              "display": {
+                "precision": 0,
+                "chartType": "heatmap",
+                "dashboardGroup": "HV Cells"
+              }
+            }
+          ],
+          "send_type": "Cyclic"
+        }
+      ],
+      "computedSignals": [
+        {
+          "name": "DrivePower",
+          "comment": "Instantaneous DC power = pack voltage * pack current.",
+          "expr": "BMS_Status.PackVoltage * BMS_Status.PackCurrent",
+          "dependsOn": [
+            "BMS_Status.PackVoltage",
+            "BMS_Status.PackCurrent"
+          ],
+          "is_signed": false,
+          "is_float": true,
+          "unit": "W",
+          "display": {
+            "precision": 0,
+            "chartType": "line",
+            "dashboardGroup": "HV Battery"
+          }
+        }
+      ]
+    },
+    {
+      "id": "chassis",
+      "name": "Chassis CAN",
+      "comment": "Classic CAN at 500 kbit/s.",
+      "filename": "chassis.mdc.json",
+      "baudrate": 500000,
+      "samplePoint": 87.5,
+      "nodes": [
+        {
+          "name": "VCU"
+        },
+        {
+          "name": "ABS"
+        },
+        {
+          "name": "EPS"
+        }
+      ],
+      "messages": [
+        {
+          "name": "VehicleDynamics",
+          "comment": "Core dynamics signals.",
+          "frame_id": 768,
+          "length": 8,
+          "cycle_time": 20,
+          "senders": [
+            "ABS"
+          ],
+          "signals": [
+            {
+              "name": "WheelSpeedFL",
+              "start": 0,
+              "length": 16,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "scale": 0.01,
+              "offset": 0,
+              "unit": "km/h",
+              "minimum": 0,
+              "maximum": 655.35,
+              "display": {
+                "precision": 1,
+                "chartType": "line",
+                "dashboardGroup": "Dynamics"
+              }
+            },
+            {
+              "name": "SteeringAngle",
+              "start": 16,
+              "length": 16,
+              "byte_order": "little_endian",
+              "is_signed": true,
+              "is_float": false,
+              "scale": 0.1,
+              "offset": 0,
+              "unit": "deg",
+              "minimum": -3276.8,
+              "maximum": 3276.7,
+              "display": {
+                "precision": 1,
+                "chartType": "line",
+                "dashboardGroup": "Dynamics"
+              }
+            },
+            {
+              "name": "BrakePressure",
+              "start": 32,
+              "length": 16,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "scale": 0.1,
+              "offset": 0,
+              "unit": "bar",
+              "minimum": 0,
+              "maximum": 6553.5,
+              "display": {
+                "precision": 1,
+                "chartType": "line",
+                "dashboardGroup": "Dynamics"
+              }
+            }
+          ],
+          "send_type": "Cyclic"
+        },
+        {
+          "name": "Diagnostics",
+          "comment": "Multiplexed diagnostic data (ISO-TP capable).",
+          "frame_id": 1536,
+          "length": 8,
+          "transport": "isotp",
+          "cycle_time": null,
+          "senders": [
+            "VCU"
+          ],
+          "multiplexing": {
+            "multiplexed": true,
+            "multiplexorSignal": "DiagMux"
+          },
+          "signals": [
+            {
+              "name": "DiagMux",
+              "comment": "Selector for the multiplexed payload.",
+              "start": 0,
+              "length": 8,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "unit": "",
+              "is_multiplexer": true
+            },
+            {
+              "name": "AuxVoltage",
+              "comment": "12V system voltage (present when DiagMux == 0).",
+              "start": 8,
+              "length": 16,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "scale": 0.001,
+              "offset": 0,
+              "unit": "V",
+              "minimum": 0,
+              "maximum": 65.535,
+              "multiplexer_ids": [
+                0
+              ],
+              "multiplexer_signal": "DiagMux"
+            },
+            {
+              "name": "FaultCode",
+              "comment": "Active DTC (present when DiagMux == 1).",
+              "start": 8,
+              "length": 16,
+              "byte_order": "little_endian",
+              "is_signed": false,
+              "is_float": false,
+              "conversion": {
+                "kind": "table"
+              },
+              "unit": "",
+              "choices": [
+                {
+                  "value": 0,
+                  "label": "None"
+                },
+                {
+                  "value": 256,
+                  "label": "EPS_Timeout"
+                },
+                {
+                  "value": 257,
+                  "label": "ABS_SensorFault"
+                }
+              ],
+              "multiplexer_ids": [
+                1
+              ],
+              "multiplexer_signal": "DiagMux",
+              "display": {
+                "format": "enum",
+                "chartType": "table"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "name": "LHR EV1",
+  "description": "Single-motor demo EV.",
+  "metadata": {
+    "name": "LHR EV1 Demo Project",
+    "description": "Realistic two-network demo: a CAN FD powertrain bus and a classic CAN chassis bus. Exercises every conversion kind, value tables, multiplexing, computed signals, alarms, display hints, and typed attributes.",
+    "author": "mdc-builder",
+    "revision": "0.1.0",
+    "source": "hand-authored",
+    "createdAt": "2025-06-16T00:00:00Z",
+    "modifiedAt": "2025-06-16T00:00:00Z"
+  },
+  "attributeDefinitions": [
+    {
+      "name": "BusType",
+      "type": "enum",
+      "description": "Physical bus type.",
+      "scopes": [
+        "network"
+      ],
+      "enumValues": [
+        "CAN",
+        "CAN FD",
+        "LIN",
+        "FlexRay"
+      ],
+      "default": "CAN"
+    },
+    {
+      "name": "SystemOwner",
+      "type": "string",
+      "description": "Owning subsystem team.",
+      "scopes": [
+        "network",
+        "message"
+      ]
+    }
+  ],
+  "valueTables": [
+    {
+      "name": "OnOff",
+      "description": "Generic boolean state shared across networks.",
+      "entries": [
+        {
+          "value": 0,
+          "label": "Off"
+        },
+        {
+          "value": 1,
+          "label": "On"
+        }
+      ]
+    }
+  ]
+};

@@ -1,0 +1,4 @@
+/build/
+build-nodeps/
+build-vcpkg2/
+vcpkg_installed/

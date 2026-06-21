@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lhr.dev/schemas/engine/config.schema.json",
+  "title": "CAN Engine Config",
+  "description": "Runtime configuration for the C++20 telemetry engine. One binary runs as a desktop sidecar or a headless server; both are configured by this document. This is one of the three project contracts — prefer additive changes and never silently redefine existing fields.",
+  "type": "object",
+  "required": ["role"],
+  "additionalProperties": false,
+  "properties": {
+    "role": {
+      "description": "desktop = Tauri sidecar (local sources + local API). server = headless host (TCP ingest listeners + API).",
+      "type": "string",
+      "enum": ["desktop", "server"]
+    },
+    "sources": {
+      "description": "Input adapters. Each is normalized into RawFrame and published on the bus. Discriminated by `type`.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/source" },
+      "default": []
+    },
+    "sinks": {
+      "description": "Outputs that consume decoded data. Discriminated by `type`.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/sink" },
+      "default": []
+    },
+    "bus": { "$ref": "#/$defs/bus" },
+    "api": { "$ref": "#/$defs/api" },
+    "server": {
+      "description": "Server-mode settings. Ignored when role=desktop.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "listeners": {
+          "description": "TCP host ingest endpoints. The engine listens and remote producers connect to push frames.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/listener" },
+          "default": []
+        },
+        "webRoot": {
+          "description": "Path to the built React app served by the backend in server mode (StaticFiles + SPA fallback). Relative paths resolve from the repo root. Missing build → placeholder page, not a crash.",
+          "type": "string",
+          "default": "app/dist"
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "tcp-slcan",
+            "tcp-slcan-listener",
+            "capnp-tcp",
+            "capnp-tcp-listener",
+            "socketcan",
+            "pcan",
+            "vector-xl",
+            "serial",
+            "file"
+          ],
+          "description": "Source discriminator. `*-listener` variants bind/accept (server ingest); the others are clients/local devices."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional label; also used as the logical bus name on emitted RawFrames."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "tcp-slcan" } } },
+          "then": {
+            "properties": {
+              "ip": { "type": "string", "description": "Remote host to connect to." },
+              "port": { "type": "integer", "default": 8187 }
+            },
+            "required": ["ip"]
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "tcp-slcan-listener" } } },
+          "then": {
+            "properties": {
+              "host": { "type": "string", "default": "0.0.0.0" },
+              "port": { "type": "integer", "default": 8187 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "capnp-tcp" } } },
+          "then": {
+            "properties": {
+              "ip": { "type": "string" },
+              "port": { "type": "integer", "default": 8190 }
+            },
+            "required": ["ip"]
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "capnp-tcp-listener" } } },
+          "then": {
+            "properties": {
+              "host": { "type": "string", "default": "0.0.0.0" },
+              "port": { "type": "integer", "default": 8190 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "socketcan" } } },
+          "then": {
+            "properties": {
+              "channel": { "type": "string", "description": "e.g. can0, vcan0." },
+              "fd": { "type": "boolean", "default": false }
+            },
+            "required": ["channel"]
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "pcan" } } },
+          "then": {
+            "properties": {
+              "channel": { "type": "string", "default": "PCAN_USBBUS1" },
+              "bitrate": { "type": "integer", "default": 500000 },
+              "device_id": { "type": "integer" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "vector-xl" } } },
+          "then": {
+            "properties": {
+              "channel": { "type": "integer", "description": "Vector XL channel index." },
+              "app_name": { "type": "string", "default": "CANalyzer" },
+              "bitrate": { "type": "integer", "default": 500000 }
+            },
+            "required": ["channel"]
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "serial" } } },
+          "then": {
+            "properties": {
+              "port": { "type": "string", "description": "Serial device path / COM port." },
+              "serial_baudrate": { "type": "integer", "default": 115200 },
+              "can_bitrate": { "type": "integer", "default": 500000 }
+            },
+            "required": ["port"]
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "file" } } },
+          "then": {
+            "properties": {
+              "path": { "type": "string", "description": "Recording to replay." },
+              "loop": { "type": "boolean", "default": false },
+              "speed": { "type": "number", "default": 1.0, "description": "Replay speed multiplier." }
+            },
+            "required": ["path"]
+          }
+        }
+      ]
+    },
+
+    "sink": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["influx", "sqlite", "file"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "influx" } } },
+          "then": {
+            "properties": {
+              "url": { "type": "string", "default": "http://127.0.0.1:8086" },
+              "org": { "type": "string" },
+              "bucket": { "type": "string" },
+              "token": { "type": "string" }
+            },
+            "required": ["url", "org", "bucket", "token"]
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "sqlite" } } },
+          "then": {
+            "properties": { "path": { "type": "string" } },
+            "required": ["path"]
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "file" } } },
+          "then": {
+            "properties": {
+              "path": { "type": "string" },
+              "format": { "type": "string", "enum": ["jsonl", "csv"], "default": "jsonl" }
+            },
+            "required": ["path"]
+          }
+        }
+      ]
+    },
+
+    "bus": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Frame transport between sources and consumers.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["inproc", "nats"],
+          "default": "inproc",
+          "description": "inproc = in-process MPSC ring (default). nats = optional plug-in; never a hard dependency."
+        },
+        "capacity": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 4096,
+          "description": "Ring depth for the in-proc bus."
+        },
+        "url": {
+          "type": "string",
+          "description": "NATS server URL (only when type=nats)."
+        }
+      }
+    },
+
+    "api": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Local HTTP + WebSocket API the React app talks to. See backend/API_CONTRACT.md.",
+      "properties": {
+        "host": { "type": "string", "default": "127.0.0.1" },
+        "port": { "type": "integer", "default": 8350 }
+      }
+    },
+
+    "listener": {
+      "type": "object",
+      "required": ["type", "port"],
+      "additionalProperties": false,
+      "description": "Server-mode TCP ingest endpoint.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["tcp-slcan", "capnp-tcp"],
+          "description": "Wire format expected from connecting producers."
+        },
+        "host": { "type": "string", "default": "0.0.0.0" },
+        "port": { "type": "integer" }
+      }
+    }
+  }
+}

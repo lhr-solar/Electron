@@ -1,0 +1,46 @@
+{
+  "uid": "lhr-event-markers",
+  "title": "LHR Event Markers",
+  "tags": ["platform"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "",
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Telemetry Events",
+        "datasource": { "type": "influxdb", "name": "InfluxDB" },
+        "enable": true,
+        "hide": false,
+        "iconColor": "rgba(255, 96, 0, 1)",
+        "query": "from(bucket: v.defaultBucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"telemetry_events\")\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.name)",
+        "textField": "name",
+        "tagsField": "tags",
+        "timeEndField": "end_ts_ns",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "text",
+      "title": "Event marker annotation source",
+      "gridPos": { "h": 3, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "content": "Telemetry event ranges (`telemetry_events` in Influx). Copy the **Telemetry Events** annotation layer to telemetry dashboards.",
+        "mode": "markdown"
+      }
+    }
+  ]
+}

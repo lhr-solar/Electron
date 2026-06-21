@@ -1,0 +1,8 @@
+{
+  "name": "can-engine",
+  "version": "0.1.0",
+  "description": "C++20 CAN telemetry ingest/decode engine (core). Dependency-light by design: the core uses only the standard library plus nlohmann-json for config parsing. Sinks/API dependencies (Drogon, InfluxDB) are added by their own sub-track.",
+  "dependencies": [
+    "nlohmann-json"
+  ]
+}

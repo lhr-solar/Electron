@@ -1,0 +1,21 @@
+{
+  "role": "server",
+  "sources": [],
+  "sinks": [
+    {
+      "type": "influx",
+      "url": "http://influxdb:8086",
+      "org": "LHRS",
+      "bucket": "telemetry_main",
+      "token": "${INFLUX_TOKEN}"
+    }
+  ],
+  "bus": { "type": "inproc", "capacity": 4096 },
+  "api": { "host": "0.0.0.0", "port": 8350 },
+  "server": {
+    "webRoot": "app/dist",
+    "listeners": [
+      { "type": "tcp-slcan", "host": "0.0.0.0", "port": 8187 }
+    ]
+  }
+}

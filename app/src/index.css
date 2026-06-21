@@ -1,0 +1,44 @@
+/* Tesla dark shell tokens (zinc palette from v3 client) */
+:root {
+  --bg: #0a0a0b;
+  --bg-elevated: #0f0f11;
+  --bg-hover: #18181b;
+  --border: #1f1f23;
+  --text: #e4e4e7;
+  --text-muted: #a1a1aa;
+  --hex: #a1a1aa;
+  --focus: #52525b;
+  --accent: #3b82f6;
+  --status-green: #22c55e;
+  --status-red: #ef4444;
+  --font: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --radius: 6px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.mantine-Notification {
+  background-color: var(--bg-elevated) !important;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+/* Subtle depth on workspace surfaces */
+.workspace-surface {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(63, 63, 70, 0.15), transparent),
+    var(--bg);
+}

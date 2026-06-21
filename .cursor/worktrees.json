@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "setup": [
+    { "name": "vcpkg-bootstrap", "command": "if [ -d engine ] && [ ! -d engine/vcpkg_installed ]; then cmake --preset default 2>/dev/null || true; fi" },
+    { "name": "npm-install", "command": "if [ -f app/package.json ]; then npm --prefix app install; fi" }
+  ]
+}

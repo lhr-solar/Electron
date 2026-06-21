@@ -1,0 +1,184 @@
+name: CI
+
+on:
+  push:
+    branches: [main, v3]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite"
+
+jobs:
+  test-and-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            vcpkg_triplet: x64-linux
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            vcpkg_triplet: arm64-osx
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            vcpkg_triplet: x64-windows
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.VCPKG_ROOT }}
+            ${{ github.workspace }}/.vcpkg-cache
+          key: vcpkg-${{ matrix.os }}-${{ hashFiles('engine/vcpkg.json') }}
+          restore-keys: vcpkg-${{ matrix.os }}-
+
+      - name: Bootstrap vcpkg
+        shell: bash
+        run: |
+          if [ ! -x "$VCPKG_ROOT/vcpkg" ]; then
+            git clone --depth 1 https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
+            "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+          fi
+
+      - name: Linux system deps (engine + Tauri)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install backend + build tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e "backend[dev]" nuitka ordered-set nanobind
+
+      - name: Build C++ engine (binding + tests)
+        shell: bash
+        run: |
+          cmake -B engine/build -S engine \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.vcpkg_triplet }}
+          cmake --build engine/build --config Release --parallel
+        env:
+          VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
+
+      - name: Engine tests (ctest)
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ctest --test-dir engine/build -C Release --output-on-failure
+          else
+            ctest --test-dir engine/build --output-on-failure
+          fi
+
+      - name: Locate can_engine on PYTHONPATH
+        shell: bash
+        run: |
+          mod=$(find engine/build/binding -maxdepth 2 \( -name 'can_engine*.so' -o -name 'can_engine*.pyd' \) | head -1)
+          test -n "$mod" || { echo "can_engine module not found"; exit 1; }
+          echo "PYTHONPATH=$(dirname "$mod")" >> "$GITHUB_ENV"
+
+      - name: Backend tests (pytest)
+        run: pytest backend/tests
+
+      - name: App tests (vitest)
+        working-directory: app
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+
+      - name: Build web app (app/dist)
+        working-directory: app
+        run: npm run build
+
+      - name: Nuitka sidecar (backend + can_engine)
+        shell: bash
+        run: python backend/build_sidecar.py --target-triple "${{ matrix.target }}"
+        env:
+          TAURI_ENV_TARGET_TRIPLE: ${{ matrix.target }}
+
+      - name: Tauri installer
+        working-directory: app
+        run: npm run tauri build
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: |
+            app/src-tauri/target/release/bundle/**
+            app/src-tauri/binaries/backend-*
+          if-no-files-found: warn
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test-and-package
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate compose file
+        run: |
+          cp deploy/.env.example deploy/.env
+          docker compose -f deploy/docker-compose.yml config >/dev/null
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build headless server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.backend
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ghcr.io/${{ github.repository }}/backend:latest
+            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

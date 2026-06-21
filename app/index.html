@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CAN</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Surface fatal load/parse errors instead of a silent black screen.
+      window.addEventListener('error', (e) => {
+        if (document.getElementById('root')?.childElementCount) return;
+        document.body.innerHTML =
+          '<pre style="color:#ef4444;background:#0a0a0b;padding:16px;margin:0;' +
+          'font:13px/1.5 ui-monospace,monospace;white-space:pre-wrap;height:100vh">' +
+          'App failed to start:\n\n' + (e.message || e.error || e) + '\n\n' +
+          (e.filename ? e.filename + ':' + e.lineno : '') + '</pre>';
+      });
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

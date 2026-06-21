@@ -1,0 +1,22 @@
+apiVersion: 1
+
+# Loads the mdc2grafana-generated dashboards mounted at /var/lib/grafana/dashboards
+# (deploy/grafana-dashboards on the host). foldersFromFilesStructure keeps them
+# organized; updates on the next provisioning poll after regeneration.
+providers:
+  - name: mdc-generated
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
+  - name: platform
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/platform
+      foldersFromFilesStructure: false

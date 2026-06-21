@@ -1,0 +1,30 @@
+[project]
+name = "lhrs-can-backend"
+version = "0.1.0"
+description = "Python REST/WS API + sinks wrapping the C++ can_engine (nanobind)."
+requires-python = ">=3.11"
+
+# Lean runtime: FastAPI + uvicorn (pulls starlette + websockets via uvicorn[standard]),
+# influx + aiosqlite for sinks, jsonschema for the config/MDC contracts.
+# Deliberately NO pandas / numpy in the default install — heavy analytics is an extra.
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+    "influxdb-client",
+    "aiosqlite",
+    "jsonschema",
+]
+
+[project.optional-dependencies]
+analytics = ["pandas", "numpy"]
+tools = ["cantools"]
+dev = ["pytest", "httpx"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["backend", "backend.sinks"]
+package-dir = { "backend" = "." }

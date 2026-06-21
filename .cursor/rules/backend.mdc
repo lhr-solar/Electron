@@ -1,0 +1,13 @@
+---
+description: Python API backend standards
+globs: backend/**
+---
+- The Python `backend/` is the API layer: REST + WebSocket for the React app (config, MDC spec CRUD, start/stop, live batches, status). Optimized for being **easy to use and expand**.
+- **In server mode it also serves the static web app** (`app/dist`) via StaticFiles (SPA fallback) so browsers load the SAME app + viewports the desktop uses. Desktop mode (Tauri sidecar) skips static serving. Server mode also runs the **TCP slcan listener** source (vehicle streams in) and hosts/links Grafana.
+- It wraps the C++ engine via the **nanobind** in-process module (no subprocess, no Cap'n Proto for the local path). Pull decoded batches from the engine on an async task and fan them out to WS clients + sinks.
+- **Sinks live here** (InfluxDB default, SQLite local, file) behind one small `Sink` protocol — adding a sink is a Python-only change, no C++ rebuild. Keep writes off the request path (async/batched).
+- Honor the contracts: the REST/WS API contract (`backend/API_CONTRACT.md`, wire shapes mirror v3 `live_message_batch` + `status`), `engine/config.schema.json`, and the engine binding API (`AGENTS.md`).
+- Reuse v3 `server/` patterns (FastAPI/async pipeline, Influx sink, status shape) by COPYING into `backend/` — never edit the `server/` reference to make new code work.
+- **Packaging is lean** (size goal): minimal runtime deps; no pandas/numpy in the desktop build (heavy analytics are server-only optional extras). Compile with **Nuitka** (`--standalone`, `--onefile` where it helps) to a native binary that bundles the nanobind `can_engine` module; prefer Nuitka over PyInstaller for smaller, faster output.
+- One MDC load/validate path (reuse `Embedded-Sharepoint/can/mdc/lib`/schema); no duplicated parsing.
+- Leave it runnable: `uvicorn`/app boots, a smoke test exercises the WS envelope and one REST route.

@@ -1,193 +1,76 @@
-# Telemetry UI / CAN Parsing
+# CAN Platform
 
-This repository contains:
+Re-platform of the CAN ingest/decode/telemetry stack. Polyglot monorepo:
 
-- Python backend (`FastAPI` + `Socket.IO`) in `server/`
-- React + Vite frontend in `client/`
-- Optional Grafana/Influx stack in `grafana/`
+| Dir | Stack | What it is |
+|-----|-------|------------|
+| `engine/` | C++20 (CMake + vcpkg, nanobind) | Hot-path ingest + MDC decode, exposed to Python as the `can_engine` module. No HTTP, no sinks. |
+| `backend/` | Python 3.11 (FastAPI) | REST/WS API + sinks (Influx/SQLite/file); wraps the C++ engine. Runs as a Tauri sidecar or headless server. |
+| `app/` | Tauri 2 + React + Vite 8 | Desktop app and (same build) the browser UI served by the backend. |
+| `Embedded-Sharepoint/can/mdc/` | JSON Schema + Node ESM | The MDC protocol — schema + `lib/` + `tools/` (`bundle`, `validate`, `dbc2mdc`, `mdc2cheaders`); the decode contract (git submodule). |
+| `Embedded-Sharepoint/can/vehicles/` | DBC + JSON | Per-vehicle DBCs + MDC projects (submodule). |
+| `deploy/` | Docker Compose | Server stack: backend + Grafana + InfluxDB; `mdc2grafana.mjs` (dashboards from the MDC spec). |
 
-## Prerequisites
+See **`AGENTS.md`** for the architecture, the four contracts, and the orchestration model.
 
-- Python 3.10+
-- Node.js 18+
-- Docker + Docker Compose (for Grafana/Influx)
-
-## Quick Start (Dev)
-
-### macOS / Linux
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r server/requirements.txt
-npm --prefix client install
-npm run dev
-```
-
-### Windows (PowerShell)
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r server/requirements.txt
-npm --prefix client install
-npm run dev
-```
-
-`npm run dev` starts both backend (`:4000`) and frontend (`:3001`) using `scripts/dev.py`.
-
-## Individual Dev Commands
-
-- Backend only: `npm run dev:backend`
-- Frontend only: `npm run dev:frontend`
-
-## Start Grafana + InfluxDB
+## Build / run
 
 ```bash
-cd grafana
-docker compose up -d
-docker compose restart grafana
-cd ..
+# Engine (C++ module + tests)
+cmake -S engine -B engine/build && cmake --build engine/build && ctest --test-dir engine/build
+
+# Backend (Python API; needs the can_engine module on PYTHONPATH)
+python -m venv backend/.venv && backend/.venv/bin/pip install -e "backend[dev]"
+backend/.venv/bin/pytest backend/tests
+backend/.venv/bin/python backend_sidecar.py          # serve API on 127.0.0.1:8350
+
+# App (desktop / web UI)
+npm --prefix app install && npm --prefix app run dev
+
+# MDC tools
+npm --prefix Embedded-Sharepoint/can/mdc install && npm --prefix Embedded-Sharepoint/can/mdc run validate
+
+# Server stack
+docker compose -f deploy/docker-compose.yml up -d
 ```
 
-## Production-Like Backend Run
+## Build into one desktop app
 
-### macOS / Linux
+The engine, Python backend, and Tauri frontend ship as a **single native app**: Tauri
+bundles the React UI + a self-contained backend binary, and spawns that binary as a
+sidecar at runtime. The sidecar has the C++ engine compiled into it, so the installer is
+the only thing a user needs.
+
+```
+C++ engine ──cmake──▶ can_engine*.so
+                          │  (--include-module)
+Python backend ─Nuitka─▶ backend-<triple>   (one binary: API + engine + schemas)
+                          │  (tauri externalBin)
+React UI ──vite──▶ dist ──┴─tauri build─▶ installer (.dmg/.app, .msi/.exe, .deb/.AppImage)
+```
+
+One command (chains all three stages):
 
 ```bash
-python3 scripts/run_backend.py --host 0.0.0.0 --port 4000
+./scripts/build-app.sh
 ```
 
-### Windows
+Prerequisites: `cmake` + a C++20 compiler, `backend/.venv` with `pip install -e "backend" "nuitka[onefile]" ordered-set`, Node 20+, and the **Rust toolchain** (`rustup`, required by Tauri). Output lands in `app/src-tauri/target/release/bundle/`.
 
-```powershell
-python .\scripts\run_backend.py --host 0.0.0.0 --port 4000
-```
-
-## Build Frontend (Website Artifact)
+Stages individually, if you need them:
 
 ```bash
-npm run build:frontend
+cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release && cmake --build engine/build  # 1
+backend/.venv/bin/python backend/build_sidecar.py                                          # 2
+npm --prefix app run tauri build                                                           # 3
 ```
 
-Output: `client/dist/` (deploy this folder to your website host).
+## Canonical build/dep locations
 
-### Auto-deploy to GitHub Pages
+One home per concern — do not recreate these at the repo root (all git-ignored):
 
-This repo includes `.github/workflows/deploy-frontend-pages.yml` to build and deploy the frontend automatically.
-
-- Trigger: push to `main` (or manual workflow dispatch)
-- Deploy target: GitHub Pages
-- Build base path: `/<repo-name>/` (project pages compatible)
-
-Set these **Repository Variables** (optional but recommended) before deploying:
-
-- `VITE_API_BASE_URL` (public backend API URL)
-- `VITE_SOCKET_URL` (public Socket.IO URL, optional)
-- `VITE_BACKEND_DOWNLOAD_URL` (URL for backend executable download button)
-
-GitHub settings needed:
-
-- `Settings -> Pages -> Source`: **GitHub Actions**
-
-### Frontend Environment
-
-Copy `client/.env.example` to `client/.env` (or set vars in CI):
-
-- `VITE_API_BASE_URL`: backend API base URL (for hosted frontend)
-- `VITE_SOCKET_URL`: optional Socket.IO URL override
-- `VITE_BACKEND_DOWNLOAD_URL`: executable download URL shown when backend is offline
-
-## Build Backend Executable (Python Backend Only)
-
-Backend executable packaging is provided by `PyInstaller` and intentionally excludes the frontend.
-
-Install PyInstaller once:
-
-```bash
-python -m pip install pyinstaller
-```
-
-Build:
-
-```bash
-npm run build:backend
-```
-
-Outputs:
-
-- raw build: `dist/telemetry-backend` (or `.exe` on Windows)
-- distributable copy: `artifacts/backend/<platform-arch>/`
-- GitHub-release asset zip: `artifacts/release/<release-name>/electron-grafana-backend-<release-name>-<platform-arch>.zip`
-
-Build on each target OS you need (Windows binary must be built on Windows; macOS binary on macOS).
-
-### Build macOS + Windows together
-
-Local cross-compiling is not supported by PyInstaller. To build both at once, use GitHub Actions:
-
-1. Create/publish a GitHub Release (tag like `v1.2.0`) **or** run workflow dispatch.
-2. Workflow `.github/workflows/release-backend.yml` builds on `macos-latest` and `windows-latest` in parallel.
-3. On release events, both `.zip` files are uploaded automatically as release assets.
-4. Windows builds are usually slower than macOS (PyInstaller analysis); workflow enables pip caching to reduce setup time.
-
-You can also build a named local release package:
-
-```bash
-node scripts/run-python.js scripts/build_backend.py --release-name v1.2.0
-```
-
-## Data Paths (Dev vs Executable)
-
-In normal source/dev mode, defaults remain project-local:
-
-- `dbc/`
-- `logs/`
-- `.trash/`
-
-In packaged executable mode, defaults move to a user workspace:
-
-- Windows: `~/Documents/Electron`
-- macOS: `~/Documents/Electron`
-- Linux: `~/Documents/Electron`
-
-On first run the backend bootstraps this folder and logs setup progress in terminal:
-
-- creates `dbc/`, `logs/`, `.trash/`
-- initializes `Embedded-Sharepoint/`
-  - copies bundled data when present
-  - or clones from `EMBEDDED_SHAREPOINT_GIT_URL` when configured
-  - or falls back to an empty scaffold with error logs
-
-You can override with:
-
-- `APP_DATA_DIR`
-- `DBC_DIR`
-- `LOG_DIR`
-- `TRASH_DIR`
-- `ELECTRON_HOME`
-- `FORCE_USER_WORKSPACE`
-- `EMBEDDED_SHAREPOINT_DIR`
-- `EMBEDDED_SHAREPOINT_GIT_URL`
-
-## Backend / Frontend Deployment Pattern
-
-- Deploy `client/dist` to your website host.
-- Or use GitHub Actions Pages deployment workflow for automatic frontend deploys.
-- Distribute backend executable separately (downloads/releases/internal portal).
-- Set `VITE_BACKEND_DOWNLOAD_URL` in frontend deployment.
-- When frontend cannot connect to backend, UI shows a **Download backend** button.
-
-## Access (Local)
-
-- Frontend dev UI: `http://localhost:3001`
-- Backend API/socket: `http://localhost:4000`
-- Grafana: `http://localhost:3000`
-- InfluxDB: `http://localhost:8086`
-
-## Optional Backend Runtime Vars
-
-- `SERVE_STATIC_CLIENT=1|0`: backend serves `client/dist` when available
-- `CORS_ORIGINS`: comma-separated HTTP CORS origins (default `*`)
-- `SOCKET_CORS_ORIGINS`: comma-separated Socket.IO origins (default falls back to `CORS_ORIGINS`)
-
+- Python env → `backend/.venv`
+- JS deps → `app/node_modules`, `Embedded-Sharepoint/can/mdc/node_modules`
+- C++ build → `engine/build`
+- App build output → `app/dist`, Tauri → `app/src-tauri/target`
+- Knowledge graph → `graphify-out/`

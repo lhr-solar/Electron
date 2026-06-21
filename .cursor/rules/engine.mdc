@@ -1,0 +1,12 @@
+---
+description: C++20 ingest/decode engine standards
+globs: engine/**
+---
+- C++20, CMake + vcpkg. The engine is **ingest + process ONLY**: sources, `TelemetryBus`, MDC-driven decode. **No HTTP/WS server in C++** (the Python `backend/` owns the API). No Drogon.
+- The engine is exposed to Python via a **nanobind** in-process binding (`engine/binding/`). Build a Python extension module + an `EngineHandle` facade (start/stop, poll decoded batches with the GIL released, status, load config, load MDC). Honor the binding API contract in `AGENTS.md`.
+- ONE `TelemetryBus` interface (in-proc MPSC default; NATS optional plug-in, never a hard dep). ONE `ISource` interface + `SourceRegistry` factory.
+- No allocations or copies on the per-frame decode hot path. Pre-size buffers; pass spans/views; avoid locks where a lock-free/queue handoff works.
+- Sources and the decoder are independent modules behind interfaces. Adding one must not touch the others. **Sinks live in the Python backend**, not here.
+- The decoder is driven entirely by the MDC spec — no hardcoded message/signal layouts. Supports array/indexed messages and per-message `transmissionType`.
+- Expose seams for unit tests; keep functions small. Reuse the v3 shapes called out in the plan (`ISource` mirrors `_Parser`, live batch payload shape) instead of inventing new ones.
+- Keep the compiled module SMALL (packaging goal): minimal deps, no server framework, prefer stdlib.

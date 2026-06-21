@@ -1,26 +1,49 @@
+# OS / editor
+.DS_Store
 .idea
 */.idea
-build/
-artifacts/
-*.spec
-logs
-**/__pycache__
-*/venv
-data/
 
-# Vite
+# Python
+**/__pycache__
+*.pyc
+.venv/
+.venv*/
+*/venv
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.spec
+
+# Node / Vite
+node_modules/
 .vite
 dist
+
+# Rust / Tauri (generated build output + compiled sidecar binary)
+app/src-tauri/target/
+app/src-tauri/binaries/
+
+# C++ / CMake build trees (incl. stale build-vcpkg/build-nodeps + Nuitka output under build/)
+build/
+build-*/
+
+# Graphify knowledge graph (generated, can be large)
+graphify-out/
+.graphify/
+
+# Runtime / data / logs
+logs
+data/
+test_data
+artifacts/
+.trash/
+
+# Secrets / env
+.env
 .env.local
 .env.*.local
-.env
 
-grafana/**/
-!grafana/*
-grafana/provisions/datasources
-!grafana/provisions
+electron-agent-vault
 
-test_data
-.trash
-
-.DS_Store
+.cursor/plans

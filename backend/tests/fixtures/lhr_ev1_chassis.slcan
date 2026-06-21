@@ -1,0 +1,4 @@
+# Deterministic lhr-ev1 chassis frames (from engine/decode/DecoderTest.cpp).
+# Format: slcan classic CAN (t<id><dlc><data>).
+t600800E83500000000000
+t60080100010000000000

@@ -1,0 +1,11 @@
+---
+description: Global engineering standards for all agents on the CAN telemetry re-platform
+alwaysApply: true
+---
+Project-specific standards (generic coding behavior: `ponytail.mdc` + `karpathy-guidelines.mdc`):
+
+- Honor the three contracts and never silently redefine them: `Embedded-Sharepoint/can/mdc/schema/mdc.schema.bundle.json`, the REST/WS API (mirrors `live_message_batch` + `status`), and `engine/config.schema.json`. See root `AGENTS.md`.
+- Repo layout: `engine/` (C++20 ingest/decode + nanobind binding), `backend/` (Python REST/WS API + sinks, wraps the engine module), `app/` (Tauri 2 + React/Vite), `Embedded-Sharepoint/can/{mdc,tools}/` (MDC schema + tooling via submodule, branch `custom_mdc`), `deploy/` (server stack). The old Python stack (`server/`, `client/`, `grafana/`) has been removed — recover patterns from git history if needed.
+- Frontend builds on Vite 8 (Rolldown, Rust) — see `app.mdc`.
+- Leave each change building/passing. Don't move to the next step on a broken build.
+- **Orchestration:** see `orchestration.mdc` — fan out parallel Task subagents in one message; never serialize independent builders or reviewers.

@@ -1,0 +1,10 @@
+---
+description: Tauri 2 + React/Vite app standards (dual-delivery)
+globs: app/**
+---
+- Tauri 2 + React 19 + Vite 8 (Rolldown) + Mantine. REQUIRED: Vite 8; both dev and production builds must work.
+- **DUAL DELIVERY — one build, two runtimes:** the same Vite build runs (a) inside **Tauri** (desktop / user side, assets bundled) and (b) **served as a static site by the Python backend** in server mode (browser / server→client). Therefore Tauri-only APIs (sidecar spawn, shell, fs) MUST be feature-detected (`window.__TAURI__`) and degrade gracefully — never hard-require Tauri at runtime. The browser build talks to the server over the network; the desktop build talks to the local sidecar.
+- The UI is a pure WS/REST client of the **Python backend** per `backend/API_CONTRACT.md` — never assume the engine's internal language or reach into internals.
+- **Role-aware + same viewports both modes:** identical telemetry/analytics/signal/mdc-editor viewports in desktop AND server-served browser. The UI exposes ALL controls for BOTH sides: source config (incl. the server TCP slcan listener), sinks, start/stop, role (desktop|server), and the Grafana link.
+- Tesla dark-only theme: extend the existing `#0a0a0b` zinc palette from `client/src/App.jsx`. No light mode.
+- Structure under `src/workspaces/{telemetry,analytics,mdc-editor}`. Small reusable components; shared hooks for WS/state. Drive the MDC editor + viz off `Embedded-Sharepoint/can/mdc/schema/mdc.schema.bundle.json`. Vite alias `@mdc-lib` → `Embedded-Sharepoint/can/mdc/lib` (see `app/vite.config.js`).

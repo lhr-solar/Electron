@@ -1,0 +1,5 @@
+# Deterministic lhr-ev1 powertrain frames (from engine/decode/DecoderTest.cpp).
+# Format: slcan CAN-FD (d<id><dlc-code><data>).
+d100A8C9BCEFF644112000000000000000000
+d2008E8036402D20400000000
+d1018058890460000000000
