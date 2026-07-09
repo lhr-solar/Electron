@@ -32,8 +32,14 @@ services:
       GF_DEFAULT_USER_NAME: Solar
       GF_DEFAULT_USER_EMAIL: solar@localhost
       GF_DEFAULT_USER_ROLE: Viewer
-      GF_SERVER_ROOT_URL: http://localhost:4000/grafana/
+      # Public URL is set by the Electron reverse proxy Host/Origin; keep a
+      # sensible default for local access and trust tunnel + LAN hosts for CSRF.
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-https://electron.lhrsolar.org/grafana/}
+      GF_SERVER_DOMAIN: ${GF_SERVER_DOMAIN:-electron.lhrsolar.org}
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      # Hostnames only (no scheme). Fixes "origin not allowed" behind Electron proxy.
+      GF_SECURITY_CSRF_TRUSTED_ORIGINS: ${GF_SECURITY_CSRF_TRUSTED_ORIGINS:-electron.lhrsolar.org,192.168.1.137,localhost,127.0.0.1}
+      GF_SECURITY_CSRF_ADDITIONAL_HEADERS: X-Forwarded-Host
       # Auto configure Grafana InfluxDB datasource
       GF_PROVISIONING_ENABLED: "true"
       # Realtime dashboards: allow 0.5s auto-refresh

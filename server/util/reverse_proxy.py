@@ -124,6 +124,12 @@ def _filtered_request_headers(request: Request) -> dict[str, str]:
         if lower == "host":
             continue
         headers[key] = value
+    # Preserve browser Host for Grafana CSRF (compares Origin vs Host / X-Forwarded-Host).
+    client_host = request.headers.get("host")
+    if client_host and "x-forwarded-host" not in {k.lower() for k in headers}:
+        headers["X-Forwarded-Host"] = client_host
+    if request.url.scheme and "x-forwarded-proto" not in {k.lower() for k in headers}:
+        headers["X-Forwarded-Proto"] = request.url.scheme
     return headers
 
 
