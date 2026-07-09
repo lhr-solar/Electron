@@ -51,7 +51,6 @@ class EventRecorder:
         self._canp_event_start_device_ms: int | None = None
         self._canp_event_host_start_ns: int | None = None
         self.event_bucket_names: set[str] = set()
-        self._pending_canp_chunk: bytes | None = None
         self._influx_client = None
 
     def set_influx_client(self, client) -> None:
@@ -86,6 +85,10 @@ class EventRecorder:
     def list_events(self) -> list[dict]:
         with self._lock:
             return list(reversed(self._events))
+
+    def get_current_event(self) -> dict | None:
+        with self._lock:
+            return dict(self._current) if self._current else None
 
     def delete_events(self, event_ids: list[str]) -> list[str]:
         """Remove local events by id. Deletes capture files when present. Returns deleted ids."""
@@ -179,18 +182,13 @@ class EventRecorder:
         with self._lock:
             self._close_current_event(time.time(), reason="stop")
 
-    def note_canp_chunk(self, chunk: bytes) -> None:
+    def note_canp_chunk(self, chunk: bytes, *, device_batch_ms: int | None = None) -> None:
+        """Append raw CANP TCP bytes to the current .canp capture immediately.
+
+        Independent of Influx connectivity / write enable / DBC decode success.
+        """
         if self.input_mode != "canp_tcp" or not chunk:
             return
-        self._pending_canp_chunk = chunk
-
-    def note_packet(
-        self,
-        slcan: str,
-        *,
-        device_batch_ms: int | None = None,
-    ) -> int | None:
-        """Record packet; returns device_time_ns for Influx when available."""
         now = time.time()
         with self._lock:
             if self._last_packet_at is not None and (now - self._last_packet_at) >= self.gap_sec:
@@ -198,17 +196,44 @@ class EventRecorder:
             if self._current is None:
                 self._open_new_event(now, device_start_ms=device_batch_ms)
             self._last_packet_at = now
+            self._write_canp_chunk(chunk)
+
+    def note_packet(
+        self,
+        slcan: str,
+        *,
+        device_batch_ms: int | None = None,
+    ) -> int | None:
+        """Record packet; returns device_time_ns for Influx when available.
+
+        For canp_tcp, wire bytes are already written in note_canp_chunk(); this
+        only maintains run timing / gap rotation for decode-side timestamps.
+        """
+        now = time.time()
+        with self._lock:
             if self.input_mode == "canp_tcp":
-                if self._pending_canp_chunk:
-                    self._write_canp_chunk(self._pending_canp_chunk)
-                    self._pending_canp_chunk = None
-            else:
-                self._write_slcan(slcan)
+                # Capture already handled on the TCP read path.
+                if self._current is None:
+                    self._open_new_event(now, device_start_ms=device_batch_ms)
+                self._last_packet_at = now
+                return self._device_time_ns(device_batch_ms)
+
+            if self._last_packet_at is not None and (now - self._last_packet_at) >= self.gap_sec:
+                self._close_current_event(self._last_packet_at, reason="gap")
+            if self._current is None:
+                self._open_new_event(now, device_start_ms=device_batch_ms)
+            self._last_packet_at = now
+            self._write_slcan(slcan)
         return self._device_time_ns(device_batch_ms)
 
     def _write_canp_chunk(self, chunk: bytes) -> None:
-        if self._current_file:
-            self._current_file.write(chunk)
+        if not self._current_file:
+            return
+        self._current_file.write(chunk)
+        try:
+            self._current_file.flush()
+        except Exception:
+            pass
 
     def _write_slcan(self, slcan: str) -> None:
         if not self._current_file:

@@ -63,9 +63,16 @@ class CanpTcpParser(_Parser):
                         self.connection_state = False
                         break
                     from server.services.telemetry import telemetry_service
+                    # Log every wire chunk immediately — before decode / Influx.
+                    first_batch_ms = None
+                    packets = list(stream.feed_packets(chunk))
+                    if packets:
+                        first_batch_ms = packets[0][3]
                     if telemetry_service.event_recorder:
-                        telemetry_service.event_recorder.note_canp_chunk(chunk)
-                    for can_id, dlc, data, batch_ts_ms in stream.feed_packets(chunk):
+                        telemetry_service.event_recorder.note_canp_chunk(
+                            chunk, device_batch_ms=first_batch_ms
+                        )
+                    for can_id, dlc, data, batch_ts_ms in packets:
                         line = self._packet_to_slcan(can_id, dlc, data)
                         if line:
                             await self.queue.put(

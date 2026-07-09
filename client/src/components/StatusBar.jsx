@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { BorderBeam } from '@/components/ui/border-beam';
 import { cn } from '@/lib/utils';
 import { socket } from '../socket';
@@ -20,12 +18,19 @@ const SIGNAL_HEX = {
 const DEFAULT_STATUS = {
   service_running: false,
   influx_connected: false,
+  influx_write_configured: true,
+  influx_write_enabled: false,
   grafana_active: false,
   parser_status: 'idle',
   parser_connection_state: null,
   data_active: false,
   vehicle: '',
   adapter: null,
+  dbc_files: [],
+  dbc_errors: [],
+  influx_bucket: '',
+  current_run: null,
+  error_message: null,
 };
 
 function adapterEquals(a, b) {
@@ -34,18 +39,36 @@ function adapterEquals(a, b) {
   return a.mode === b.mode && a.label === b.label && a.detail === b.detail;
 }
 
+function runEquals(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.id === b.id &&
+    a.display_name === b.display_name &&
+    a.dump_file === b.dump_file &&
+    a.start_time_iso === b.start_time_iso
+  );
+}
+
 function statusEquals(a, b) {
   if (a === b) return true;
   if (!a || !b) return false;
   return (
     a.service_running === b.service_running &&
     a.influx_connected === b.influx_connected &&
+    a.influx_write_configured === b.influx_write_configured &&
+    a.influx_write_enabled === b.influx_write_enabled &&
     a.grafana_active === b.grafana_active &&
     a.parser_status === b.parser_status &&
     a.parser_connection_state === b.parser_connection_state &&
     a.data_active === b.data_active &&
     a.vehicle === b.vehicle &&
-    adapterEquals(a.adapter, b.adapter)
+    a.influx_bucket === b.influx_bucket &&
+    a.error_message === b.error_message &&
+    adapterEquals(a.adapter, b.adapter) &&
+    runEquals(a.current_run, b.current_run) &&
+    JSON.stringify(a.dbc_files || []) === JSON.stringify(b.dbc_files || []) &&
+    JSON.stringify(a.dbc_errors || []) === JSON.stringify(b.dbc_errors || [])
   );
 }
 
@@ -183,82 +206,6 @@ function StatusSegment({ label, value, tone, title, pulse = false }) {
   );
 }
 
-function InfoRow({ label, value }) {
-  return (
-    <div className="grid grid-cols-[72px_1fr] items-baseline gap-2">
-      <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-        {label}
-      </span>
-      <span className="truncate text-[12px] font-medium text-foreground" title={value || undefined}>
-        {value || '—'}
-      </span>
-    </div>
-  );
-}
-
-function adapterDetailLabel(mode) {
-  switch (mode) {
-    case 'serial_canadapter':
-    case 'serial_uart':
-      return 'Port';
-    case 'pcan':
-      return 'PCAN';
-    case 'tcp':
-      return 'TCP';
-    case 'canp_tcp':
-      return 'CANP';
-    case 'file':
-      return 'File';
-    default:
-      return 'Detail';
-  }
-}
-
-function SessionInfoButton({ active, vehicle, adapterInfo }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <Popover open={open} onOpenChange={(next) => active && setOpen(next)}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              aria-label="Session info"
-              disabled={!active}
-              className={cn(
-                'flex h-full shrink-0 items-center px-2.5 outline-none transition-colors',
-                'focus-visible:ring-2 focus-visible:ring-ring/50',
-                active
-                  ? cn('text-muted-foreground hover:text-foreground', open && 'text-foreground')
-                  : 'cursor-not-allowed text-muted-foreground/45'
-              )}
-            >
-              <Info size={15} strokeWidth={2} className="shrink-0" />
-            </button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          {active ? 'Session info' : 'Start the service to view session info'}
-        </TooltipContent>
-      </Tooltip>
-      {active && (
-        <PopoverContent side="bottom" align="end" className="w-64 space-y-2.5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-            Session
-          </div>
-          <InfoRow label="Vehicle" value={vehicle} />
-          <InfoRow label="Adapter" value={adapterInfo?.label} />
-          <InfoRow
-            label={adapterDetailLabel(adapterInfo?.mode)}
-            value={adapterInfo?.detail}
-          />
-        </PopoverContent>
-      )}
-    </Popover>
-  );
-}
-
 export function StatusBar() {
   const { backendConnected, status, adapter, data } = useTelemetryStatus();
   const reduceMotion = useReducedMotion();
@@ -266,7 +213,6 @@ export function StatusBar() {
   const serverTone = backendConnected ? 'green' : 'red';
   const runningTone = !backendConnected ? 'gray' : status.service_running ? 'green' : 'gray';
   const dataIncoming = data.tone === 'green' && data.label === 'incoming';
-  const infoActive = backendConnected && status.service_running;
 
   const segments = [
     {
@@ -299,21 +245,14 @@ export function StatusBar() {
   return (
     <div
       className={cn(
-        'relative flex h-8 max-w-full items-center rounded-lg border border-border bg-card/70 backdrop-blur-sm',
+        'relative flex h-8 max-w-full items-center overflow-hidden rounded-lg border border-border bg-card/70 backdrop-blur-sm',
         backendConnected ? 'border-border' : 'border-signal-red/40'
       )}
     >
-      <div className="flex h-full min-w-0 flex-1 items-center divide-x divide-border overflow-x-auto overflow-y-visible">
+      <div className="flex h-full min-w-0 flex-1 items-center divide-x divide-border overflow-x-auto">
         {segments.map((seg) => (
           <StatusSegment key={seg.label} {...seg} />
         ))}
-      </div>
-      <div className="flex h-full shrink-0 items-center border-l border-border">
-        <SessionInfoButton
-          active={infoActive}
-          vehicle={status.vehicle}
-          adapterInfo={status.adapter}
-        />
       </div>
       {dataIncoming && !reduceMotion && (
         <BorderBeam size={70} duration={5} colorFrom="#22e39b" colorTo="#22d3ee" borderWidth={1.5} />

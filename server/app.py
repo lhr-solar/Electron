@@ -265,10 +265,22 @@ def _adapter_status_info():
 async def build_status_payload(force_health_refresh: bool = False):
     parser_status = telemetry_service.get_parser_status()
     influx_connected, grafana_active = await _get_cached_health(force_refresh=force_health_refresh)
+    write_configured = bool(settings.COMMON_CONFIG.get("INFLUX_WRITE_ENABLED", True))
+    current_run = None
+    recorder = getattr(telemetry_service, "event_recorder", None)
+    if recorder is not None:
+        try:
+            current_run = recorder.get_current_event()
+        except Exception:
+            current_run = None
+    dbc_files = settings.COMMON_CONFIG.get("DBC_FILES") or []
+    if not isinstance(dbc_files, list):
+        dbc_files = [f for f in str(dbc_files).split(",") if f.strip()]
     return {
         "service_running": telemetry_service.running,
         "influx_connected": influx_connected,
-        "influx_write_enabled": settings.COMMON_CONFIG.get("INFLUX_WRITE_ENABLED", True) and influx_connected,
+        "influx_write_configured": write_configured,
+        "influx_write_enabled": write_configured and influx_connected,
         "grafana_active": grafana_active,
         "grafana_url": "/grafana/",
         "influx_url": "/influx/",
@@ -279,7 +291,9 @@ async def build_status_payload(force_health_refresh: bool = False):
         "dbc_errors": telemetry_service.get_dbc_errors(),
         "influx_bucket": settings.get_bucket(),
         "vehicle": settings.COMMON_CONFIG.get("DBC_VEHICLE", ""),
+        "dbc_files": dbc_files,
         "adapter": _adapter_status_info(),
+        "current_run": current_run,
     }
 
 async def emit_status_update(force_health_refresh: bool = False, to: str | None = None):

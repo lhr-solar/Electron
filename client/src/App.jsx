@@ -7,7 +7,7 @@ import {
   PanelRightOpen,
   PanelRightClose,
   LineChart,
-  ScrollText,
+  Info,
   Lock,
   Atom,
   Home,
@@ -19,6 +19,7 @@ import { SignalDashboard } from './components/SignalDashboard';
 import { DbcViewer } from './components/DbcViewer';
 import { Analytics } from './components/Analytics';
 import { StatusBar } from './components/StatusBar';
+import { ServerInfoPanel } from './components/ServerInfoPanel';
 import { DatabaseManagementModal } from './components/DatabaseManagementModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +29,7 @@ import { socket } from './socket';
 import { apiJson, clearManageToken, setManageToken } from './lib/api';
 
 const CLIENT_DEFAULT_PAGE = 'control';
-const SERVER_VIEWER_DEFAULT = 'live-log';
+const SERVER_VIEWER_DEFAULT = 'info';
 
 const CLIENT_PAGES = [
   { id: 'control', label: 'Config', icon: Settings },
@@ -38,7 +39,7 @@ const CLIENT_PAGES = [
 ];
 
 const SERVER_VIEWER_PAGES = [
-  { id: 'live-log', label: 'Live Log', icon: ScrollText },
+  { id: 'info', label: 'Info', icon: Info },
   { id: 'dashboard', label: 'Signals', icon: LayoutDashboard },
   { id: 'analytics', label: 'Analytics', icon: LineChart },
   { id: 'dbc-viewer', label: 'DBC Viewer', icon: FileText },
@@ -209,22 +210,24 @@ function ClientApp() {
   );
 }
 
+function resolveServerViewerPage(raw) {
+  const p = raw === 'live-log' ? 'info' : raw;
+  return SERVER_VIEWER_PAGES.some((t) => t.id === p) ? p : SERVER_VIEWER_DEFAULT;
+}
+
 function ServerViewerApp() {
-  const [page, setPage] = useState(() => {
-    const p = getHashPage(SERVER_VIEWER_DEFAULT);
-    return SERVER_VIEWER_PAGES.some((t) => t.id === p) ? p : SERVER_VIEWER_DEFAULT;
-  });
+  const [page, setPage] = useState(() => resolveServerViewerPage(getHashPage(SERVER_VIEWER_DEFAULT)));
   const [sideLogOpen, setSideLogOpen] = useState(false);
   const [runsOpen, setRunsOpen] = useState(false);
   const [vehicle, setVehicle] = useState('HighNoon');
 
   useEffect(() => {
     const onHashChange = () => {
-      const p = getHashPage(SERVER_VIEWER_DEFAULT);
-      setPage(SERVER_VIEWER_PAGES.some((t) => t.id === p) ? p : SERVER_VIEWER_DEFAULT);
+      setPage(resolveServerViewerPage(getHashPage(SERVER_VIEWER_DEFAULT)));
     };
     window.addEventListener('hashchange', onHashChange);
-    if (!window.location.hash) window.location.hash = SERVER_VIEWER_DEFAULT;
+    const current = window.location.hash.replace('#', '');
+    if (!current || current === 'live-log') window.location.hash = SERVER_VIEWER_DEFAULT;
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
@@ -278,8 +281,17 @@ function ServerViewerApp() {
         canDeleteRuns={false}
         eventsOnly
       />
-      <div className="min-h-0 flex-1" style={{ display: page === 'live-log' ? 'flex' : 'none' }}>
-        {page === 'live-log' ? <LiveMessageLog variant="stage" /> : null}
+      <div className="min-h-0 flex-1" style={{ display: page === 'info' ? 'flex' : 'none' }}>
+        {page === 'info' ? (
+          <div className="flex min-h-0 w-full flex-1 flex-col md:flex-row">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col border-b border-border md:border-b-0 md:border-r">
+              <LiveMessageLog variant="stage" />
+            </div>
+            <div className="flex min-h-0 w-full shrink-0 flex-col md:w-[380px] lg:w-[420px]">
+              <ServerInfoPanel />
+            </div>
+          </div>
+        ) : null}
       </div>
       {['dashboard', 'analytics', 'dbc-viewer'].map((id) => {
         const Component = id === 'dashboard' ? SignalDashboard : id === 'analytics' ? Analytics : DbcViewer;

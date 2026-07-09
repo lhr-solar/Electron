@@ -261,11 +261,19 @@ class TelemetryService:
         if self.influx_writer:
             self.influx_writer.close()
 
+        # Always close/persist event captures (.canp/.txt), even when Influx writes are off.
         if self.event_recorder:
-            if influx_client and had_influx_writer:
-                self.event_recorder.finalize_with_influx(influx_client)
-            else:
-                self.event_recorder.close_all()
+            try:
+                if influx_client:
+                    self.event_recorder.finalize_with_influx(influx_client)
+                else:
+                    self.event_recorder.close_all()
+            except Exception:
+                logger.exception("Failed to finalize event recorder; forcing close_all.")
+                try:
+                    self.event_recorder.close_all()
+                except Exception:
+                    pass
             self.event_recorder = None
         
         self.running = False
