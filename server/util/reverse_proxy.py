@@ -30,7 +30,13 @@ INFLUX_UPSTREAM = str(settings.INFLUX_CONFIG.get("INFLUX_URL", "http://localhost
 GRAFANA_PUBLIC_PREFIX = "/grafana"
 INFLUX_PUBLIC_PREFIX = "/influx"
 
-_REWRITE_CONTENT_TYPES = ("text/html", "application/javascript", "text/javascript", "text/css")
+_REWRITE_CONTENT_TYPES = (
+    "text/html",
+    "application/javascript",
+    "text/javascript",
+    "text/css",
+    "application/json",
+)
 
 
 def _disconnected_page(title: str, service: str, hint: str) -> str:
@@ -178,28 +184,42 @@ def _rewrite_body_paths(content: bytes, public_prefix: str) -> bytes:
         text,
     )
     # API calls must stay under the proxy prefix, not the Electron /api routes.
+    # Also rewrite JSON-escaped forms (\/api\/v2\/...) from Influx API link fields.
     text = text.replace(f'{prefix}/api/', '\0INFLUX_API\0')
+    text = text.replace(f'{prefix}\\/api\\/', '\0INFLUX_API_ESC\0')
     text = text.replace('/api/', f'{prefix}/api/')
+    text = text.replace('\\/api\\/', f'{prefix}\\/api\\/')
     text = text.replace('\0INFLUX_API\0', f'{prefix}/api/')
+    text = text.replace('\0INFLUX_API_ESC\0', f'{prefix}\\/api\\/')
     return text.encode("utf-8")
 
 
 def _rewrite_set_cookie(value: str, public_prefix: str) -> str:
+    """Rewrite upstream cookies so the browser scopes them under /influx/.
+
+    Influx OSS sessions default to Path=/api/ and SameSite=Strict. Under the
+    Electron subpath proxy that becomes Path=/influx/api/; broaden to
+    Path=/influx/ and prefer Lax so session cookies survive normal navigations
+    (fixes Data Explorer 'Failed to load tag keys' after stale/mis-scoped auth).
+    """
     prefix = public_prefix.rstrip("/") or ""
     if not prefix:
         return value
+    # Path=/ so the session is sent for both /influx/* and bare /api/v2/*
+    # (Influx UI still issues some queries against /api/v2 without the subpath).
+    cookie_path = "/"
+
     if not re.search(r"(?i)Path=", value):
-        return f"{value}; Path={prefix}/"
+        value = f"{value}; Path={cookie_path}"
+    else:
+        value = re.sub(r"(?i)Path=([^;]*)", f"Path={cookie_path}", value, count=1)
 
-    def _rewrite_path(match: re.Match[str]) -> str:
-        path = match.group(1) or "/"
-        if path == prefix or path.startswith(prefix + "/"):
-            return f"Path={path}"
-        if path == "/":
-            return f"Path={prefix}/"
-        return f"Path={prefix}{path}"
-
-    return re.sub(r"(?i)Path=([^;]*)", _rewrite_path, value, count=1)
+    # SameSite=Strict can drop the session on some proxied navigations.
+    if re.search(r"(?i)SameSite=", value):
+        value = re.sub(r"(?i)SameSite=[^;]*", "SameSite=Lax", value, count=1)
+    else:
+        value = f"{value}; SameSite=Lax"
+    return value
 
 
 _CACHE_VALIDATOR_HEADERS = {

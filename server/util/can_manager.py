@@ -20,6 +20,7 @@ class CANManager:
         self.print_can_info = self.config.get("PRINT_CAN_INFO", False)
         self.influx_writer = influx_writer
         self.vehicle_name = self.config.get("DBC_VEHICLE", "unknown")
+        self.run_id: str | None = None  # set by processor for tcp/canp tagging
         self.load_errors = []
 
         self.db = cantools.database.Database()
@@ -164,18 +165,24 @@ class CANManager:
             self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet, ts)
             return {"can_id_hex": can_id_hex, "message_name": None, "sender": "Unknown", "network": "not_found", "vehicle": self.vehicle_name, "signals": {}}
 
+    def _base_tags(self, *, network: str, sender: str, message_name: str) -> dict:
+        tags = {
+            "vehicle": self.vehicle_name,
+            "network": network,
+            "sender": sender,
+            "message_name": message_name,
+        }
+        if self.run_id:
+            tags["run_id"] = self.run_id
+        return tags
+
     def _write_unknown_to_influx(self, arbitration_id, slcan_packet, timestamp_ns):
         """Write a not-found / decode-failed message to Influx with raw packet only."""
         if not self.influx_writer:
             return
         try:
             measurement = f"{arbitration_id:X}"
-            tags = {
-                "vehicle": self.vehicle_name,
-                "network": "not_found",
-                "sender": "Unknown",
-                "message_name": "not_found",
-            }
+            tags = self._base_tags(network="not_found", sender="Unknown", message_name="not_found")
             fields = {"raw_packet": slcan_packet}
             self.influx_writer.write_data(measurement, tags, fields, int(timestamp_ns))
         except Exception as e:
@@ -195,27 +202,20 @@ class CANManager:
             sender = self.id_map.get(arbitration_id, "Unknown")
             network = self.frame_id_to_network.get(arbitration_id, "unknown")
 
-            tags = {
-                "vehicle": self.vehicle_name,
-                "network": network,
-                "sender": sender,
-                "message_name": message_def.name,
-            }
+            tags = self._base_tags(network=network, sender=sender, message_name=message_def.name)
 
-            # Array messages: message has an index signal (e.g. cell index). When idx is valid we add it as a tag
-            # and omit the index signal from fields so each row is one logical element; when idx is invalid we
-            # write all signals and no idx tag.
+            # Array messages: index signal becomes the `idx` tag (never only a field).
+            # Valid idx (>= 0, including 0) → tag + omit from fields. Invalid → no idx tag;
+            # still omit the index signal from fields so it cannot appear as a field-only value.
             index_signal_name = self.array_messages.get(arbitration_id)
-            exclude_index_from_fields = False
             if index_signal_name is not None:
-                idx = decoded_msg.get(index_signal_name, -1)
+                raw_idx = decoded_msg.get(index_signal_name, -1)
                 try:
-                    idx = int(idx)
+                    idx = int(raw_idx)
                 except (TypeError, ValueError):
                     idx = -1
-                if idx != -1:
+                if idx >= 0:
                     tags["idx"] = str(idx)
-                    exclude_index_from_fields = True
 
             fields = {"raw_packet": slcan_packet}
 
@@ -225,7 +225,7 @@ class CANManager:
                 return str(value)
 
             for sig_name, sig_val in decoded_msg.items():
-                if exclude_index_from_fields and sig_name == index_signal_name:
+                if index_signal_name is not None and sig_name == index_signal_name:
                     continue
                 fields[sig_name] = convert_value(sig_val)
 

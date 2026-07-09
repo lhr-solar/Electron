@@ -37,6 +37,7 @@ async def process_packets(packet_queue, stop_event, can_manager, live_message_qu
                 computed = event_recorder.note_packet(slcan, device_batch_ms=device_batch_ms)
                 if computed is not None:
                     device_time_ns = computed
+                can_manager.run_id = event_recorder.current_run_id()
             elif device_batch_ms is not None:
                 device_time_ns = int(device_batch_ms * 1_000_000)
 

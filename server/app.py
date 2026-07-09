@@ -25,6 +25,21 @@ from server.services.telemetry import telemetry_service
 from server.util.influx_writer import InfluxDBWriter
 from server.util.analytics_buffer import analytics_buffer
 from server.util.analytics_validate import validate_views
+from server.util.time_markers import (
+    TIME_MARKERS_BUCKET,
+    create_marker as create_time_marker,
+    delete_markers as delete_time_markers,
+    ensure_bucket as ensure_time_markers_bucket,
+    is_protected_bucket as is_time_markers_bucket,
+    list_markers as list_time_markers,
+    rename_marker as rename_time_marker,
+    time_ns_now,
+)
+from server.util.events_bucket import (
+    EVENTS_BUCKET,
+    ensure_bucket as ensure_events_bucket,
+    is_protected_bucket as is_events_system_bucket,
+)
 from server.util.vehicle_dbc_resolve import (
     get_vehicle_folders,
     resolve_vehicle as _resolve_vehicle,
@@ -152,6 +167,31 @@ class DecodeCsvRequest(BaseModel):
 
 class DeleteEventsRequest(BaseModel):
     event_ids: list[str]
+
+
+class RenameEventRequest(BaseModel):
+    event_id: str
+    name: str
+
+
+class TimeMarkerCreate(BaseModel):
+    name: str | None = None
+    # Client click time (ns since epoch). Server fills if omitted.
+    time_ns: int | None = None
+
+
+class TimeMarkerRename(BaseModel):
+    name: str = ""
+    time_ns: int
+
+
+class TimeMarkerDeleteItem(BaseModel):
+    id: str
+    time_ns: int
+
+
+class TimeMarkerDeleteRequest(BaseModel):
+    markers: list[TimeMarkerDeleteItem]
 
 
 class AnalyticsValidateRequest(BaseModel):
@@ -366,8 +406,12 @@ async def _maybe_server_autostart():
     settings.update_setting("CANP_TCP_PORT", int(preset["port"]))
     settings.update_setting("DBC_VEHICLE", vehicle)
     settings.update_setting("DBC_FILES", dbc_files)
+    # Server mode always boots with Influx writes on → telemetry_main (canp_tcp default).
+    settings.update_setting("INFLUX_WRITE_ENABLED", True)
+    if not (settings.INFLUX_CONFIG.get("INFLUX_TELEMETRY_BUCKET") or "").strip():
+        settings.INFLUX_CONFIG["INFLUX_TELEMETRY_BUCKET"] = "telemetry_main"
     logger.info(
-        "Server auto-start: preset=%s (%s:%s) vehicle=%s dbcs=%d",
+        "Server auto-start: preset=%s (%s:%s) vehicle=%s dbcs=%d write=on",
         auto_id, preset["ip"], preset["port"], vehicle, len(dbc_files),
     )
 
@@ -381,7 +425,7 @@ async def _maybe_server_autostart():
     if not config:
         logger.error("Server auto-start: invalid effective config.")
         return
-    influx_write_enabled = config.get("INFLUX_WRITE_ENABLED", True)
+    influx_write_enabled = bool(config.get("INFLUX_WRITE_ENABLED", True))
     if influx_write_enabled and not influx_client:
         logger.warning("Server auto-start: InfluxDB not connected; starting without writes.")
         settings.update_setting("INFLUX_WRITE_ENABLED", False)
@@ -389,11 +433,16 @@ async def _maybe_server_autostart():
         config = settings.get_effective_config()
     writer: InfluxDBWriter | None = None
     if influx_write_enabled and influx_client:
-        target_bucket = config.get("INFLUX_BUCKET", "debug")
-        if not _is_event_bucket_name(target_bucket):
-            writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
-        else:
-            logger.warning("Server auto-start: refusing event bucket; starting without writes.")
+        target_bucket = config.get("INFLUX_BUCKET") or "telemetry_main"
+        if _is_system_or_legacy_event_bucket(target_bucket):
+            logger.warning(
+                "Server auto-start: bucket '%s' not writable for telemetry; using telemetry_main.",
+                target_bucket,
+            )
+            target_bucket = "telemetry_main"
+            settings.INFLUX_CONFIG["INFLUX_TELEMETRY_BUCKET"] = "telemetry_main"
+        writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
+        logger.info("Server auto-start: Influx writes enabled → bucket '%s'.", target_bucket)
     try:
         await telemetry_service.start(writer, sio=sio, influx_client=influx_client)
         logger.info("Server auto-start: telemetry service started.")
@@ -426,6 +475,10 @@ async def lifespan(app: FastAPI):
         if not ok:
             raise Exception("Ping failed")
         logger.info("InfluxDB connection successful.")
+        if ensure_time_markers_bucket(influx_client):
+            logger.info("Influx bucket '%s' ready.", TIME_MARKERS_BUCKET)
+        if ensure_events_bucket(influx_client):
+            logger.info("Influx bucket '%s' ready.", EVENTS_BUCKET)
     except Exception as e:
         logger.error(f"Failed to connect to InfluxDB on startup: {e}")
         influx_client = None
@@ -484,8 +537,11 @@ async def start_service():
     writer: InfluxDBWriter | None = None
     if influx_write_enabled:
         target_bucket = config.get("INFLUX_BUCKET", "debug")
-        if _is_event_bucket_name(target_bucket):
-            raise HTTPException(status_code=400, detail="Cannot write telemetry to an event metadata bucket. Choose a telemetry bucket in Database settings.")
+        if _is_system_or_legacy_event_bucket(target_bucket):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot write telemetry to a system/metadata bucket. Choose telemetry_main or a debug bucket.",
+            )
         writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
     await telemetry_service.start(writer, sio=sio, influx_client=influx_client)
     await emit_status_update(force_health_refresh=True)
@@ -512,8 +568,11 @@ async def restart_service():
     writer: InfluxDBWriter | None = None
     if influx_write_enabled:
         target_bucket = config.get("INFLUX_BUCKET", "debug")
-        if _is_event_bucket_name(target_bucket):
-            raise HTTPException(status_code=400, detail="Cannot write telemetry to an event metadata bucket. Choose a telemetry bucket in Database settings.")
+        if _is_system_or_legacy_event_bucket(target_bucket):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot write telemetry to a system/metadata bucket. Choose telemetry_main or a debug bucket.",
+            )
         writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
     await telemetry_service.start(writer, sio=sio, influx_client=influx_client)
     await emit_status_update(force_health_refresh=True)
@@ -886,19 +945,29 @@ async def get_dbc_schema(vehicle: str, filename: str):
         )
     return {"vehicle": vehicle, "filename": safe_name, "path": dbc_path, "messages": messages}
 
+def _is_system_bucket(name: str) -> bool:
+    return is_time_markers_bucket(name) or is_events_system_bucket(name)
+
+
 def _is_event_bucket_name(name: str) -> bool:
+    """True for the protected `events` bucket or legacy mistaken per-run buckets."""
+    if is_events_system_bucket(name):
+        return True
     index_path = os.path.join(settings.LOG_DIR, "events", "index.json")
-    if not os.path.isfile(index_path):
-        return False
-    try:
-        with open(index_path, encoding="utf-8") as f:
-            data = json.load(f)
-        for evt in data.get("events") or []:
-            if evt.get("bucket_name") == name:
-                return True
-    except Exception:
-        pass
-    return " - Run " in name
+    if os.path.isfile(index_path):
+        try:
+            with open(index_path, encoding="utf-8") as f:
+                data = json.load(f)
+            for evt in data.get("events") or []:
+                if evt.get("bucket_name") == name:
+                    return True
+        except Exception:
+            pass
+    return " - Run " in (name or "")
+
+
+def _is_system_or_legacy_event_bucket(name: str) -> bool:
+    return _is_system_bucket(name) or _is_event_bucket_name(name)
 
 
 @app.get("/api/events")
@@ -914,12 +983,71 @@ async def list_events():
         org = settings.INFLUX_CONFIG.get("INFLUX_ORG", "")
         influx_events = await asyncio.to_thread(list_recent_influx_events, influx_client, org)
     merged = merge_local_and_influx_events(local_events, influx_events)
+
+    # Prepend the live in-progress event (held only by the running recorder).
+    live = getattr(telemetry_service, "event_recorder", None)
+    current = None
+    if live is not None:
+        try:
+            current = live.get_current_event()
+        except Exception:
+            current = None
+    if current:
+        current = dict(current)
+        current["in_progress"] = True
+        current["source"] = "local"
+        keys = {current.get("uuid"), current.get("id"), current.get("bucket_name")} - {None, ""}
+        already = any(
+            (e.get("uuid") in keys or e.get("id") in keys or e.get("bucket_name") in keys)
+            for e in merged
+        )
+        if not already:
+            merged = [current] + merged
+
     return {
         "events": merged,
         "influx_connected": influx_connected,
         "local_count": len(local_events),
         "influx_count": len(influx_events),
     }
+
+
+@app.post("/api/events/rename")
+async def rename_event(body: RenameEventRequest):
+    """Rename an event (in-progress or past). Allowed for all users (not manage-gated)."""
+    from server.util.event_recorder import EventRecorder
+
+    event_id = (body.event_id or "").strip()
+    name = (body.name or "").strip()
+    if not event_id or not name:
+        raise HTTPException(status_code=400, detail="event_id and name required.")
+
+    live = getattr(telemetry_service, "event_recorder", None)
+    updated = None
+    # The in-progress event lives only in the running recorder.
+    if live is not None:
+        if influx_client is not None:
+            try:
+                live.set_influx_client(influx_client)
+            except Exception:
+                pass
+        updated = await asyncio.to_thread(live.rename_current, event_id, name)
+
+    # Otherwise rename a stored event in the on-disk index.
+    if updated is None:
+        recorder = EventRecorder(settings.LOG_DIR, settings.INPUT_MODE, settings.COMMON_CONFIG.get("DBC_VEHICLE", ""))
+        if influx_client is not None:
+            recorder.set_influx_client(influx_client)
+        updated = await asyncio.to_thread(recorder.rename_event, event_id, name)
+        if updated is not None and live is not None:
+            try:
+                live.reload_index()
+            except Exception:
+                pass
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Event not found.")
+    return {"event": updated}
 
 
 @app.post("/api/events/decode-csv")
@@ -971,20 +1099,49 @@ async def delete_events(body: DeleteEventsRequest):
 
     if not body.event_ids:
         raise HTTPException(status_code=400, detail="event_ids required.")
+
+    # Never delete the in-progress run.
+    live = getattr(telemetry_service, "event_recorder", None)
+    protected: set[str] = set()
+    current = None
+    if live is not None:
+        try:
+            current = live.get_current_event()
+        except Exception:
+            current = None
+    if current:
+        protected = {str(current.get(k) or "") for k in ("uuid", "id", "bucket_name")} - {""}
+    ids = [i for i in body.event_ids if str(i) not in protected]
+    skipped_current = len(body.event_ids) - len(ids)
+
     recorder = EventRecorder(settings.LOG_DIR, settings.INPUT_MODE, settings.COMMON_CONFIG.get("DBC_VEHICLE", ""))
-    deleted = await asyncio.to_thread(recorder.delete_events, body.event_ids)
-    return {"deleted": deleted, "count": len(deleted)}
+    deleted = await asyncio.to_thread(recorder.delete_events, ids) if ids else []
+    if deleted and live is not None:
+        try:
+            live.reload_index()
+        except Exception:
+            pass
+    return {"deleted": deleted, "count": len(deleted), "skipped_in_progress": skipped_current}
 
 
 @app.get("/api/influx/buckets")
 async def list_buckets():
     if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
     names = [b.name for b in influx_client.buckets_api().find_buckets().buckets]
-    return [{"name": n, "is_event": _is_event_bucket_name(n)} for n in sorted(names)]
+    return [
+        {
+            "name": n,
+            "is_event": _is_event_bucket_name(n),
+            "protected": _is_system_bucket(n),
+        }
+        for n in sorted(names)
+    ]
 
 @app.post("/api/influx/buckets")
 async def create_bucket(bucket: Bucket):
     if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    if _is_system_bucket(bucket.name):
+        raise HTTPException(status_code=403, detail=f"Bucket '{bucket.name}' is system-managed.")
     if _is_event_bucket_name(bucket.name):
         raise HTTPException(status_code=403, detail="Cannot manually create event metadata buckets.")
     try:
@@ -996,12 +1153,91 @@ async def create_bucket(bucket: Bucket):
 
 @app.delete("/api/influx/buckets/{name}")
 async def delete_bucket(name: str):
+    if _is_system_bucket(name):
+        raise HTTPException(status_code=403, detail=f"Bucket '{name}' cannot be deleted.")
     if not name.startswith("debug"): raise HTTPException(status_code=403, detail="Forbidden: Only buckets starting with 'debug' can be deleted.")
     if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
     bucket_to_delete = influx_client.buckets_api().find_bucket_by_name(name)
     if not bucket_to_delete: raise HTTPException(status_code=404, detail=f"Bucket '{name}' not found.")
     influx_client.buckets_api().delete_bucket(bucket_to_delete)
     return {"message": f"Bucket '{name}' deleted successfully."}
+
+
+@app.get("/api/time-markers")
+async def get_time_markers(time_range: str = "-30d", limit: int = 500):
+    """List time markers newest-first (public)."""
+    if not influx_client:
+        raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    try:
+        markers = await asyncio.to_thread(
+            list_time_markers,
+            influx_client,
+            range_start=time_range,
+            limit=limit,
+        )
+        return {"markers": markers, "bucket": TIME_MARKERS_BUCKET}
+    except Exception as e:
+        logger.exception("time marker list failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/time-markers")
+async def post_time_marker(body: TimeMarkerCreate | None = None):
+    """Create a time marker immediately (public — viewers can mark)."""
+    if not influx_client:
+        raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    body = body or TimeMarkerCreate()
+    try:
+        marker = await asyncio.to_thread(
+            create_time_marker,
+            influx_client,
+            name=body.name or "",
+            marked_at_ns=body.time_ns if body.time_ns is not None else time_ns_now(),
+        )
+        return marker
+    except Exception as e:
+        logger.exception("time marker create failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.patch("/api/time-markers/{marker_id}")
+async def patch_time_marker(marker_id: str, body: TimeMarkerRename):
+    """Set / update the display name for an existing marker (public — all users)."""
+    if not influx_client:
+        raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    try:
+        marker = await asyncio.to_thread(
+            rename_time_marker,
+            influx_client,
+            marker_id,
+            name=body.name,
+            time_ns=body.time_ns,
+        )
+        return marker
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("time marker rename failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/time-markers/delete")
+async def post_delete_time_markers(body: TimeMarkerDeleteRequest):
+    """Delete time markers (public — all users, server + normal app)."""
+    if not influx_client:
+        raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    if not body.markers:
+        raise HTTPException(status_code=400, detail="markers required.")
+    try:
+        deleted = await asyncio.to_thread(
+            delete_time_markers,
+            influx_client,
+            [m.model_dump() for m in body.markers],
+        )
+        return {"deleted": deleted, "count": len(deleted)}
+    except Exception as e:
+        logger.exception("time marker delete failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/analytics/stat")
@@ -1160,6 +1396,25 @@ async def influx_proxy(request: Request, path: str = ""):
             request,
             INFLUX_UPSTREAM,
             strip_prefix=INFLUX_PREFIX,
+            public_prefix=INFLUX_PREFIX,
+            rewrite_body_paths=True,
+        )
+    except httpx.RequestError:
+        return influx_disconnected()
+
+
+# Influx UI still POSTs some Flux queries to /api/v2/* (no /influx prefix).
+# Electron owns /api/* otherwise, so forward only the Influx v2 namespace.
+@app.api_route("/api/v2", methods=PROXY_METHODS)
+@app.api_route("/api/v2/{path:path}", methods=PROXY_METHODS)
+async def influx_api_v2_compat_proxy(request: Request, path: str = ""):
+    influx_connected, _ = await _get_cached_health()
+    if not influx_connected:
+        return influx_disconnected()
+    try:
+        return await proxy_to_upstream(
+            request,
+            INFLUX_UPSTREAM,
             public_prefix=INFLUX_PREFIX,
             rewrite_body_paths=True,
         )

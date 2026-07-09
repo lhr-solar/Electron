@@ -8,6 +8,7 @@ import os
 import re
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,6 +30,11 @@ def _display_run_name(start_ts: float, run_number: int) -> str:
 
 
 def _safe_bucket_name(display_name: str) -> str:
+    """Legacy label kept on event records for UI / matching old mistaken buckets.
+
+    Event metadata goes to the protected `events` bucket; CAN telemetry goes to
+    telemetry_main tagged with run_id. We never create an Influx bucket from this name.
+    """
     cleaned = re.sub(r"[^\w\s,.-]", "", display_name).strip()
     return cleaned[:128] or "event-run"
 
@@ -44,13 +50,14 @@ class EventRecorder:
         self._lock = threading.RLock()
         self._index_path = os.path.join(self.events_dir, INDEX_NAME)
         self._events: list[dict] = self._load_index()
+        if self._ensure_uuids():
+            self._save_index()
         self._run_counter = self._next_run_number()
         self._current: dict | None = None
         self._current_file = None
         self._last_packet_at: float | None = None
         self._canp_event_start_device_ms: int | None = None
         self._canp_event_host_start_ns: int | None = None
-        self.event_bucket_names: set[str] = set()
         self._influx_client = None
 
     def set_influx_client(self, client) -> None:
@@ -74,6 +81,33 @@ class EventRecorder:
         except Exception as e:
             logger.error("Failed to save events index: %s", e)
 
+    def _ensure_uuids(self) -> bool:
+        """Backfill a stable uuid on any event that predates the uuid field."""
+        changed = False
+        for evt in self._events:
+            if not evt.get("uuid"):
+                evt["uuid"] = uuid.uuid4().hex
+                changed = True
+        return changed
+
+    def reload_index(self) -> None:
+        """Re-read the on-disk index (used after another recorder instance mutated it)."""
+        with self._lock:
+            self._events = self._load_index()
+            if self._ensure_uuids():
+                self._save_index()
+
+    @staticmethod
+    def _event_matches(evt: dict, identifier: str) -> bool:
+        ident = str(identifier or "")
+        if not ident:
+            return False
+        return ident in {
+            str(evt.get("uuid") or ""),
+            str(evt.get("id") or ""),
+            str(evt.get("bucket_name") or ""),
+        }
+
     def _next_run_number(self) -> int:
         today = datetime.now().date().isoformat()
         count = 0
@@ -90,6 +124,13 @@ class EventRecorder:
         with self._lock:
             return dict(self._current) if self._current else None
 
+    def current_run_id(self) -> str | None:
+        """Stable run id (uuid) for Influx tags on the in-progress event."""
+        with self._lock:
+            if not self._current:
+                return None
+            return str(self._current.get("uuid") or self._current.get("id") or "") or None
+
     def delete_events(self, event_ids: list[str]) -> list[str]:
         """Remove local events by id. Deletes capture files when present. Returns deleted ids."""
         wanted = {str(x) for x in (event_ids or []) if x}
@@ -100,7 +141,7 @@ class EventRecorder:
             keep: list[dict] = []
             for evt in self._events:
                 eid = str(evt.get("id") or "")
-                if eid not in wanted:
+                if not any(self._event_matches(evt, w) for w in wanted):
                     keep.append(evt)
                     continue
                 dump_path = evt.get("dump_path") or ""
@@ -109,17 +150,45 @@ class EventRecorder:
                         os.remove(dump_path)
                     except OSError as e:
                         logger.warning("Could not delete capture %s: %s", dump_path, e)
-                bucket = evt.get("bucket_name")
-                if bucket:
-                    self.event_bucket_names.discard(bucket)
                 deleted.append(eid)
             if deleted:
                 self._events = keep
                 self._save_index()
         return deleted
 
-    def is_event_bucket(self, bucket_name: str) -> bool:
-        return bucket_name in self.event_bucket_names
+    def rename_current(self, identifier: str, new_name: str) -> dict | None:
+        """Rename the in-progress event if it matches. Returns updated event or None."""
+        name = str(new_name or "").strip()[:200]
+        if not name:
+            return None
+        with self._lock:
+            if self._current and self._event_matches(self._current, identifier):
+                self._current["display_name"] = name
+                self._current["renamed"] = True
+                return dict(self._current)
+        return None
+
+    def rename_event(self, identifier: str, new_name: str) -> dict | None:
+        """Rename a stored (closed) event in the on-disk index. Returns updated event or None."""
+        name = str(new_name or "").strip()[:200]
+        if not name:
+            return None
+        updated: dict | None = None
+        with self._lock:
+            for evt in self._events:
+                if self._event_matches(evt, identifier):
+                    evt["display_name"] = name
+                    evt["renamed"] = True
+                    updated = dict(evt)
+                    break
+            if updated is not None:
+                self._save_index()
+        if updated is not None and self._influx_client:
+            try:
+                self.write_event_metadata(self._influx_client, updated)
+            except Exception as e:
+                logger.warning("Failed to sync renamed event metadata to Influx: %s", e)
+        return updated
 
     def _extension(self) -> str:
         return ".canp" if self.input_mode == "canp_tcp" else ".txt"
@@ -134,11 +203,13 @@ class EventRecorder:
         filename = f"{safe_vehicle}_{stamp}_run{run_number}{ext}"
         path = os.path.join(self.events_dir, filename)
         display_name = _display_run_name(start_ts, run_number)
+        # Label only (UI / legacy matching). Not an Influx bucket name.
         bucket_name = _safe_bucket_name(display_name)
-        self.event_bucket_names.add(bucket_name)
         event = {
             "id": f"evt_{stamp}_{run_number}",
+            "uuid": uuid.uuid4().hex,
             "display_name": display_name,
+            "renamed": False,
             "bucket_name": bucket_name,
             "run_number": run_number,
             "input_mode": self.input_mode,
@@ -153,7 +224,12 @@ class EventRecorder:
         self._current_file = open(path, "ab" if ext == ".canp" else "a", encoding=None if ext == ".canp" else "utf-8")
         self._canp_event_start_device_ms = device_start_ms
         self._canp_event_host_start_ns = time.time_ns() if device_start_ms is not None else None
-        logger.info("Started event capture: %s -> %s", display_name, path)
+        if self._influx_client:
+            try:
+                self.write_event_metadata(self._influx_client, event)
+            except Exception as e:
+                logger.warning("Failed to write start event_meta: %s", e)
+        logger.info("Started event capture: %s -> %s (run_id=%s)", display_name, path, event.get("uuid"))
 
     def _close_current_event(self, end_ts: float | None, reason: str = "gap") -> None:
         if not self._current:
@@ -249,36 +325,29 @@ class EventRecorder:
         delta_ms = device_batch_ms - self._canp_event_start_device_ms
         return int(self._canp_event_host_start_ns + delta_ms * 1_000_000)
 
-    def create_event_influx_bucket(self, influx_client, event: dict) -> bool:
-        if not influx_client:
-            return False
-        name = event.get("bucket_name")
-        if not name:
-            return False
-        try:
-            influx_client.buckets_api().create_bucket(bucket_name=name)
-            return True
-        except Exception as e:
-            if "already exists" in str(e).lower():
-                return True
-            logger.warning("Could not create event bucket %s: %s", name, e)
-            return False
-
     def write_event_metadata(self, influx_client, event: dict) -> None:
-        if not influx_client:
+        """Write event_meta into the protected `events` bucket, tagged with run_id."""
+        if not influx_client or not event:
             return
-        bucket = event.get("bucket_name")
-        if not bucket:
+        run_id = str(event.get("uuid") or event.get("id") or "").strip()
+        if not run_id:
             return
-        self.create_event_influx_bucket(influx_client, event)
         try:
+            from server.util.events_bucket import EVENTS_BUCKET, MEASUREMENT, ensure_bucket
             from server.util.influx_writer import InfluxDBWriter
 
-            writer = InfluxDBWriter(influx_client, bucket)
+            if not ensure_bucket(influx_client):
+                logger.warning("events bucket unavailable; skipping event_meta write")
+                return
+            writer = InfluxDBWriter(influx_client, EVENTS_BUCKET)
             start_ns = int(datetime.fromisoformat(event["start_time_iso"]).timestamp() * 1e9)
             writer.write_data(
-                "event_meta",
-                {"event_id": event.get("id", ""), "vehicle": event.get("vehicle", "")},
+                MEASUREMENT,
+                {
+                    "run_id": run_id,
+                    "event_id": event.get("id", ""),
+                    "vehicle": event.get("vehicle", ""),
+                },
                 {
                     "display_name": event.get("display_name", ""),
                     "start_time_iso": event.get("start_time_iso", ""),

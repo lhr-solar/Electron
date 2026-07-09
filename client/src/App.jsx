@@ -21,6 +21,7 @@ import { Analytics } from './components/Analytics';
 import { StatusBar } from './components/StatusBar';
 import { ServerInfoPanel } from './components/ServerInfoPanel';
 import { DatabaseManagementModal } from './components/DatabaseManagementModal';
+import { TimeMarkButton } from './components/TimeMarkButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -188,7 +189,13 @@ function ClientApp() {
   const toggleSideLog = useCallback(() => setSideLogOpen((v) => !v), []);
 
   return (
-    <AppShell title="Electron" tabs={CLIENT_PAGES} page={page} onNavigate={navigate}>
+    <AppShell
+      title="Electron"
+      tabs={CLIENT_PAGES}
+      page={page}
+      onNavigate={navigate}
+      rightExtra={<TimeMarkButton />}
+    >
       <div
         className="flex min-h-0 flex-1 flex-nowrap items-stretch"
         style={{ display: page === 'control' ? 'flex' : 'none' }}
@@ -220,6 +227,15 @@ function ServerViewerApp() {
   const [sideLogOpen, setSideLogOpen] = useState(false);
   const [runsOpen, setRunsOpen] = useState(false);
   const [vehicle, setVehicle] = useState('HighNoon');
+  // Manage/admin session lets the viewer delete runs (rename is always allowed).
+  const [canDeleteRuns, setCanDeleteRuns] = useState(false);
+
+  useEffect(() => {
+    if (!runsOpen) return;
+    apiJson('/api/manage/session')
+      .then((s) => setCanDeleteRuns(!!s.authenticated))
+      .catch(() => setCanDeleteRuns(false));
+  }, [runsOpen]);
 
   useEffect(() => {
     const onHashChange = () => {
@@ -252,6 +268,7 @@ function ServerViewerApp() {
       onNavigate={navigate}
       rightExtra={
         <div className="flex items-center gap-1">
+          <TimeMarkButton />
           <Button
             variant="secondary"
             size="sm"
@@ -278,7 +295,7 @@ function ServerViewerApp() {
         influxConnected={false}
         vehicle={vehicle}
         dbcFiles={[]}
-        canDeleteRuns={false}
+        canDeleteRuns={canDeleteRuns}
         eventsOnly
       />
       <div className="min-h-0 flex-1" style={{ display: page === 'info' ? 'flex' : 'none' }}>

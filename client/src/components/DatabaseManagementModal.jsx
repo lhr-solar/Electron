@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, Plus, Trash2, Loader2, CircleAlert } from 'lucide-react';
+import { Download, Plus, Trash2, Loader2, CircleAlert, Pencil, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,6 +52,10 @@ export function DatabaseManagementModal({
   const [rangeEnd, setRangeEnd] = useState('');
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -87,21 +91,28 @@ export function DatabaseManagementModal({
       setSelectedEventIds([]);
       setRangeStart('');
       setRangeEnd('');
+      setConfirmDeleteOpen(false);
+      setRenameTarget(null);
+      setRenameValue('');
     }
   }, [opened]);
 
-  const telemetryBuckets = buckets.filter((b) => !b.is_event);
+  const telemetryBuckets = buckets.filter((b) => !b.is_event && !b.protected);
+  const protectedBuckets = buckets.filter((b) => b.protected);
   const eventBuckets = buckets.filter((b) => b.is_event);
+  // System buckets (e.g. time_markers) are never valid telemetry write targets.
   const bucketOptions = telemetryBuckets.map((b) => ({ value: b.name, label: b.name }));
 
   const selectableEvents = useMemo(
-    () => events.filter((e) => e.source !== 'influx'),
+    () => events.filter((e) => e.source !== 'influx' && !e.in_progress),
     [events]
   );
   const allEventIds = useMemo(() => selectableEvents.map((e) => e.id), [selectableEvents]);
   const allSelected = selectableEvents.length > 0 && selectedEventIds.length === selectableEvents.length;
   const canExport = selectedEventIds.length > 0 || rangeStart.trim() || rangeEnd.trim();
   const canDelete = canDeleteRuns && selectedEventIds.length > 0;
+  const eventKey = (evt) => evt.uuid || evt.id;
+  const canRenameEvent = (evt) => evt.source !== 'influx';
 
   const toggleEvent = (id) => {
     setSelectedEventIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -195,6 +206,7 @@ export function DatabaseManagementModal({
         color: 'green',
       });
       setSelectedEventIds([]);
+      setConfirmDeleteOpen(false);
       load();
     } catch (e) {
       notifications.show({ title: 'Delete failed', message: e.message, color: 'red' });
@@ -203,11 +215,51 @@ export function DatabaseManagementModal({
     }
   };
 
+  const openRename = (evt) => {
+    setRenameTarget(evt);
+    setRenameValue(evt.display_name || '');
+  };
+
+  const submitRename = async () => {
+    const name = renameValue.trim();
+    if (!name || !renameTarget) return;
+    setRenaming(true);
+    try {
+      await apiJson('/api/events/rename', {
+        method: 'POST',
+        body: JSON.stringify({ event_id: eventKey(renameTarget), name }),
+      });
+      notifications.show({ title: 'Run renamed', message: name, color: 'green' });
+      setRenameTarget(null);
+      setRenameValue('');
+      load();
+    } catch (e) {
+      notifications.show({ title: 'Rename failed', message: e.message, color: 'red' });
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   return (
+    <>
     <Dialog open={opened} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-h-[85vh] overflow-y-auto bg-popover sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="font-display">Database management</DialogTitle>
+          <div className="flex items-center justify-between gap-2 pr-8">
+            <DialogTitle className="font-display">Database management</DialogTitle>
+            {canDeleteRuns && selectedEventIds.length > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setConfirmDeleteOpen(true)}
+                disabled={deleting}
+                className="shrink-0"
+              >
+                {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                Delete {selectedEventIds.length}
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         {!influxConnected && !eventsOnly && (
@@ -281,6 +333,20 @@ export function DatabaseManagementModal({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {protectedBuckets.map((b) => (
+                      <TableRow key={b.name}>
+                        <TableCell className="tabular text-sm">{b.name}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className="border-signal-purple/30 bg-signal-purple/10 text-signal-purple"
+                          >
+                            system
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">Protected</TableCell>
+                      </TableRow>
+                    ))}
                     {telemetryBuckets.map((b) => (
                       <TableRow key={b.name}>
                         <TableCell className="tabular text-sm">{b.name}</TableCell>
@@ -345,7 +411,7 @@ export function DatabaseManagementModal({
               <p className="text-xs text-muted-foreground">
                 Select runs and/or a time range. Output is clipped to actual data timestamps (no empty padding).
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   onClick={downloadDecodedCsv}
                   disabled={!canExport || loading || exporting}
@@ -357,19 +423,11 @@ export function DatabaseManagementModal({
                   )}
                   Generate and download CSV
                 </Button>
-                {canDeleteRuns && (
-                  <Button
-                    variant="destructive"
-                    onClick={deleteSelectedRuns}
-                    disabled={!canDelete || loading || deleting}
-                  >
-                    {deleting ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-3.5" />
-                    )}
-                    Delete selected runs
-                  </Button>
+                {selectedEventIds.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {selectedEventIds.length} selected
+                    {canDeleteRuns ? ' — use Delete (top right)' : ''}
+                  </span>
                 )}
               </div>
               <div className="rounded-md border border-border">
@@ -388,12 +446,13 @@ export function DatabaseManagementModal({
                       <TableHead>Start</TableHead>
                       <TableHead>End</TableHead>
                       <TableHead>Capture</TableHead>
+                      <TableHead className="w-9" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {events.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5}>
+                        <TableCell colSpan={6}>
                           <p className="text-sm text-muted-foreground">
                             No recorded events yet.
                           </p>
@@ -401,18 +460,27 @@ export function DatabaseManagementModal({
                       </TableRow>
                     )}
                     {events.map((evt) => (
-                      <TableRow key={evt.id}>
+                      <TableRow key={evt.uuid || evt.id} className={evt.in_progress ? 'bg-signal-green/5' : undefined}>
                         <TableCell>
                           <Checkbox
                             checked={selectedEventIds.includes(evt.id)}
                             onCheckedChange={() => toggleEvent(evt.id)}
                             aria-label={`Select ${evt.display_name}`}
-                            disabled={evt.source === 'influx'}
+                            disabled={evt.source === 'influx' || evt.in_progress}
                           />
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-sm font-medium">{evt.display_name}</span>
+                            {evt.in_progress && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-signal-green/40 bg-signal-green/10 text-signal-green"
+                              >
+                                <Radio className="size-3 animate-pulse" />
+                                in progress
+                              </Badge>
+                            )}
                             {evt.source === 'influx' && (
                               <Badge
                                 variant="outline"
@@ -430,11 +498,33 @@ export function DatabaseManagementModal({
                               </Badge>
                             )}
                           </div>
-                          <p className="tabular text-xs text-muted-foreground">{evt.bucket_name}</p>
+                          <p className="tabular text-xs text-muted-foreground">
+                            {evt.uuid || evt.id || evt.bucket_name}
+                          </p>
                         </TableCell>
                         <TableCell className="tabular text-xs">{evt.start_time_iso}</TableCell>
-                        <TableCell className="tabular text-xs">{evt.end_time_iso || '—'}</TableCell>
+                        <TableCell className="tabular text-xs">
+                          {evt.in_progress ? (
+                            <span className="text-signal-green">recording…</span>
+                          ) : (
+                            evt.end_time_iso || '—'
+                          )}
+                        </TableCell>
                         <TableCell className="tabular text-xs">{evt.dump_file || '—'}</TableCell>
+                        <TableCell>
+                          {canRenameEvent(evt) && (
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => openRename(evt)}
+                              aria-label={`Rename ${evt.display_name}`}
+                              title="Rename run"
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <Pencil className="size-3" />
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -461,5 +551,71 @@ export function DatabaseManagementModal({
         </Tabs>
       </DialogContent>
     </Dialog>
+
+    <Dialog
+      open={!!renameTarget}
+      onOpenChange={(o) => { if (!o) { setRenameTarget(null); setRenameValue(''); } }}
+    >
+      <DialogContent className="bg-popover sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display">Rename run</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="rename-input" className="text-xs">Run name</Label>
+          <Input
+            id="rename-input"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.currentTarget.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submitRename(); }}
+            placeholder="Run name"
+            autoFocus
+            className="h-9 text-sm"
+          />
+          {renameTarget?.in_progress && (
+            <p className="text-xs text-signal-green">This run is currently recording.</p>
+          )}
+          <div className="mt-2 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => { setRenameTarget(null); setRenameValue(''); }}
+              disabled={renaming}
+            >
+              Cancel
+            </Button>
+            <Button onClick={submitRename} disabled={!renameValue.trim() || renaming}>
+              {renaming ? <Loader2 className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}
+              Save
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={confirmDeleteOpen} onOpenChange={(o) => { if (!o) setConfirmDeleteOpen(false); }}>
+      <DialogContent className="bg-popover sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display">Delete {selectedEventIds.length} run(s)?</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            This permanently removes the selected run(s) and their local capture files. This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirmDeleteOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={deleteSelectedRuns}
+              disabled={deleting || selectedEventIds.length === 0}
+            >
+              {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+              Delete
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

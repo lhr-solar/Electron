@@ -15,6 +15,8 @@ const Toaster = ({
       theme="dark"
       className="toaster group"
       position="bottom-left"
+      duration={2200}
+      closeButton
       icons={{
         success: <CircleCheckIcon className="size-4 text-signal-green" />,
         info: <InfoIcon className="size-4 text-signal-blue" />,
