@@ -167,7 +167,7 @@ export function TimeMarkersModal({ opened, onClose, refreshKey = 0 }) {
     const payload = selectedIds
       .map((id) => byId.get(id))
       .filter(Boolean)
-      .map((m) => ({ id: m.id, time_ns: m.time_ns }));
+      .map((m) => ({ id: m.id, time_ns: m.time_ns, name: m.name || '' }));
     if (!payload.length) return;
     setDeleting(true);
     try {

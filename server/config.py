@@ -186,8 +186,11 @@ class Configuration:
             logger.exception("Failed to create embedded DBC fallback dir: %s", exc)
 
     def get_bucket(self):
-        """Return the InfluxDB bucket name for the current input mode."""
-        if self.INPUT_MODE in ("tcp", "canp_tcp"):
+        """Return the InfluxDB bucket name for the current input mode.
+
+        Only canp_tcp writes to telemetry_main; all other adapters use debug.
+        """
+        if self.INPUT_MODE == "canp_tcp":
             return "telemetry_main"
         return "debug"
 

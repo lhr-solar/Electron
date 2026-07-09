@@ -227,6 +227,7 @@ function ServerViewerApp() {
   const [sideLogOpen, setSideLogOpen] = useState(false);
   const [runsOpen, setRunsOpen] = useState(false);
   const [vehicle, setVehicle] = useState('HighNoon');
+  const [influxConnected, setInfluxConnected] = useState(false);
   // Manage/admin session lets the viewer delete runs (rename is always allowed).
   const [canDeleteRuns, setCanDeleteRuns] = useState(false);
 
@@ -250,6 +251,7 @@ function ServerViewerApp() {
   useEffect(() => {
     const onStatus = (status) => {
       if (status?.vehicle) setVehicle(status.vehicle);
+      if (typeof status?.influx_connected === 'boolean') setInfluxConnected(status.influx_connected);
     };
     socket.on('status', onStatus);
     return () => socket.off('status', onStatus);
@@ -292,7 +294,7 @@ function ServerViewerApp() {
       <DatabaseManagementModal
         opened={runsOpen}
         onClose={() => setRunsOpen(false)}
-        influxConnected={false}
+        influxConnected={influxConnected}
         vehicle={vehicle}
         dbcFiles={[]}
         canDeleteRuns={canDeleteRuns}

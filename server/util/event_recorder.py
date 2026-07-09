@@ -1,4 +1,16 @@
-"""Event detection (30s gap), raw network capture, and event metadata registry."""
+"""CANP run events + raw capture files.
+
+Source of truth: logs/canp/canp_manifest.json (no Influx events bucket).
+
+CANP:
+  - always write logs/canp/mm-dd-yy-HHMMSS.<uuid>.canp
+  - new event on first chunk and after 30s idle
+  - uuid tags telemetry_main points as run_id when Influx writes are on
+
+Other modes:
+  - logs/slcan/mm-dd-yy-HHMMSS.<uuid>.txt only when CAPTURE_RAW is truthy
+  - no events
+"""
 
 from __future__ import annotations
 
@@ -10,13 +22,16 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+_TRUTHY = {"1", "true", "yes", "on"}
+CANP_SUBDIR = "canp"
+SLCAN_SUBDIR = "slcan"
+MANIFEST_NAME = "canp_manifest.json"
 EVENT_GAP_SEC = 30.0
-EVENTS_SUBDIR = "events"
-INDEX_NAME = "index.json"
+DEFAULT_NAME = "Untitled run"
+_RUN_NAME_RE = re.compile(r"^Run\s+(\d+)$", re.IGNORECASE)
 
 
 def _utc_iso(ts: float | None = None) -> str:
@@ -24,19 +39,160 @@ def _utc_iso(ts: float | None = None) -> str:
     return dt.isoformat(timespec="milliseconds")
 
 
-def _display_run_name(start_ts: float, run_number: int) -> str:
-    dt = datetime.fromtimestamp(start_ts, tz=timezone.utc).astimezone()
-    return f"{dt.strftime('%B')} {dt.day}, {dt.year} - Run {run_number}"
+def _file_stamp(ts: float) -> str:
+    """Human-readable local stamp: mm-dd-yy-HHMMSS."""
+    return datetime.fromtimestamp(ts).strftime("%m-%d-%y-%H%M%S")
 
 
-def _safe_bucket_name(display_name: str) -> str:
-    """Legacy label kept on event records for UI / matching old mistaken buckets.
+def _local_day_key(ts: float) -> str:
+    return datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
 
-    Event metadata goes to the protected `events` bucket; CAN telemetry goes to
-    telemetry_main tagged with run_id. We never create an Influx bucket from this name.
-    """
-    cleaned = re.sub(r"[^\w\s,.-]", "", display_name).strip()
-    return cleaned[:128] or "event-run"
+
+def _next_daily_run_number(log_dir: str, start_ts: float) -> int:
+    """Next Run N for the local calendar day (resets to 1 each day)."""
+    day = _local_day_key(start_ts)
+    max_n = 0
+    for e in _read_manifest_raw(log_dir):
+        if not isinstance(e, dict):
+            continue
+        start_iso = e.get("start_time_iso") or ""
+        try:
+            evt_ts = datetime.fromisoformat(start_iso).timestamp()
+        except Exception:
+            continue
+        if _local_day_key(evt_ts) != day:
+            continue
+        n = e.get("run_number")
+        try:
+            if n is not None:
+                max_n = max(max_n, int(n))
+                continue
+        except (TypeError, ValueError):
+            pass
+        for label in (e.get("name"), e.get("display_name")):
+            m = _RUN_NAME_RE.match(str(label or "").strip())
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+                break
+    return max_n + 1
+
+
+def capture_raw_enabled(input_mode: str) -> bool:
+    """canp always captures; other modes need CAPTURE_RAW=1 (or true/yes/on)."""
+    if input_mode == "canp_tcp":
+        return True
+    return (os.environ.get("CAPTURE_RAW") or "").strip().lower() in _TRUTHY
+
+
+def canp_log_dir(log_dir: str) -> str:
+    return os.path.join(log_dir, CANP_SUBDIR)
+
+
+def slcan_log_dir(log_dir: str) -> str:
+    return os.path.join(log_dir, SLCAN_SUBDIR)
+
+
+def manifest_path(log_dir: str) -> str:
+    return os.path.join(canp_log_dir(log_dir), MANIFEST_NAME)
+
+
+def resolve_dump_path(log_dir: str, dump_file: str, input_mode: str = "") -> str:
+    if not dump_file:
+        return ""
+    if os.path.isabs(dump_file):
+        return dump_file
+    name = os.path.basename(dump_file)
+    if name.endswith(".canp") or input_mode == "canp_tcp":
+        return os.path.join(canp_log_dir(log_dir), name)
+    return os.path.join(slcan_log_dir(log_dir), name)
+
+
+def _read_manifest_raw(log_dir: str) -> list[dict]:
+    path = manifest_path(log_dir)
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        events = data.get("events") if isinstance(data, dict) else data
+        return list(events) if isinstance(events, list) else []
+    except Exception as e:
+        logger.warning("Failed to read %s: %s", path, e)
+        return []
+
+
+def _write_manifest(log_dir: str, events: list[dict]) -> None:
+    path = manifest_path(log_dir)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"events": events}, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
+def upsert_manifest_event(log_dir: str, event: dict) -> None:
+    run_id = str(event.get("uuid") or event.get("id") or "").strip()
+    if not run_id:
+        return
+    events = _read_manifest_raw(log_dir)
+    stored = {
+        "uuid": run_id,
+        "id": run_id,
+        "name": event.get("name") or "",
+        "display_name": event.get("display_name") or "",
+        "renamed": bool(event.get("renamed")),
+        "run_number": event.get("run_number"),
+        "start_time_iso": event.get("start_time_iso") or "",
+        "end_time_iso": event.get("end_time_iso") or "",
+        "dump_file": event.get("dump_file") or "",
+        "vehicle": event.get("vehicle") or "",
+        "input_mode": "canp_tcp",
+        "device_start_ms": event.get("device_start_ms"),
+    }
+    for i, e in enumerate(events):
+        if str(e.get("uuid") or e.get("id") or "") == run_id:
+            events[i] = {**e, **stored}
+            _write_manifest(log_dir, events)
+            return
+    events.append(stored)
+    _write_manifest(log_dir, events)
+
+
+def list_manifest_events(log_dir: str) -> list[dict]:
+    out = []
+    for evt in _read_manifest_raw(log_dir):
+        if not isinstance(evt, dict):
+            continue
+        item = dict(evt)
+        run_id = str(item.get("uuid") or item.get("id") or "")
+        if not run_id:
+            continue
+        item["id"] = run_id
+        item["uuid"] = run_id
+        dump_file = item.get("dump_file") or ""
+        path = resolve_dump_path(log_dir, dump_file, "canp_tcp") if dump_file else ""
+        if dump_file and not os.path.isfile(path):
+            canp_dir = canp_log_dir(log_dir)
+            if os.path.isdir(canp_dir):
+                for name in os.listdir(canp_dir):
+                    if run_id in name and name.endswith(".canp"):
+                        path = os.path.join(canp_dir, name)
+                        dump_file = name
+                        break
+        item["dump_path"] = path
+        item["dump_file"] = os.path.basename(path) if path else dump_file
+        item["dump_exists"] = bool(path and os.path.isfile(path))
+        given = (item.get("name") or "").strip()
+        if given:
+            item["display_name"] = given
+        elif not (item.get("display_name") or "").strip():
+            n = item.get("run_number")
+            item["display_name"] = f"Run {n}" if n else DEFAULT_NAME
+        item["source"] = "local"
+        out.append(item)
+    out.sort(key=lambda e: e.get("start_time_iso") or "", reverse=True)
+    return out
 
 
 class EventRecorder:
@@ -44,58 +200,18 @@ class EventRecorder:
         self.log_dir = log_dir
         self.input_mode = input_mode
         self.vehicle = vehicle or "unknown"
+        self.canp_dir = canp_log_dir(log_dir)
+        self.slcan_dir = slcan_log_dir(log_dir)
+        os.makedirs(self.canp_dir, exist_ok=True)
+        os.makedirs(self.slcan_dir, exist_ok=True)
         self.gap_sec = EVENT_GAP_SEC
-        self.events_dir = os.path.join(log_dir, EVENTS_SUBDIR)
-        os.makedirs(self.events_dir, exist_ok=True)
         self._lock = threading.RLock()
-        self._index_path = os.path.join(self.events_dir, INDEX_NAME)
-        self._events: list[dict] = self._load_index()
-        if self._ensure_uuids():
-            self._save_index()
-        self._run_counter = self._next_run_number()
         self._current: dict | None = None
         self._current_file = None
         self._last_packet_at: float | None = None
         self._canp_event_start_device_ms: int | None = None
         self._canp_event_host_start_ns: int | None = None
-        self._influx_client = None
-
-    def set_influx_client(self, client) -> None:
-        self._influx_client = client
-
-    def _load_index(self) -> list[dict]:
-        if not os.path.isfile(self._index_path):
-            return []
-        try:
-            with open(self._index_path, encoding="utf-8") as f:
-                data = json.load(f)
-            return list(data.get("events") or [])
-        except Exception as e:
-            logger.warning("Failed to load events index: %s", e)
-            return []
-
-    def _save_index(self) -> None:
-        try:
-            with open(self._index_path, "w", encoding="utf-8") as f:
-                json.dump({"events": self._events}, f, indent=2)
-        except Exception as e:
-            logger.error("Failed to save events index: %s", e)
-
-    def _ensure_uuids(self) -> bool:
-        """Backfill a stable uuid on any event that predates the uuid field."""
-        changed = False
-        for evt in self._events:
-            if not evt.get("uuid"):
-                evt["uuid"] = uuid.uuid4().hex
-                changed = True
-        return changed
-
-    def reload_index(self) -> None:
-        """Re-read the on-disk index (used after another recorder instance mutated it)."""
-        with self._lock:
-            self._events = self._load_index()
-            if self._ensure_uuids():
-                self._save_index()
+        self._capture_enabled = capture_raw_enabled(input_mode)
 
     @staticmethod
     def _event_matches(evt: dict, identifier: str) -> bool:
@@ -105,114 +221,119 @@ class EventRecorder:
         return ident in {
             str(evt.get("uuid") or ""),
             str(evt.get("id") or ""),
-            str(evt.get("bucket_name") or ""),
         }
-
-    def _next_run_number(self) -> int:
-        today = datetime.now().date().isoformat()
-        count = 0
-        for evt in self._events:
-            if str(evt.get("start_time_iso", "")).startswith(today):
-                count += 1
-        return count + 1
-
-    def list_events(self) -> list[dict]:
-        with self._lock:
-            return list(reversed(self._events))
 
     def get_current_event(self) -> dict | None:
         with self._lock:
             return dict(self._current) if self._current else None
 
     def current_run_id(self) -> str | None:
-        """Stable run id (uuid) for Influx tags on the in-progress event."""
+        """CANP event uuid for telemetry_main run_id tags."""
         with self._lock:
-            if not self._current:
+            if self.input_mode != "canp_tcp" or not self._current:
                 return None
-            return str(self._current.get("uuid") or self._current.get("id") or "") or None
+            return str(self._current.get("uuid") or "") or None
 
-    def delete_events(self, event_ids: list[str]) -> list[str]:
-        """Remove local events by id. Deletes capture files when present. Returns deleted ids."""
-        wanted = {str(x) for x in (event_ids or []) if x}
-        if not wanted:
-            return []
-        deleted: list[str] = []
+    def begin_run(self) -> dict | None:
         with self._lock:
-            keep: list[dict] = []
-            for evt in self._events:
-                eid = str(evt.get("id") or "")
-                if not any(self._event_matches(evt, w) for w in wanted):
-                    keep.append(evt)
-                    continue
-                dump_path = evt.get("dump_path") or ""
-                if dump_path and os.path.isfile(dump_path):
-                    try:
-                        os.remove(dump_path)
-                    except OSError as e:
-                        logger.warning("Could not delete capture %s: %s", dump_path, e)
-                deleted.append(eid)
-            if deleted:
-                self._events = keep
-                self._save_index()
-        return deleted
+            self._close_current_event(end_ts=None, reason="rotate")
+            self._last_packet_at = None
+            if self.input_mode == "canp_tcp":
+                return None  # open on first chunk
+            if self._capture_enabled:
+                return self._open_slcan_capture(time.time())
+            return None
+
+    def list_events(self) -> list[dict]:
+        return list_manifest_events(self.log_dir)
 
     def rename_current(self, identifier: str, new_name: str) -> dict | None:
-        """Rename the in-progress event if it matches. Returns updated event or None."""
         name = str(new_name or "").strip()[:200]
         if not name:
             return None
         with self._lock:
             if self._current and self._event_matches(self._current, identifier):
+                self._current["name"] = name
                 self._current["display_name"] = name
                 self._current["renamed"] = True
-                return dict(self._current)
-        return None
+                updated = dict(self._current)
+            else:
+                return None
+        self._persist(updated)
+        return updated
 
     def rename_event(self, identifier: str, new_name: str) -> dict | None:
-        """Rename a stored (closed) event in the on-disk index. Returns updated event or None."""
         name = str(new_name or "").strip()[:200]
         if not name:
             return None
-        updated: dict | None = None
         with self._lock:
-            for evt in self._events:
-                if self._event_matches(evt, identifier):
-                    evt["display_name"] = name
-                    evt["renamed"] = True
-                    updated = dict(evt)
-                    break
-            if updated is not None:
-                self._save_index()
-        if updated is not None and self._influx_client:
-            try:
-                self.write_event_metadata(self._influx_client, updated)
-            except Exception as e:
-                logger.warning("Failed to sync renamed event metadata to Influx: %s", e)
+            if self._current and self._event_matches(self._current, identifier):
+                return None
+        events = _read_manifest_raw(self.log_dir)
+        updated = None
+        for e in events:
+            if self._event_matches(e, identifier):
+                e["name"] = name
+                e["display_name"] = name
+                e["renamed"] = True
+                updated = dict(e)
+                break
+        if not updated:
+            return None
+        _write_manifest(self.log_dir, events)
         return updated
 
-    def _extension(self) -> str:
-        return ".canp" if self.input_mode == "canp_tcp" else ".txt"
+    def delete_events(self, event_ids: list[str]) -> list[str]:
+        """Remove runs from canp_manifest.json and delete .canp files."""
+        deleted: list[str] = []
+        events = _read_manifest_raw(self.log_dir)
+        wanted = {str(i) for i in (event_ids or [])}
+        kept: list[dict] = []
+        for e in events:
+            run_id = str(e.get("uuid") or e.get("id") or "")
+            if run_id not in wanted:
+                kept.append(e)
+                continue
+            with self._lock:
+                if self._current and self._event_matches(self._current, run_id):
+                    kept.append(e)
+                    continue
+            dump_file = e.get("dump_file") or ""
+            dump_path = resolve_dump_path(self.log_dir, dump_file, "canp_tcp") if dump_file else ""
+            if dump_path and os.path.isfile(dump_path):
+                try:
+                    os.remove(dump_path)
+                except OSError as err:
+                    logger.warning("Could not delete capture %s: %s", dump_path, err)
+            deleted.append(run_id)
+        if deleted:
+            _write_manifest(self.log_dir, kept)
+        return deleted
 
-    def _open_new_event(self, start_ts: float, device_start_ms: int | None = None) -> None:
-        self._close_current_event(end_ts=None, reason="rotate")
-        run_number = self._run_counter
-        self._run_counter += 1
-        stamp = datetime.fromtimestamp(start_ts).strftime("%Y%m%d_%H%M%S")
-        ext = self._extension()
-        safe_vehicle = re.sub(r"[^\w.-]+", "_", self.vehicle).strip("_") or "vehicle"
-        filename = f"{safe_vehicle}_{stamp}_run{run_number}{ext}"
-        path = os.path.join(self.events_dir, filename)
-        display_name = _display_run_name(start_ts, run_number)
-        # Label only (UI / legacy matching). Not an Influx bucket name.
-        bucket_name = _safe_bucket_name(display_name)
+    def _persist(self, event: dict) -> None:
+        if (event.get("input_mode") or self.input_mode) != "canp_tcp":
+            return
+        try:
+            upsert_manifest_event(self.log_dir, event)
+        except Exception as e:
+            logger.warning("Failed to update canp_manifest.json: %s", e)
+
+    def _open_canp_run(self, start_ts: float, device_start_ms: int | None = None) -> dict:
+        event_uuid = uuid.uuid4().hex
+        stamp = _file_stamp(start_ts)
+        filename = f"{stamp}.{event_uuid}.canp"
+        path = os.path.join(self.canp_dir, filename)
+        run_number = _next_daily_run_number(self.log_dir, start_ts)
+        default_name = f"Run {run_number}"
+
         event = {
-            "id": f"evt_{stamp}_{run_number}",
-            "uuid": uuid.uuid4().hex,
-            "display_name": display_name,
+            "id": event_uuid,
+            "uuid": event_uuid,
+            "name": default_name,
+            "display_name": default_name,
             "renamed": False,
-            "bucket_name": bucket_name,
             "run_number": run_number,
-            "input_mode": self.input_mode,
+            "input_mode": "canp_tcp",
             "vehicle": self.vehicle,
             "start_time_iso": _utc_iso(start_ts),
             "end_time_iso": None,
@@ -220,18 +341,41 @@ class EventRecorder:
             "dump_file": filename,
             "dump_path": path,
         }
+
         self._current = event
-        self._current_file = open(path, "ab" if ext == ".canp" else "a", encoding=None if ext == ".canp" else "utf-8")
+        self._current_file = open(path, "ab")
         self._canp_event_start_device_ms = device_start_ms
         self._canp_event_host_start_ns = time.time_ns() if device_start_ms is not None else None
-        if self._influx_client:
-            try:
-                self.write_event_metadata(self._influx_client, event)
-            except Exception as e:
-                logger.warning("Failed to write start event_meta: %s", e)
-        logger.info("Started event capture: %s -> %s (run_id=%s)", display_name, path, event.get("uuid"))
+        self._persist(event)
+        logger.info("Started canp run uuid=%s file=%s", event_uuid, path)
+        return dict(event)
 
-    def _close_current_event(self, end_ts: float | None, reason: str = "gap") -> None:
+    def _open_slcan_capture(self, start_ts: float) -> dict:
+        event_uuid = uuid.uuid4().hex
+        stamp = _file_stamp(start_ts)
+        filename = f"{stamp}.{event_uuid}.txt"
+        path = os.path.join(self.slcan_dir, filename)
+        label = datetime.fromtimestamp(start_ts).strftime("%b %d, %Y %H:%M:%S")
+        event = {
+            "id": event_uuid,
+            "uuid": event_uuid,
+            "name": "",
+            "display_name": label,
+            "renamed": False,
+            "input_mode": self.input_mode,
+            "vehicle": self.vehicle,
+            "start_time_iso": _utc_iso(start_ts),
+            "end_time_iso": None,
+            "device_start_ms": None,
+            "dump_file": filename,
+            "dump_path": path,
+        }
+        self._current = event
+        self._current_file = open(path, "a", encoding="utf-8")
+        logger.info("Started slcan capture: %s", path)
+        return dict(event)
+
+    def _close_current_event(self, end_ts: float | None, reason: str = "stop") -> None:
         if not self._current:
             return
         end = end_ts or time.time()
@@ -243,13 +387,10 @@ class EventRecorder:
             except Exception:
                 pass
             self._current_file = None
-        with self._lock:
-            self._events.append(dict(self._current))
-            self._save_index()
         closed = dict(self._current)
-        if self._influx_client:
-            self.write_event_metadata(self._influx_client, closed)
-        logger.info("Closed event %s (%s)", closed.get("display_name"), reason)
+        if closed.get("input_mode") == "canp_tcp":
+            self._persist(closed)
+        logger.info("Closed run %s (%s)", closed.get("uuid"), reason)
         self._current = None
         self._canp_event_start_device_ms = None
         self._canp_event_host_start_ns = None
@@ -257,12 +398,9 @@ class EventRecorder:
     def close_all(self) -> None:
         with self._lock:
             self._close_current_event(time.time(), reason="stop")
+            self._last_packet_at = None
 
     def note_canp_chunk(self, chunk: bytes, *, device_batch_ms: int | None = None) -> None:
-        """Append raw CANP TCP bytes to the current .canp capture immediately.
-
-        Independent of Influx connectivity / write enable / DBC decode success.
-        """
         if self.input_mode != "canp_tcp" or not chunk:
             return
         now = time.time()
@@ -270,7 +408,12 @@ class EventRecorder:
             if self._last_packet_at is not None and (now - self._last_packet_at) >= self.gap_sec:
                 self._close_current_event(self._last_packet_at, reason="gap")
             if self._current is None:
-                self._open_new_event(now, device_start_ms=device_batch_ms)
+                self._open_canp_run(now, device_start_ms=device_batch_ms)
+            elif device_batch_ms is not None and self._canp_event_start_device_ms is None:
+                self._canp_event_start_device_ms = device_batch_ms
+                self._canp_event_host_start_ns = time.time_ns()
+                self._current["device_start_ms"] = device_batch_ms
+                self._persist(self._current)
             self._last_packet_at = now
             self._write_canp_chunk(chunk)
 
@@ -280,27 +423,16 @@ class EventRecorder:
         *,
         device_batch_ms: int | None = None,
     ) -> int | None:
-        """Record packet; returns device_time_ns for Influx when available.
-
-        For canp_tcp, wire bytes are already written in note_canp_chunk(); this
-        only maintains run timing / gap rotation for decode-side timestamps.
-        """
-        now = time.time()
         with self._lock:
             if self.input_mode == "canp_tcp":
-                # Capture already handled on the TCP read path.
-                if self._current is None:
-                    self._open_new_event(now, device_start_ms=device_batch_ms)
-                self._last_packet_at = now
                 return self._device_time_ns(device_batch_ms)
 
-            if self._last_packet_at is not None and (now - self._last_packet_at) >= self.gap_sec:
-                self._close_current_event(self._last_packet_at, reason="gap")
+            if not self._capture_enabled or not slcan:
+                return None
             if self._current is None:
-                self._open_new_event(now, device_start_ms=device_batch_ms)
-            self._last_packet_at = now
+                self._open_slcan_capture(time.time())
             self._write_slcan(slcan)
-        return self._device_time_ns(device_batch_ms)
+        return None
 
     def _write_canp_chunk(self, chunk: bytes) -> None:
         if not self._current_file:
@@ -324,44 +456,3 @@ class EventRecorder:
             return int(device_batch_ms * 1_000_000)
         delta_ms = device_batch_ms - self._canp_event_start_device_ms
         return int(self._canp_event_host_start_ns + delta_ms * 1_000_000)
-
-    def write_event_metadata(self, influx_client, event: dict) -> None:
-        """Write event_meta into the protected `events` bucket, tagged with run_id."""
-        if not influx_client or not event:
-            return
-        run_id = str(event.get("uuid") or event.get("id") or "").strip()
-        if not run_id:
-            return
-        try:
-            from server.util.events_bucket import EVENTS_BUCKET, MEASUREMENT, ensure_bucket
-            from server.util.influx_writer import InfluxDBWriter
-
-            if not ensure_bucket(influx_client):
-                logger.warning("events bucket unavailable; skipping event_meta write")
-                return
-            writer = InfluxDBWriter(influx_client, EVENTS_BUCKET)
-            start_ns = int(datetime.fromisoformat(event["start_time_iso"]).timestamp() * 1e9)
-            writer.write_data(
-                MEASUREMENT,
-                {
-                    "run_id": run_id,
-                    "event_id": event.get("id", ""),
-                    "vehicle": event.get("vehicle", ""),
-                },
-                {
-                    "display_name": event.get("display_name", ""),
-                    "start_time_iso": event.get("start_time_iso", ""),
-                    "end_time_iso": event.get("end_time_iso") or "",
-                    "dump_file": event.get("dump_file", ""),
-                    "input_mode": event.get("input_mode", ""),
-                    "device_start_ms": event.get("device_start_ms") or 0,
-                },
-                start_ns,
-            )
-            writer.close()
-        except Exception as e:
-            logger.warning("Failed to write event metadata to Influx: %s", e)
-
-    def finalize_with_influx(self, influx_client) -> None:
-        self.set_influx_client(influx_client)
-        self.close_all()

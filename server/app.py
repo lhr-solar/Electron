@@ -35,11 +35,6 @@ from server.util.time_markers import (
     rename_marker as rename_time_marker,
     time_ns_now,
 )
-from server.util.events_bucket import (
-    EVENTS_BUCKET,
-    ensure_bucket as ensure_events_bucket,
-    is_protected_bucket as is_events_system_bucket,
-)
 from server.util.vehicle_dbc_resolve import (
     get_vehicle_folders,
     resolve_vehicle as _resolve_vehicle,
@@ -433,14 +428,8 @@ async def _maybe_server_autostart():
         config = settings.get_effective_config()
     writer: InfluxDBWriter | None = None
     if influx_write_enabled and influx_client:
-        target_bucket = config.get("INFLUX_BUCKET") or "telemetry_main"
-        if _is_system_or_legacy_event_bucket(target_bucket):
-            logger.warning(
-                "Server auto-start: bucket '%s' not writable for telemetry; using telemetry_main.",
-                target_bucket,
-            )
-            target_bucket = "telemetry_main"
-            settings.INFLUX_CONFIG["INFLUX_TELEMETRY_BUCKET"] = "telemetry_main"
+        target_bucket = _telemetry_write_bucket(config)
+        settings.INFLUX_CONFIG["INFLUX_TELEMETRY_BUCKET"] = target_bucket
         writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
         logger.info("Server auto-start: Influx writes enabled → bucket '%s'.", target_bucket)
     try:
@@ -477,8 +466,20 @@ async def lifespan(app: FastAPI):
         logger.info("InfluxDB connection successful.")
         if ensure_time_markers_bucket(influx_client):
             logger.info("Influx bucket '%s' ready.", TIME_MARKERS_BUCKET)
-        if ensure_events_bucket(influx_client):
-            logger.info("Influx bucket '%s' ready.", EVENTS_BUCKET)
+        # System `debug` bucket for non-canp adapters (not deletable via API).
+        try:
+            buckets_api = influx_client.buckets_api()
+            if not buckets_api.find_bucket_by_name("debug"):
+                buckets_api.create_bucket(bucket_name="debug", org=influx_client.org)
+                logger.info("Created Influx bucket 'debug'.")
+            # Drop legacy `events` bucket if present (runs live in canp_manifest.json now).
+            legacy = buckets_api.find_bucket_by_name("events")
+            if legacy:
+                buckets_api.delete_bucket(legacy)
+                logger.info("Deleted legacy Influx bucket 'events'.")
+        except Exception as e:
+            if "already exists" not in str(e).lower():
+                logger.warning("Could not ensure debug / drop legacy events bucket: %s", e)
     except Exception as e:
         logger.error(f"Failed to connect to InfluxDB on startup: {e}")
         influx_client = None
@@ -523,6 +524,14 @@ def _validate_and_raise():
     if title and detail:
         raise HTTPException(status_code=400, detail=f"{title}: {detail}")
 
+def _telemetry_write_bucket(config: dict) -> str:
+    """canp → telemetry_main; every other adapter → debug (system bucket)."""
+    mode = (config.get("INPUT_MODE") or settings.INPUT_MODE or "").strip()
+    if mode == "canp_tcp":
+        return "telemetry_main"
+    return "debug"
+
+
 @app.post("/api/start")
 async def start_service():
     if telemetry_service.running:
@@ -536,12 +545,8 @@ async def start_service():
         raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
     writer: InfluxDBWriter | None = None
     if influx_write_enabled:
-        target_bucket = config.get("INFLUX_BUCKET", "debug")
-        if _is_system_or_legacy_event_bucket(target_bucket):
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot write telemetry to a system/metadata bucket. Choose telemetry_main or a debug bucket.",
-            )
+        target_bucket = _telemetry_write_bucket(config)
+        settings.INFLUX_CONFIG["INFLUX_TELEMETRY_BUCKET"] = target_bucket
         writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
     await telemetry_service.start(writer, sio=sio, influx_client=influx_client)
     await emit_status_update(force_health_refresh=True)
@@ -567,12 +572,8 @@ async def restart_service():
         await telemetry_service.stop(influx_client)
     writer: InfluxDBWriter | None = None
     if influx_write_enabled:
-        target_bucket = config.get("INFLUX_BUCKET", "debug")
-        if _is_system_or_legacy_event_bucket(target_bucket):
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot write telemetry to a system/metadata bucket. Choose telemetry_main or a debug bucket.",
-            )
+        target_bucket = _telemetry_write_bucket(config)
+        settings.INFLUX_CONFIG["INFLUX_TELEMETRY_BUCKET"] = target_bucket
         writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
     await telemetry_service.start(writer, sio=sio, influx_client=influx_client)
     await emit_status_update(force_health_refresh=True)
@@ -946,24 +947,17 @@ async def get_dbc_schema(vehicle: str, filename: str):
     return {"vehicle": vehicle, "filename": safe_name, "path": dbc_path, "messages": messages}
 
 def _is_system_bucket(name: str) -> bool:
-    return is_time_markers_bucket(name) or is_events_system_bucket(name)
+    n = (name or "").strip()
+    # debug is the shared non-canp write target — system-managed, not deletable.
+    return n == "debug" or is_time_markers_bucket(n)
 
 
 def _is_event_bucket_name(name: str) -> bool:
-    """True for the protected `events` bucket or legacy mistaken per-run buckets."""
-    if is_events_system_bucket(name):
+    """True for leftover legacy event metadata bucket names (not creatable/writable)."""
+    n = (name or "").strip()
+    if n == "events":
         return True
-    index_path = os.path.join(settings.LOG_DIR, "events", "index.json")
-    if os.path.isfile(index_path):
-        try:
-            with open(index_path, encoding="utf-8") as f:
-                data = json.load(f)
-            for evt in data.get("events") or []:
-                if evt.get("bucket_name") == name:
-                    return True
-        except Exception:
-            pass
-    return " - Run " in (name or "")
+    return " - Run " in n
 
 
 def _is_system_or_legacy_event_bucket(name: str) -> bool:
@@ -972,19 +966,12 @@ def _is_system_or_legacy_event_bucket(name: str) -> bool:
 
 @app.get("/api/events")
 async def list_events():
-    from server.util.event_recorder import EventRecorder
-    from server.util.influx_events import list_recent_influx_events, merge_local_and_influx_events
+    """List CANP runs from logs/canp/canp_manifest.json (+ live in-progress)."""
+    from server.util.event_recorder import list_manifest_events
 
-    recorder = EventRecorder(settings.LOG_DIR, settings.INPUT_MODE, settings.COMMON_CONFIG.get("DBC_VEHICLE", ""))
-    local_events = recorder.list_events()
     influx_connected = bool(influx_client and await asyncio.to_thread(influx_client.ping))
-    influx_events: list[dict] = []
-    if influx_connected:
-        org = settings.INFLUX_CONFIG.get("INFLUX_ORG", "")
-        influx_events = await asyncio.to_thread(list_recent_influx_events, influx_client, org)
-    merged = merge_local_and_influx_events(local_events, influx_events)
+    events = await asyncio.to_thread(list_manifest_events, settings.LOG_DIR)
 
-    # Prepend the live in-progress event (held only by the running recorder).
     live = getattr(telemetry_service, "event_recorder", None)
     current = None
     if live is not None:
@@ -992,29 +979,35 @@ async def list_events():
             current = live.get_current_event()
         except Exception:
             current = None
-    if current:
+    if current and current.get("uuid") and (current.get("input_mode") or "") == "canp_tcp":
         current = dict(current)
         current["in_progress"] = True
-        current["source"] = "local"
-        keys = {current.get("uuid"), current.get("id"), current.get("bucket_name")} - {None, ""}
-        already = any(
-            (e.get("uuid") in keys or e.get("id") in keys or e.get("bucket_name") in keys)
-            for e in merged
-        )
+        current["source"] = "live"
+        current["dump_exists"] = bool(current.get("dump_path") and os.path.isfile(current["dump_path"]))
+        keys = {current.get("uuid"), current.get("id")} - {None, ""}
+        already = any((e.get("uuid") in keys or e.get("id") in keys) for e in events)
         if not already:
-            merged = [current] + merged
+            events = [current] + events
+        else:
+            for e in events:
+                if e.get("uuid") in keys or e.get("id") in keys:
+                    e["in_progress"] = True
+                    if current.get("name"):
+                        e["name"] = current["name"]
+                        e["display_name"] = current["name"]
+                    break
 
     return {
-        "events": merged,
+        "events": events,
         "influx_connected": influx_connected,
-        "local_count": len(local_events),
-        "influx_count": len(influx_events),
+        "local_count": len(events),
+        "influx_count": 0,
     }
 
 
 @app.post("/api/events/rename")
 async def rename_event(body: RenameEventRequest):
-    """Rename an event (in-progress or past). Allowed for all users (not manage-gated)."""
+    """Rename a CANP run in canp_manifest.json."""
     from server.util.event_recorder import EventRecorder
 
     event_id = (body.event_id or "").strip()
@@ -1024,26 +1017,14 @@ async def rename_event(body: RenameEventRequest):
 
     live = getattr(telemetry_service, "event_recorder", None)
     updated = None
-    # The in-progress event lives only in the running recorder.
     if live is not None:
-        if influx_client is not None:
-            try:
-                live.set_influx_client(influx_client)
-            except Exception:
-                pass
         updated = await asyncio.to_thread(live.rename_current, event_id, name)
 
-    # Otherwise rename a stored event in the on-disk index.
     if updated is None:
-        recorder = EventRecorder(settings.LOG_DIR, settings.INPUT_MODE, settings.COMMON_CONFIG.get("DBC_VEHICLE", ""))
-        if influx_client is not None:
-            recorder.set_influx_client(influx_client)
+        recorder = EventRecorder(
+            settings.LOG_DIR, settings.INPUT_MODE, settings.COMMON_CONFIG.get("DBC_VEHICLE", "")
+        )
         updated = await asyncio.to_thread(recorder.rename_event, event_id, name)
-        if updated is not None and live is not None:
-            try:
-                live.reload_index()
-            except Exception:
-                pass
 
     if updated is None:
         raise HTTPException(status_code=404, detail="Event not found.")
@@ -1052,12 +1033,19 @@ async def rename_event(body: RenameEventRequest):
 
 @app.post("/api/events/decode-csv")
 async def decode_events_csv(body: DecodeCsvRequest):
-    """Public in server mode so viewers can select runs and download CSVs."""
+    """Decode selected CANP runs from local captures (manifest). Works without Influx."""
     from server.util.decode_capture import generate_decoded_csv_zip
-    from server.util.event_recorder import EventRecorder
+    from server.util.event_recorder import list_manifest_events
 
-    recorder = EventRecorder(settings.LOG_DIR, settings.INPUT_MODE, settings.COMMON_CONFIG.get("DBC_VEHICLE", ""))
-    events = recorder.list_events()
+    events = await asyncio.to_thread(list_manifest_events, settings.LOG_DIR)
+    live = getattr(telemetry_service, "event_recorder", None)
+    if live is not None:
+        current = live.get_current_event()
+        if current and current.get("uuid") and (current.get("input_mode") or "") == "canp_tcp":
+            keys = {current.get("uuid"), current.get("id")} - {None, ""}
+            if not any(e.get("uuid") in keys for e in events):
+                events = [dict(current)] + events
+
     default_vehicle = (body.vehicle or "").strip() or settings.COMMON_CONFIG.get("DBC_VEHICLE", "") or settings.DEFAULT_DBC_VEHICLE
     dbc_files = body.dbc_files if body.dbc_files is not None else settings.COMMON_CONFIG.get("DBC_FILES") or []
 
@@ -1094,13 +1082,12 @@ async def decode_events_csv(body: DecodeCsvRequest):
 
 @app.post("/api/events/delete")
 async def delete_events(body: DeleteEventsRequest):
-    """Delete local runs. Client mode always allowed; server mode requires manage auth."""
+    """Delete runs from canp_manifest.json (+ .canp files). Server mode needs manage auth."""
     from server.util.event_recorder import EventRecorder
 
     if not body.event_ids:
         raise HTTPException(status_code=400, detail="event_ids required.")
 
-    # Never delete the in-progress run.
     live = getattr(telemetry_service, "event_recorder", None)
     protected: set[str] = set()
     current = None
@@ -1110,17 +1097,14 @@ async def delete_events(body: DeleteEventsRequest):
         except Exception:
             current = None
     if current:
-        protected = {str(current.get(k) or "") for k in ("uuid", "id", "bucket_name")} - {""}
+        protected = {str(current.get(k) or "") for k in ("uuid", "id")} - {""}
     ids = [i for i in body.event_ids if str(i) not in protected]
     skipped_current = len(body.event_ids) - len(ids)
 
-    recorder = EventRecorder(settings.LOG_DIR, settings.INPUT_MODE, settings.COMMON_CONFIG.get("DBC_VEHICLE", ""))
+    recorder = EventRecorder(
+        settings.LOG_DIR, settings.INPUT_MODE, settings.COMMON_CONFIG.get("DBC_VEHICLE", "")
+    )
     deleted = await asyncio.to_thread(recorder.delete_events, ids) if ids else []
-    if deleted and live is not None:
-        try:
-            live.reload_index()
-        except Exception:
-            pass
     return {"deleted": deleted, "count": len(deleted), "skipped_in_progress": skipped_current}
 
 
@@ -1155,7 +1139,12 @@ async def create_bucket(bucket: Bucket):
 async def delete_bucket(name: str):
     if _is_system_bucket(name):
         raise HTTPException(status_code=403, detail=f"Bucket '{name}' cannot be deleted.")
-    if not name.startswith("debug"): raise HTTPException(status_code=403, detail="Forbidden: Only buckets starting with 'debug' can be deleted.")
+    # Extra debug-* scratch buckets may be deleted; the system `debug` bucket may not.
+    if not name.startswith("debug") or name == "debug":
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Only non-system buckets starting with 'debug' (not 'debug' itself) can be deleted.",
+        )
     if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
     bucket_to_delete = influx_client.buckets_api().find_bucket_by_name(name)
     if not bucket_to_delete: raise HTTPException(status_code=404, detail=f"Bucket '{name}' not found.")

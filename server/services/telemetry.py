@@ -183,9 +183,9 @@ class TelemetryService:
             config.get("INPUT_MODE", "tcp"),
             vehicle=vehicle,
         )
-        if influx_client:
-            self.event_recorder.set_influx_client(influx_client)
-        
+        # CANP opens on first chunk (+ 30s idle rotate); slcan opens now if CAPTURE_RAW.
+        self.event_recorder.begin_run()
+
         self.parser = create_async_parser(config, self.packet_queue, self.stop_event)
         self.live_message_queue = asyncio.Queue(maxsize=500) if sio else None
 
@@ -261,19 +261,12 @@ class TelemetryService:
         if self.influx_writer:
             self.influx_writer.close()
 
-        # Always close/persist event captures (.canp/.txt), even when Influx writes are off.
+        # Always close/persist event captures (.canp/.txt).
         if self.event_recorder:
             try:
-                if influx_client:
-                    self.event_recorder.finalize_with_influx(influx_client)
-                else:
-                    self.event_recorder.close_all()
+                self.event_recorder.close_all()
             except Exception:
-                logger.exception("Failed to finalize event recorder; forcing close_all.")
-                try:
-                    self.event_recorder.close_all()
-                except Exception:
-                    pass
+                logger.exception("Failed to close event recorder.")
             self.event_recorder = None
         
         self.running = False

@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { apiJson } from '../lib/api';
 import { notifications } from '../lib/notify';
+import { socket } from '../socket';
 import { TimeMarkersModal } from './TimeMarkersModal';
 
 function clickTimeNs() {
@@ -23,15 +24,27 @@ function clickTimeNs() {
 
 /**
  * Header controls: Time Mark (immediate save + name) and Markers list.
+ * Only available when Influx is connected (any adapter).
  */
 export function TimeMarkButton() {
   const [busy, setBusy] = useState(false);
+  const [influxConnected, setInfluxConnected] = useState(false);
   const [nameOpen, setNameOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [name, setName] = useState('');
   const [pending, setPending] = useState(null); // { id, time_ns, time_iso }
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    const onStatus = (status) => {
+      if (typeof status?.influx_connected === 'boolean') {
+        setInfluxConnected(status.influx_connected);
+      }
+    };
+    socket.on('status', onStatus);
+    return () => socket.off('status', onStatus);
+  }, []);
 
   useEffect(() => {
     if (nameOpen) {
@@ -41,6 +54,8 @@ export function TimeMarkButton() {
   }, [nameOpen]);
 
   const bumpList = () => setListRefreshKey((k) => k + 1);
+
+  if (!influxConnected) return null;
 
   const mark = async () => {
     if (busy) return;

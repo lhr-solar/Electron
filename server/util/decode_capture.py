@@ -309,6 +309,7 @@ def generate_decoded_csv_zip(
     total_rows = 0
     files_used = []
 
+    missing_dumps: list[str] = []
     for event in selected:
         vehicle = (event.get("vehicle") or "").strip() or "unknown"
         if vehicle not in dbc_cache:
@@ -318,7 +319,9 @@ def generate_decoded_csv_zip(
         if not dbc_index:
             continue
         path = event.get("dump_path") or ""
+        label = event.get("display_name") or event.get("uuid") or event.get("id") or path or "?"
         if not path or not Path(path).is_file():
+            missing_dumps.append(str(label))
             continue
         capture = Path(path)
         files_used.append(capture.name)
@@ -330,6 +333,11 @@ def generate_decoded_csv_zip(
         total_rows += rows
 
     if total_rows == 0:
+        if missing_dumps and len(missing_dumps) == len(selected):
+            raise ValueError(
+                "Capture file(s) not found for selected event(s). "
+                "Expected logs/canp/yy-mm-dd.<uuid>.canp next to the event."
+            )
         raise ValueError("No decoded rows in the selected range. Try a different event or time window.")
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")

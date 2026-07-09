@@ -1,4 +1,9 @@
-"""Time markers: click timestamps stored in a protected Influx bucket."""
+"""Time markers: click timestamps stored in a protected Influx bucket.
+
+Requires an active Influx connection (server or client). Soft-delete via
+`deleted=1` so list/reload hide markers immediately without relying on
+Influx delete API time windows.
+"""
 
 from __future__ import annotations
 
@@ -27,7 +32,6 @@ def ensure_bucket(influx_client) -> bool:
         logger.info("Created Influx bucket '%s'", TIME_MARKERS_BUCKET)
         return True
     except Exception as e:
-        # Race: another process created it
         if "already exists" in str(e).lower():
             return True
         logger.warning("Could not ensure time_markers bucket: %s", e)
@@ -58,6 +62,7 @@ def create_marker(
         .tag("id", marker_id)
         .field("name", label)
         .field("marked", 1)
+        .field("deleted", 0)
         .time(ts_ns)
     )
     write_api = influx_client.write_api(write_options=SYNCHRONOUS)
@@ -88,6 +93,7 @@ def rename_marker(influx_client, marker_id: str, *, name: str, time_ns: int) -> 
         .tag("id", mid)
         .field("name", label)
         .field("marked", 1)
+        .field("deleted", 0)
         .time(ts_ns)
     )
     write_api = influx_client.write_api(write_options=SYNCHRONOUS)
@@ -105,37 +111,39 @@ def rename_marker(influx_client, marker_id: str, *, name: str, time_ns: int) -> 
 
 
 def delete_markers(influx_client, markers: list[dict]) -> list[str]:
-    """Delete markers by id + time_ns. Returns deleted ids. Public (no auth)."""
+    """Soft-delete markers (deleted=1). Returns deleted ids. Public (no auth)."""
     if not influx_client:
         raise RuntimeError("InfluxDB is not connected.")
     if not ensure_bucket(influx_client):
         raise RuntimeError("time_markers bucket unavailable.")
 
     deleted: list[str] = []
-    delete_api = influx_client.delete_api()
-    for item in markers or []:
-        mid = str((item or {}).get("id") or "").strip()
-        if not mid:
-            continue
-        try:
-            ts_ns = int((item or {}).get("time_ns"))
-        except (TypeError, ValueError):
-            continue
-        # Narrow delete window around the point (±1µs) + id predicate.
-        start = _iso_ns(max(0, ts_ns - 1000))
-        stop = _iso_ns(ts_ns + 1000)
-        predicate = f'_measurement="{MEASUREMENT}" AND id="{mid}"'
-        try:
-            delete_api.delete(
-                start,
-                stop,
-                predicate,
-                bucket=TIME_MARKERS_BUCKET,
-                org=influx_client.org,
+    write_api = influx_client.write_api(write_options=SYNCHRONOUS)
+    try:
+        for item in markers or []:
+            mid = str((item or {}).get("id") or "").strip()
+            if not mid:
+                continue
+            try:
+                ts_ns = int((item or {}).get("time_ns"))
+            except (TypeError, ValueError):
+                continue
+            name = str((item or {}).get("name") or "")
+            point = (
+                Point(MEASUREMENT)
+                .tag("id", mid)
+                .field("name", name)
+                .field("marked", 1)
+                .field("deleted", 1)
+                .time(ts_ns)
             )
-            deleted.append(mid)
-        except Exception as e:
-            logger.warning("Failed to delete time marker %s: %s", mid, e)
+            try:
+                write_api.write(bucket=TIME_MARKERS_BUCKET, org=influx_client.org, record=point)
+                deleted.append(mid)
+            except Exception as e:
+                logger.warning("Failed to soft-delete time marker %s: %s", mid, e)
+    finally:
+        write_api.close()
     return deleted
 
 
@@ -145,14 +153,13 @@ def list_markers(
     range_start: str = "-30d",
     limit: int = 500,
 ) -> list[dict]:
-    """Return markers newest-first: [{id, name, time_ns, time_iso}, ...]."""
+    """Return non-deleted markers newest-first: [{id, name, time_ns, time_iso}, ...]."""
     if not influx_client:
         return []
     if not ensure_bucket(influx_client):
         return []
     lim = max(1, min(int(limit or 500), 2000))
     start = (range_start or "-30d").strip() or "-30d"
-    # Guard against flux injection in range literal.
     if not start.startswith("-") and not start.startswith("20"):
         start = "-30d"
     flux = f'''
@@ -161,7 +168,7 @@ from(bucket: "{TIME_MARKERS_BUCKET}")
   |> filter(fn: (r) => r._measurement == "{MEASUREMENT}")
   |> pivot(rowKey: ["_time", "id"], columnKey: ["_field"], valueColumn: "_value")
   |> sort(columns: ["_time"], desc: true)
-  |> limit(n: {lim})
+  |> limit(n: {lim * 2})
 '''
     try:
         tables = influx_client.query_api().query(flux, org=influx_client.org)
@@ -177,6 +184,16 @@ from(bucket: "{TIME_MARKERS_BUCKET}")
             mid = str(values.get("id") or "").strip()
             if not mid or mid in seen:
                 continue
+            # Soft-deleted (deleted=1). Missing deleted → keep (legacy markers).
+            deleted = values.get("deleted")
+            try:
+                if deleted is not None and int(deleted) != 0:
+                    seen.add(mid)
+                    continue
+            except (TypeError, ValueError):
+                if deleted:
+                    seen.add(mid)
+                    continue
             seen.add(mid)
             t = values.get("_time")
             if t is None:
@@ -195,6 +212,10 @@ from(bucket: "{TIME_MARKERS_BUCKET}")
                     "bucket": TIME_MARKERS_BUCKET,
                 }
             )
+            if len(out) >= lim:
+                break
+        if len(out) >= lim:
+            break
     out.sort(key=lambda m: m["time_ns"], reverse=True)
     return out
 
