@@ -10,6 +10,7 @@ import {
   ScrollText,
   Lock,
   Atom,
+  Home,
 } from 'lucide-react';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { LiveMessageLog } from './components/LiveMessageLog';
@@ -22,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { socket } from './socket';
-import { apiJson } from './lib/api';
+import { apiJson, clearManageToken, setManageToken } from './lib/api';
 
 const CLIENT_DEFAULT_PAGE = 'control';
 const SERVER_VIEWER_DEFAULT = 'live-log';
@@ -64,19 +65,34 @@ function Wordmark({ title }) {
 
 function TopLink({ href, active, imgSrc, alt, title }) {
   const className = cn(
-    'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-muted-foreground transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-    active ? 'hover:bg-accent hover:text-foreground' : 'pointer-events-none opacity-40'
+    'inline-flex flex-col items-center justify-center gap-1 rounded-md px-2 py-0.5 outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+    active
+      ? 'text-foreground hover:bg-accent'
+      : 'pointer-events-none text-muted-foreground'
   );
   const children = (
     <>
-      <img src={imgSrc} alt={alt} className="h-[18px] w-auto opacity-90" />
-      <ExternalLink className="size-3.5" strokeWidth={1.75} />
+      <span className="inline-flex items-center gap-1.5">
+        <img
+          src={imgSrc}
+          alt={alt}
+          className={cn('h-[18px] w-auto', active ? 'opacity-100' : 'opacity-70')}
+        />
+        <ExternalLink className="size-3.5" strokeWidth={1.75} />
+      </span>
+      <span
+        aria-hidden
+        className={cn(
+          'h-1 w-7 rounded-full',
+          active ? 'bg-signal-green shadow-[0_0_6px_#22e39b]' : 'bg-signal-red'
+        )}
+      />
     </>
   );
 
   if (!active) {
     return (
-      <span title={title} className={className}>
+      <span title={`${title} (disconnected)`} className={className}>
         {children}
       </span>
     );
@@ -246,6 +262,21 @@ function ServerViewerApp() {
   );
 }
 
+function HomeLink({ className }) {
+  return (
+    <a
+      href="/"
+      className={cn(
+        'inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-secondary px-2.5 text-[13px] font-medium text-foreground/90 transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        className
+      )}
+    >
+      <Home size={13} strokeWidth={1.75} />
+      Home
+    </a>
+  );
+}
+
 function ManageLogin({ onSuccess }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -256,7 +287,8 @@ function ManageLogin({ onSuccess }) {
     setLoading(true);
     setError('');
     try {
-      await apiJson('/api/manage/login', { method: 'POST', body: JSON.stringify({ password }) });
+      const res = await apiJson('/api/manage/login', { method: 'POST', body: JSON.stringify({ password }) });
+      if (res?.token) setManageToken(res.token);
       onSuccess();
     } catch (err) {
       setError(err.message || 'Login failed');
@@ -266,7 +298,10 @@ function ManageLogin({ onSuccess }) {
   };
 
   return (
-    <div className="grid flex-1 place-items-center bg-background">
+    <div className="relative grid flex-1 place-items-center bg-background">
+      <div className="absolute left-4 top-4">
+        <HomeLink />
+      </div>
       <form
         onSubmit={submit}
         className="w-80 rounded-xl border border-border bg-card p-6 shadow-2xl shadow-black/40"
@@ -302,7 +337,10 @@ function ServerManageApp() {
 
   const refreshSession = useCallback(() => {
     apiJson('/api/manage/session')
-      .then((s) => setAuthed(!!s.authenticated))
+      .then((s) => {
+        if (!s.authenticated) clearManageToken();
+        setAuthed(!!s.authenticated);
+      })
       .catch(() => setAuthed(false));
   }, []);
 
@@ -316,6 +354,7 @@ function ServerManageApp() {
     } catch {
       /* ignore */
     }
+    clearManageToken();
     setAuthed(false);
   };
 
@@ -342,9 +381,12 @@ function ServerManageApp() {
       page="control"
       onNavigate={() => {}}
       rightExtra={
-        <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground">
-          Log out
-        </Button>
+        <div className="flex items-center gap-1">
+          <HomeLink />
+          <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground">
+            Log out
+          </Button>
+        </div>
       }
     >
       <PageWithCollapsibleLog logOpen={sideLogOpen} onToggle={() => setSideLogOpen((v) => !v)}>

@@ -23,7 +23,7 @@ function isCurrentConfig(c, currentIp, currentPort) {
   );
 }
 
-export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentPort, isServerMode = false }) {
+export function CanpConfigModal({ opened, onClose, onRefresh, currentIp, currentPort, isServerMode = false }) {
   const [list, setList] = useState([]);
   const [autoId, setAutoId] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -36,11 +36,11 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
   const [autoSaving, setAutoSaving] = useState(false);
 
   const load = useCallback(() => {
-    apiJson('/api/tcp/configs')
+    apiJson('/api/canp/configs')
       .then(setList)
-      .catch((e) => notifications.show({ title: 'TCP configs', message: e.message, color: 'red' }));
+      .catch((e) => notifications.show({ title: 'CANP configs', message: e.message, color: 'red' }));
     if (isServerMode) {
-      apiJson('/api/tcp/auto')
+      apiJson('/api/canp/auto')
         .then((res) => setAutoId(res.auto || null))
         .catch(() => setAutoId(null));
     }
@@ -55,7 +55,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
     setEditingId(null);
     setFormName('');
     setFormIp(currentIp || '');
-    setFormPort(String(currentPort || '8187'));
+    setFormPort(String(currentPort || '6500'));
   };
 
   const startEdit = (c) => {
@@ -81,7 +81,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
       notifications.show({ title: 'Validation', message: 'Valid port required (1-65535)', color: 'red' });
       return;
     }
-    apiJson('/api/tcp/configs', { method: 'POST', body: JSON.stringify({ name: formName.trim(), ip: formIp.trim(), port }) })
+    apiJson('/api/canp/configs', { method: 'POST', body: JSON.stringify({ name: formName.trim(), ip: formIp.trim(), port }) })
       .then((created) => {
         setList((prev) => [...prev, created]);
         setAdding(false);
@@ -89,7 +89,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
         setFormIp('');
         setFormPort('');
         onRefresh?.();
-        notifications.show({ title: 'TCP config', message: 'Added', color: 'green' });
+        notifications.show({ title: 'CANP config', message: 'Added', color: 'green' });
       })
       .catch((e) => notifications.show({ title: 'Add failed', message: e.message, color: 'red' }));
   };
@@ -104,12 +104,12 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
       notifications.show({ title: 'Validation', message: 'Valid port required (1-65535)', color: 'red' });
       return;
     }
-    apiJson(`/api/tcp/configs/${editingId}`, { method: 'PUT', body: JSON.stringify({ name: formName.trim(), ip: formIp.trim(), port }) })
+    apiJson(`/api/canp/configs/${editingId}`, { method: 'PUT', body: JSON.stringify({ name: formName.trim(), ip: formIp.trim(), port }) })
       .then((updated) => {
         setList((prev) => prev.map((c) => (c.id === editingId ? updated : c)));
         setEditingId(null);
         onRefresh?.();
-        notifications.show({ title: 'TCP config', message: 'Updated', color: 'green' });
+        notifications.show({ title: 'CANP config', message: 'Updated', color: 'green' });
       })
       .catch((e) => notifications.show({ title: 'Update failed', message: e.message, color: 'red' }));
   };
@@ -122,12 +122,17 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
     if (!pendingDelete) return;
     const { id, name } = pendingDelete;
     setPendingDelete(null);
-    apiJson(`/api/tcp/configs/${id}`, { method: 'DELETE' })
+    apiJson(`/api/canp/configs/${id}`, { method: 'DELETE' })
       .then(() => {
         setList((prev) => prev.filter((x) => x.id !== id));
-        if (autoId === id) setAutoId(null);
         onRefresh?.();
-        notifications.show({ title: 'TCP config', message: `"${name}" deleted`, color: 'green' });
+        notifications.show({ title: 'CANP config', message: `"${name}" deleted`, color: 'green' });
+        // Reload auto id — delete may fall back to DAQ Server.
+        if (isServerMode) {
+          apiJson('/api/canp/auto')
+            .then((res) => setAutoId(res.auto || null))
+            .catch(() => setAutoId(null));
+        }
       })
       .catch((e) => notifications.show({ title: 'Delete failed', message: e.message, color: 'red' }));
   };
@@ -135,12 +140,14 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
   const setAsAuto = (id) => {
     const next = autoId === id ? null : id;
     setAutoSaving(true);
-    apiJson('/api/tcp/auto', { method: 'PUT', body: JSON.stringify({ auto: next }) })
+    apiJson('/api/canp/auto', { method: 'PUT', body: JSON.stringify({ auto: next }) })
       .then((res) => {
         setAutoId(res.auto || null);
         notifications.show({
           title: 'Server auto-start',
-          message: res.auto ? `Will auto-start with "${list.find((c) => c.id === res.auto)?.name || res.auto}"` : 'Auto-start cleared',
+          message: res.auto
+            ? `Will auto-start with "${list.find((c) => c.id === res.auto)?.name || res.auto}"`
+            : 'Auto-start cleared',
           color: 'green',
         });
       })
@@ -150,7 +157,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
 
   const testConnection = (ip, port) => {
     setTesting(true);
-    apiJson('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: ip.trim(), port: parseInt(port, 10) || 8187 }) })
+    apiJson('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: ip.trim(), port: parseInt(port, 10) || 6500 }) })
       .then((res) => {
         if (res.ok) {
           notifications.show({ title: 'Connection test', message: res.message, color: 'green' });
@@ -165,10 +172,10 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
   const renderForm = (onSave) => (
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="tcp-form-name" className="text-xs">Name</Label>
+        <Label htmlFor="canp-form-name" className="text-xs">Name</Label>
         <Input
-          id="tcp-form-name"
-          placeholder="e.g. Main Server"
+          id="canp-form-name"
+          placeholder="e.g. DAQ Server"
           value={formName}
           onChange={(e) => setFormName(e.target.value)}
           className="h-8 text-sm"
@@ -176,18 +183,18 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
       </div>
       <div className="flex gap-2">
         <div className="flex flex-1 flex-col gap-1.5">
-          <Label htmlFor="tcp-form-ip" className="text-xs">IP</Label>
+          <Label htmlFor="canp-form-ip" className="text-xs">IP</Label>
           <Input
-            id="tcp-form-ip"
+            id="canp-form-ip"
             value={formIp}
             onChange={(e) => setFormIp(e.target.value)}
             className="h-8 text-sm tabular"
           />
         </div>
         <div className="flex flex-1 flex-col gap-1.5">
-          <Label htmlFor="tcp-form-port" className="text-xs">Port</Label>
+          <Label htmlFor="canp-form-port" className="text-xs">Port</Label>
           <Input
-            id="tcp-form-port"
+            id="canp-form-port"
             type="number"
             value={formPort}
             onChange={(e) => setFormPort(e.target.value)}
@@ -218,15 +225,15 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
       <Dialog open={opened} onOpenChange={(o) => { if (!o) onClose(); }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto bg-popover sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-display">Manage TCP configs</DialogTitle>
+            <DialogTitle className="font-display">Manage CANP configs</DialogTitle>
           </DialogHeader>
 
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
                 {isServerMode
-                  ? 'Presets + optional server auto-start (CANP, HighNoon, all DBCs)'
-                  : 'Saved network/port presets'}
+                  ? 'Presets + server auto-start (default: DAQ Server, HighNoon, all DBCs)'
+                  : 'Saved CANP host/port presets'}
               </p>
               <Button variant="ghost" size="xs" onClick={startAdd} disabled={adding}>
                 <Plus className="size-3" />
@@ -335,7 +342,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
 
             {list.length === 0 && !adding && (
               <p className="py-4 text-center text-sm text-muted-foreground">
-                No TCP configs yet. Add one above.
+                No CANP configs yet. Add one above.
               </p>
             )}
           </div>
@@ -345,7 +352,7 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
       <Dialog open={!!pendingDelete} onOpenChange={(o) => { if (!o) setPendingDelete(null); }}>
         <DialogContent className="bg-popover sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-display">Delete TCP config</DialogTitle>
+            <DialogTitle className="font-display">Delete CANP config</DialogTitle>
             <DialogDescription>
               {pendingDelete ? `Delete "${pendingDelete.name}"? This cannot be undone.` : ''}
             </DialogDescription>

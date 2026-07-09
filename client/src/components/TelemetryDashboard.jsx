@@ -3,7 +3,7 @@ import { notifications } from '@/lib/notify';
 import { socket } from '../socket';
 import { Power, RefreshCw, Usb, Wifi, FileText, Car, Save, Settings2, Database, Square, Cpu, Network, Loader2 } from 'lucide-react';
 import { LogFileManagerModal, DbcFileManagerModal } from './FileManagerModals';
-import { TcpConfigModal } from './TcpConfigModal';
+import { CanpConfigModal } from './CanpConfigModal';
 import { DatabaseManagementModal } from './DatabaseManagementModal';
 import { apiJson, backendDownloadUrl } from '../lib/api';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,7 @@ const INPUT_MODES = [
   { value: 'file', label: 'File' },
 ];
 
-const SERVER_INPUT_MODES = INPUT_MODES.filter((m) => m.value === 'tcp' || m.value === 'canp_tcp');
+const SERVER_INPUT_MODES = INPUT_MODES.filter((m) => m.value === 'canp_tcp');
 const SERVER_MODE_VALUES = new Set(SERVER_INPUT_MODES.map((m) => m.value));
 
 const SOURCE_MODE_ICON_SIZE = 14;
@@ -145,9 +145,9 @@ export function TelemetryDashboard() {
   const [loading, setLoading] = useState({ start: false, stop: false, save: false, tcpTest: false });
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [dbcModalOpen, setDbcModalOpen] = useState(false);
-  const [tcpModalOpen, setTcpModalOpen] = useState(false);
+  const [canpModalOpen, setCanpModalOpen] = useState(false);
   const [dbModalOpen, setDbModalOpen] = useState(false);
-  const [tcpConfigs, setTcpConfigs] = useState([]);
+  const [canpConfigs, setCanpConfigs] = useState([]);
   const [appMode, setAppMode] = useState(null);
   const canDownloadBackend = !backendConnected && !!backendDownloadUrl;
   const selectAllDbcOnLoadRef = useRef(false);
@@ -195,10 +195,10 @@ export function TelemetryDashboard() {
       .catch(() => setPcanPrereq({ ok: false, message: 'Failed to check', platform: 'unknown', hint: null }));
   }, []);
 
-  const loadTcpConfigs = useCallback(() => {
-    apiJson('/api/tcp/configs')
-      .then(setTcpConfigs)
-      .catch(() => setTcpConfigs([]));
+  const loadCanpConfigs = useCallback(() => {
+    apiJson('/api/canp/configs')
+      .then(setCanpConfigs)
+      .catch(() => setCanpConfigs([]));
   }, []);
 
   const loadVehicles = useCallback(() => {
@@ -227,9 +227,9 @@ export function TelemetryDashboard() {
     loadSerialPorts();
     loadLogFiles();
     loadVehicles();
-    loadTcpConfigs();
+    loadCanpConfigs();
     loadAppMode();
-  }, [loadConfig, loadSerialPorts, loadLogFiles, loadVehicles, loadTcpConfigs, loadAppMode]);
+  }, [loadConfig, loadSerialPorts, loadLogFiles, loadVehicles, loadCanpConfigs, loadAppMode]);
 
   useEffect(() => {
     if (!isServerMode || !config || status.service_running) return;
@@ -538,32 +538,8 @@ export function TelemetryDashboard() {
         );
       }
       case 'tcp': {
-        const tcpPresetOptions = [
-          { value: CUSTOM_PRESET, label: 'Custom' },
-          ...tcpConfigs.map((c) => ({ value: c.id, label: `${c.name} (${c.ip}:${c.port})` })),
-        ];
-        const selectedPreset = tcpConfigs.find((c) => c.ip === config.TCP_IP && c.port === config.TCP_PORT)?.id || CUSTOM_PRESET;
         return (
           <>
-            <div className="flex items-end gap-2">
-              <ConfigSelect
-                label="Preset"
-                className="min-w-0 flex-1"
-                value={selectedPreset}
-                onValueChange={(v) => {
-                  const c = tcpConfigs.find((x) => x.id === v);
-                  if (c) {
-                    setLocalConfig('TCP_IP', c.ip);
-                    setLocalConfig('TCP_PORT', c.port);
-                  }
-                }}
-                options={tcpPresetOptions}
-                disabled={disabled}
-              />
-              <Button variant="ghost" size="icon-sm" onClick={() => setTcpModalOpen(true)} disabled={disabled} title="Manage TCP configs">
-                <Settings2 className="size-3.5" />
-              </Button>
-            </div>
             <div className="grid grid-cols-2 gap-2">
               <ConfigInput
                 label="IP"
@@ -604,11 +580,11 @@ export function TelemetryDashboard() {
         );
       }
       case 'canp_tcp': {
-        const tcpPresetOptions = [
+        const canpPresetOptions = [
           { value: CUSTOM_PRESET, label: 'Custom' },
-          ...tcpConfigs.map((c) => ({ value: c.id, label: `${c.name} (${c.ip}:${c.port})` })),
+          ...canpConfigs.map((c) => ({ value: c.id, label: `${c.name} (${c.ip}:${c.port})` })),
         ];
-        const selectedPreset = tcpConfigs.find((c) => c.ip === config.CANP_TCP_IP && c.port === config.CANP_TCP_PORT)?.id || CUSTOM_PRESET;
+        const selectedPreset = canpConfigs.find((c) => c.ip === config.CANP_TCP_IP && c.port === config.CANP_TCP_PORT)?.id || CUSTOM_PRESET;
         return (
           <>
             <p className="text-xs text-muted-foreground">Photon CANP batched frames over TCP (magic CAN1, v3).</p>
@@ -618,16 +594,16 @@ export function TelemetryDashboard() {
                 className="min-w-0 flex-1"
                 value={selectedPreset}
                 onValueChange={(v) => {
-                  const c = tcpConfigs.find((x) => x.id === v);
+                  const c = canpConfigs.find((x) => x.id === v);
                   if (c) {
                     setLocalConfig('CANP_TCP_IP', c.ip);
                     setLocalConfig('CANP_TCP_PORT', c.port);
                   }
                 }}
-                options={tcpPresetOptions}
+                options={canpPresetOptions}
                 disabled={disabled}
               />
-              <Button variant="ghost" size="icon-sm" onClick={() => setTcpModalOpen(true)} disabled={disabled} title="Manage TCP configs">
+              <Button variant="ghost" size="icon-sm" onClick={() => setCanpModalOpen(true)} disabled={disabled} title="Manage CANP configs">
                 <Settings2 className="size-3.5" />
               </Button>
             </div>
@@ -906,12 +882,12 @@ export function TelemetryDashboard() {
         onFilesChanged={() => loadDbcFilesForVehicle(config.DBC_VEHICLE)}
         onVehiclesChanged={loadVehicles}
       />
-      <TcpConfigModal
-        opened={tcpModalOpen}
-        onClose={() => setTcpModalOpen(false)}
-        onRefresh={loadTcpConfigs}
-        currentIp={inputMode === 'canp_tcp' ? config.CANP_TCP_IP : config.TCP_IP}
-        currentPort={inputMode === 'canp_tcp' ? config.CANP_TCP_PORT : config.TCP_PORT}
+      <CanpConfigModal
+        opened={canpModalOpen}
+        onClose={() => setCanpModalOpen(false)}
+        onRefresh={loadCanpConfigs}
+        currentIp={config.CANP_TCP_IP}
+        currentPort={config.CANP_TCP_PORT}
         isServerMode={isServerMode}
       />
       <DatabaseManagementModal

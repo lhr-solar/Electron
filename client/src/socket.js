@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import { socketBaseUrl } from './lib/api';
+import { getManageToken, socketBaseUrl } from './lib/api';
 
 // undefined means deriving the URL from window.location.
 const URL = socketBaseUrl || undefined;
@@ -10,4 +10,9 @@ export const socket = io(URL, {
   autoConnect: true,
   transports: ['websocket', 'polling'],
   upgrade: true,
+  withCredentials: true,
+  auth: (cb) => {
+    const token = getManageToken();
+    cb(token ? { manage_token: token } : {});
+  },
 });

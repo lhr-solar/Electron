@@ -222,6 +222,42 @@ async def _get_cached_health(force_refresh: bool = False):
         asyncio.create_task(_bg())
     return _cached_health()
 
+def _adapter_status_info():
+    """Compact adapter summary for the status-bar info popover."""
+    config = settings.get_effective_config()
+    mode = config.get("INPUT_MODE") or settings.INPUT_MODE or ""
+    labels = {
+        "serial_canadapter": "Adapter",
+        "serial_uart": "UART",
+        "pcan": "PCAN",
+        "tcp": "TCP SLCAN",
+        "canp_tcp": "CANP",
+        "file": "File",
+    }
+    detail = ""
+    if mode in ("serial_canadapter", "serial_uart"):
+        detail = (config.get("SERIAL_PORT") or "").strip()
+    elif mode == "pcan":
+        device_id = config.get("PCAN_DEVICE_ID")
+        channel = (config.get("PCAN_CHANNEL") or "").strip()
+        detail = f"ID {device_id}" if device_id not in (None, "") else channel
+    elif mode == "tcp":
+        ip = (config.get("TCP_IP") or "").strip()
+        port = config.get("TCP_PORT")
+        detail = f"{ip}:{port}" if ip and port not in (None, "") else ip
+    elif mode == "canp_tcp":
+        ip = (config.get("CANP_TCP_IP") or "").strip()
+        port = config.get("CANP_TCP_PORT")
+        detail = f"{ip}:{port}" if ip and port not in (None, "") else ip
+    elif mode == "file":
+        detail = (config.get("REPLAY_FILE_PATH") or "").strip()
+    return {
+        "mode": mode,
+        "label": labels.get(mode, mode or "—"),
+        "detail": detail,
+    }
+
+
 async def build_status_payload(force_health_refresh: bool = False):
     parser_status = telemetry_service.get_parser_status()
     influx_connected, grafana_active = await _get_cached_health(force_refresh=force_health_refresh)
@@ -239,6 +275,7 @@ async def build_status_payload(force_health_refresh: bool = False):
         "dbc_errors": telemetry_service.get_dbc_errors(),
         "influx_bucket": settings.get_bucket(),
         "vehicle": settings.COMMON_CONFIG.get("DBC_VEHICLE", ""),
+        "adapter": _adapter_status_info(),
     }
 
 async def emit_status_update(force_health_refresh: bool = False, to: str | None = None):
@@ -286,14 +323,14 @@ def _list_vehicle_dbc_names(vehicle: str) -> list[str]:
 
 
 async def _maybe_server_autostart():
-    """If server mode has an optional TCP auto preset, apply HighNoon+all DBCs and start."""
+    """Server mode: auto-start CANP with DAQ (or configured) preset, HighNoon, all DBCs."""
     if not IS_SERVER_MODE:
         return
-    from server.util.tcp_configs import get_auto_id, get_config
+    from server.util.canp_configs import get_auto_id, get_config
 
     auto_id = await asyncio.to_thread(get_auto_id)
     if not auto_id:
-        logger.info("Server auto-start: no auto TCP config set; skipping.")
+        logger.info("Server auto-start: no auto CANP config set; skipping.")
         return
     preset = await asyncio.to_thread(get_config, auto_id)
     if not preset:
@@ -488,22 +525,23 @@ async def runtime_info():
 
 
 @app.post("/api/manage/login")
-async def manage_login(body: ManageLogin):
+async def manage_login(body: ManageLogin, request: Request):
     if not IS_SERVER_MODE:
-        return {"ok": True, "authenticated": True}
+        return {"ok": True, "authenticated": True, "token": None}
     if not MANAGE_PASSWORD:
         raise HTTPException(status_code=503, detail="MANAGE_PASSWORD is not configured.")
     if not password_ok(body.password):
         raise HTTPException(status_code=401, detail="Invalid password.")
-    response = JSONResponse({"ok": True, "authenticated": True})
-    set_session_cookie(response, create_session_token())
+    token = create_session_token()
+    response = JSONResponse({"ok": True, "authenticated": True, "token": token})
+    set_session_cookie(response, token, request)
     return response
 
 
 @app.post("/api/manage/logout")
-async def manage_logout():
+async def manage_logout(request: Request):
     response = JSONResponse({"ok": True, "authenticated": False})
-    clear_session_cookie(response)
+    clear_session_cookie(response, request)
     return response
 
 
@@ -574,43 +612,49 @@ async def check_pcan_prerequisites():
     from server.util.pcan_utils import check_pcan_prerequisites
     return await asyncio.to_thread(check_pcan_prerequisites)
 
-@app.get("/api/tcp/configs")
-async def list_tcp_configs():
-    from server.util.tcp_configs import list_configs
+@app.get("/api/canp/configs")
+@app.get("/api/tcp/configs")  # legacy alias
+async def list_canp_configs():
+    from server.util.canp_configs import list_configs
     return await asyncio.to_thread(list_configs)
 
-@app.get("/api/tcp/auto")
-async def get_tcp_auto():
-    from server.util.tcp_configs import get_auto_id
+@app.get("/api/canp/auto")
+@app.get("/api/tcp/auto")  # legacy alias
+async def get_canp_auto():
+    from server.util.canp_configs import get_auto_id
     return {"auto": await asyncio.to_thread(get_auto_id)}
 
-@app.put("/api/tcp/auto")
-async def update_tcp_auto(body: TcpAutoUpdate):
-    from server.util.tcp_configs import set_auto_id
+@app.put("/api/canp/auto")
+@app.put("/api/tcp/auto")  # legacy alias
+async def update_canp_auto(body: TcpAutoUpdate):
+    from server.util.canp_configs import set_auto_id
     try:
         auto = await asyncio.to_thread(set_auto_id, body.auto)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return {"auto": auto}
 
-@app.post("/api/tcp/configs")
-async def create_tcp_config(body: TcpConfigCreate):
-    from server.util.tcp_configs import add_config
+@app.post("/api/canp/configs")
+@app.post("/api/tcp/configs")  # legacy alias
+async def create_canp_config(body: TcpConfigCreate):
+    from server.util.canp_configs import add_config
     return await asyncio.to_thread(add_config, body.name, body.ip, body.port)
 
-@app.put("/api/tcp/configs/{config_id}")
-async def update_tcp_config(config_id: str, body: TcpConfigUpdate):
-    from server.util.tcp_configs import update_config
+@app.put("/api/canp/configs/{config_id}")
+@app.put("/api/tcp/configs/{config_id}")  # legacy alias
+async def update_canp_config(config_id: str, body: TcpConfigUpdate):
+    from server.util.canp_configs import update_config
     result = await asyncio.to_thread(update_config, config_id, body.name, body.ip, body.port)
     if not result:
-        raise HTTPException(status_code=404, detail="TCP config not found.")
+        raise HTTPException(status_code=404, detail="CANP config not found.")
     return result
 
-@app.delete("/api/tcp/configs/{config_id}")
-async def delete_tcp_config(config_id: str):
-    from server.util.tcp_configs import delete_config
+@app.delete("/api/canp/configs/{config_id}")
+@app.delete("/api/tcp/configs/{config_id}")  # legacy alias
+async def delete_canp_config(config_id: str):
+    from server.util.canp_configs import delete_config
     if not await asyncio.to_thread(delete_config, config_id):
-        raise HTTPException(status_code=404, detail="TCP config not found.")
+        raise HTTPException(status_code=404, detail="CANP config not found.")
     return {"message": "Deleted."}
 
 @app.post("/api/tcp/test")

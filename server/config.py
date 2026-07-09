@@ -47,7 +47,7 @@ class Configuration:
 
         # --- Default Settings ---
         self.DEFAULT_DBC_VEHICLE = os.environ.get("DEFAULT_DBC_VEHICLE", "HighNoon")
-        self.INPUT_MODE = 'tcp'
+        self.INPUT_MODE = 'canp_tcp'
         self.COMMON_CONFIG = {
             "DBC_VEHICLE": self.DEFAULT_DBC_VEHICLE,
             "DBC_FILES": [],  # list of .dbc filenames under Embedded-Sharepoint/can/dbc/<vehicle>/
@@ -69,11 +69,14 @@ class Configuration:
         self.TCP_CONFIG = {
             "TCP_IP": "3.141.38.115",
             "TCP_PORT": 8187,
+            "CONNECTION_TIMEOUT": 5.0,
         }
         # CANP TCP: Photon batched binary frames (photon/network/canp.h).
+        # Default endpoint matches DAQ Server preset.
         self.CANP_TCP_CONFIG = {
-            "CANP_TCP_IP": "127.0.0.1",
+            "CANP_TCP_IP": "3.141.38.115",
             "CANP_TCP_PORT": 6500,
+            "CONNECTION_TIMEOUT": 5.0,
         }
         self.FILE_CONFIG = {
             "REPLAY_FILE_PATH": os.path.join(self.LOG_DIR, "261_log.txt"),

@@ -1,5 +1,5 @@
 {
-  "auto": null,
+  "auto": "daq-server",
   "configs": [
     {
       "id": "daq-server",

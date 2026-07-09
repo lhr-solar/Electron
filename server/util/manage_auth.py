@@ -51,10 +51,22 @@ def password_ok(password: str) -> bool:
     return hmac.compare_digest(password or "", MANAGE_PASSWORD)
 
 
+def _token_from_request(request: Request) -> str | None:
+    cookie = request.cookies.get(COOKIE_NAME)
+    if cookie:
+        return cookie
+    # Client may persist the session token in localStorage and send it back.
+    auth = request.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    header = request.headers.get("x-manage-token")
+    return header.strip() if header else None
+
+
 def is_authenticated(request: Request) -> bool:
     if not IS_SERVER_MODE:
         return True
-    return verify_session_token(request.cookies.get(COOKIE_NAME))
+    return verify_session_token(_token_from_request(request))
 
 
 def require_manage_auth(request: Request) -> None:
@@ -66,19 +78,34 @@ def require_manage_auth(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Manage login required.")
 
 
-def set_session_cookie(response: Response, token: str) -> None:
+def _request_is_https(request: Request | None) -> bool:
+    if request is None:
+        return False
+    if request.url.scheme == "https":
+        return True
+    proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+    return proto == "https"
+
+
+def set_session_cookie(response: Response, token: str, request: Request | None = None) -> None:
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         httponly=True,
         samesite="lax",
+        secure=_request_is_https(request),
         max_age=SESSION_TTL_SEC,
         path="/",
     )
 
 
-def clear_session_cookie(response: Response) -> None:
-    response.delete_cookie(key=COOKIE_NAME, path="/")
+def clear_session_cookie(response: Response, request: Request | None = None) -> None:
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/",
+        samesite="lax",
+        secure=_request_is_https(request),
+    )
 
 
 # Mutating HTTP routes that require manage auth in server mode.
@@ -87,13 +114,15 @@ _PROTECTED_EXACT = {
     ("POST", "/api/stop"),
     ("POST", "/api/restart"),
     ("POST", "/api/config"),
-    ("POST", "/api/tcp/configs"),
-    ("PUT", "/api/tcp/auto"),
+    ("POST", "/api/canp/configs"),
+    ("PUT", "/api/canp/auto"),
+    ("POST", "/api/tcp/configs"),  # legacy
+    ("PUT", "/api/tcp/auto"),  # legacy
     ("POST", "/api/tcp/test"),
     ("POST", "/api/dbc/vehicles"),
     ("POST", "/api/events/decode-csv"),
     ("POST", "/api/influx/buckets"),
-}
+)
 
 
 def path_requires_manage_auth(method: str, path: str) -> bool:
@@ -105,7 +134,7 @@ def path_requires_manage_auth(method: str, path: str) -> bool:
     path = path.rstrip("/") or path
     if (method, path) in _PROTECTED_EXACT:
         return True
-    if path.startswith("/api/tcp/configs/"):
+    if path.startswith("/api/canp/configs/") or path.startswith("/api/tcp/configs/"):
         return True
     if path.startswith("/api/files/"):
         return True

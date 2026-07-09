@@ -21,7 +21,10 @@ class CanpTcpParser(_Parser):
         super().__init__(queue, stop_event)
         self.source = (ip, port)
         self.connection_state = False
-        self.connection_timeout = settings.TCP_CONFIG.get("CONNECTION_TIMEOUT", 5.0)
+        self.connection_timeout = settings.CANP_TCP_CONFIG.get(
+            "CONNECTION_TIMEOUT",
+            settings.TCP_CONFIG.get("CONNECTION_TIMEOUT", 5.0),
+        )
 
     @staticmethod
     def _packet_to_slcan(can_id: int, dlc: int, data: bytes) -> str | None:
