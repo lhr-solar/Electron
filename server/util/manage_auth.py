@@ -122,7 +122,7 @@ _PROTECTED_EXACT = {
     ("POST", "/api/dbc/vehicles"),
     ("POST", "/api/events/delete"),
     ("POST", "/api/influx/buckets"),
-)
+}
 
 
 def path_requires_manage_auth(method: str, path: str) -> bool:
