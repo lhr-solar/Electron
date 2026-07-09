@@ -31,12 +31,21 @@ def validate_start_config() -> tuple[str | None, str | None]:
     if not dbc_paths:
         return "DBC error", f"No DBC files selected for vehicle '{vehicle}'."
 
-    # Load DBC to surface load/parse errors before starting
+    # Load DBC to surface load/parse errors before starting.
+    # Partial failures are OK (e.g. one bad DBC among many) as long as something loaded.
     try:
         can_manager = CANManager(dbc_paths, config, influx_writer=None)
         errors = can_manager.get_errors()
+        if not can_manager.db.messages:
+            detail = " ".join(errors) if errors else "No messages loaded from selected DBC files."
+            return "DBC error", detail
         if errors:
-            return "DBC error", " ".join(errors) if len(errors) <= 2 else (errors[0] + " … and " + str(len(errors) - 1) + " more.")
+            logger.warning(
+                "DBC validation: %d file(s) failed to load; continuing with %d messages. First error: %s",
+                len(errors),
+                len(can_manager.db.messages),
+                errors[0],
+            )
     except Exception as e:
         logger.exception("DBC validation: %s", e)
         return "DBC error", str(e)
