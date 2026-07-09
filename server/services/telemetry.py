@@ -171,7 +171,7 @@ class TelemetryService:
         dbc_files = config.get("DBC_FILES") or []
         if not isinstance(dbc_files, list):
             dbc_files = [f for f in str(dbc_files).split(",") if f.strip()]
-        dbc_paths = resolve_dbc_paths(vehicle, dbc_files, settings.DBC_DIR)
+        dbc_paths = resolve_dbc_paths(vehicle, dbc_files)
         if not dbc_paths:
             self.dbc_errors.append(f"No DBC files selected for vehicle '{vehicle}'.")
         can_manager = CANManager(dbc_paths, config, influx_writer=self.influx_writer)

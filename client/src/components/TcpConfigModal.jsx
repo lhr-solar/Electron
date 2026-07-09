@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Box, Text, Stack, Group, Button, TextInput, ActionIcon } from '@mantine/core';
+import { Modal, Box, Text, Stack, Group, Button, TextInput, ActionIcon, Badge } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { Trash2, Pencil, Plus, Wifi } from 'lucide-react';
+import { Trash2, Pencil, Plus, Wifi, Zap } from 'lucide-react';
 import { apiJson } from '../lib/api';
 
-export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentPort }) {
+export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentPort, isServerMode = false }) {
   const [list, setList] = useState([]);
+  const [autoId, setAutoId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [formName, setFormName] = useState('');
   const [formIp, setFormIp] = useState('');
@@ -13,12 +14,18 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
   const [adding, setAdding] = useState(false);
   const [testing, setTesting] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [autoSaving, setAutoSaving] = useState(false);
 
   const load = useCallback(() => {
     apiJson('/api/tcp/configs')
       .then(setList)
       .catch((e) => notifications.show({ title: 'TCP configs', message: e.message, color: 'red' }));
-  }, []);
+    if (isServerMode) {
+      apiJson('/api/tcp/auto')
+        .then((res) => setAutoId(res.auto || null))
+        .catch(() => setAutoId(null));
+    }
+  }, [isServerMode]);
 
   useEffect(() => {
     if (opened) load();
@@ -100,10 +107,27 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
     apiJson(`/api/tcp/configs/${id}`, { method: 'DELETE' })
       .then(() => {
         setList((prev) => prev.filter((x) => x.id !== id));
+        if (autoId === id) setAutoId(null);
         onRefresh?.();
         notifications.show({ title: 'TCP config', message: `"${name}" deleted`, color: 'green' });
       })
       .catch((e) => notifications.show({ title: 'Delete failed', message: e.message, color: 'red' }));
+  };
+
+  const setAsAuto = (id) => {
+    const next = autoId === id ? null : id;
+    setAutoSaving(true);
+    apiJson('/api/tcp/auto', { method: 'PUT', body: JSON.stringify({ auto: next }) })
+      .then((res) => {
+        setAutoId(res.auto || null);
+        notifications.show({
+          title: 'Server auto-start',
+          message: res.auto ? `Will auto-start with "${list.find((c) => c.id === res.auto)?.name || res.auto}"` : 'Auto-start cleared',
+          color: 'green',
+        });
+      })
+      .catch((e) => notifications.show({ title: 'Auto-start failed', message: e.message, color: 'red' }))
+      .finally(() => setAutoSaving(false));
   };
 
   const testConnection = (ip, port) => {
@@ -125,7 +149,11 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
     <Modal opened={opened} onClose={onClose} title="Manage TCP configs" size="md">
       <Stack gap="md">
         <Group justify="space-between">
-          <Text size="sm" c="dimmed">Saved network/port presets</Text>
+          <Text size="sm" c="dimmed">
+            {isServerMode
+              ? 'Presets + optional server auto-start (CANP, HighNoon, all DBCs)'
+              : 'Saved network/port presets'}
+          </Text>
           <Button variant="subtle" size="xs" leftSection={<Plus size={12} />} onClick={startAdd} disabled={adding}>
             Add
           </Button>
@@ -176,10 +204,27 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
               ) : (
                 <Group justify="space-between">
                   <div>
-                    <Text size="sm" fw={500}>{c.name}</Text>
+                    <Group gap={6} align="center">
+                      <Text size="sm" fw={500}>{c.name}</Text>
+                      {isServerMode && autoId === c.id && (
+                        <Badge size="xs" color="blue" variant="light">auto</Badge>
+                      )}
+                    </Group>
                     <Text size="xs" c="dimmed">{c.ip}:{c.port}</Text>
                   </div>
                   <Group gap={4}>
+                    {isServerMode && (
+                      <ActionIcon
+                        variant={autoId === c.id ? 'filled' : 'subtle'}
+                        size="sm"
+                        color={autoId === c.id ? 'blue' : 'gray'}
+                        onClick={() => setAsAuto(c.id)}
+                        loading={autoSaving}
+                        title={autoId === c.id ? 'Clear server auto-start' : 'Set as server auto-start'}
+                      >
+                        <Zap size={14} />
+                      </ActionIcon>
+                    )}
                     <ActionIcon variant="subtle" size="sm" onClick={() => testConnection(c.ip, c.port)} loading={testing} title="Test connection">
                       <Wifi size={14} />
                     </ActionIcon>

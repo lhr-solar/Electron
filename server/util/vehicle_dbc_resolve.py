@@ -1,7 +1,4 @@
-"""Resolve vehicle names and DBC paths across Embedded-Sharepoint and local DBC dir.
-Vehicle names are matched case-insensitively with leading/trailing trim.
-Embedded-Sharepoint spelling is preferred for display.
-"""
+"""Resolve vehicle names and DBC paths from Embedded-Sharepoint only."""
 import os
 
 
@@ -20,14 +17,15 @@ def _normalize(name: str) -> str:
     return name.strip().lower()
 
 
-def get_vehicle_folders(local_dbc_dir: str):
+def get_vehicle_folders(_local_dbc_dir: str = ""):
     """Return (display_by_normalized, embedded_actual_by_normalized, local_actual_by_normalized).
-    Display name prefers Embedded-Sharepoint spelling. Keys are normalized (strip + lower).
+
+    local_actual is always empty — DBCs come from Embedded-Sharepoint only.
+    `_local_dbc_dir` kept for call-site compatibility.
     """
     embedded_dir = get_embedded_dbc_dir()
     display = {}
     embedded_actual = {}
-    local_actual = {}
     if os.path.isdir(embedded_dir):
         for d in os.listdir(embedded_dir):
             path = os.path.join(embedded_dir, d)
@@ -35,34 +33,21 @@ def get_vehicle_folders(local_dbc_dir: str):
                 n = _normalize(d)
                 display[n] = d.strip()
                 embedded_actual[n] = d
-    if os.path.isdir(local_dbc_dir):
-        for d in os.listdir(local_dbc_dir):
-            path = os.path.join(local_dbc_dir, d)
-            if os.path.isdir(path) and not d.startswith("."):
-                n = _normalize(d)
-                if n not in display:
-                    display[n] = d.strip()
-                local_actual[n] = d
-    return display, embedded_actual, local_actual
+    return display, embedded_actual, {}
 
 
-def resolve_vehicle(vehicle: str, local_dbc_dir: str):
-    """Resolve vehicle name (any casing/whitespace) to (display_name, embedded_dir_name, local_dir_name).
-    Dir names are actual folder names on disk; None if that source has no folder for this vehicle.
-    """
+def resolve_vehicle(vehicle: str, _local_dbc_dir: str = ""):
+    """Resolve vehicle name to (display_name, embedded_dir_name, local_dir_name)."""
     n = _normalize(vehicle)
-    display, embedded_actual, local_actual = get_vehicle_folders(local_dbc_dir)
+    display, embedded_actual, local_actual = get_vehicle_folders()
     if n not in display:
         return None, None, None
     return display[n], embedded_actual.get(n), local_actual.get(n)
 
 
-def resolve_dbc_paths(vehicle: str, dbc_files: list, local_dbc_dir: str):
-    """Resolve vehicle + list of DBC filenames to full file paths.
-    For each file, uses embedded path if present, else local path.
-    Returns list of paths (may include missing files; CANManager will report missing).
-    """
-    _, emb_actual, loc_actual = resolve_vehicle(vehicle, local_dbc_dir)
+def resolve_dbc_paths(vehicle: str, dbc_files: list, _local_dbc_dir: str = ""):
+    """Resolve vehicle + DBC filenames to Embedded-Sharepoint paths."""
+    _, emb_actual, _ = resolve_vehicle(vehicle)
     embedded_dir = get_embedded_dbc_dir()
     paths = []
     for f in dbc_files:
@@ -71,48 +56,27 @@ def resolve_dbc_paths(vehicle: str, dbc_files: list, local_dbc_dir: str):
             continue
         if not f.lower().endswith(".dbc"):
             f = f + ".dbc"
-        # Prefer embedded, then local
-        chosen = None
         if emb_actual is not None:
-            emb_path = os.path.join(embedded_dir, emb_actual, f)
-            if os.path.isfile(emb_path):
-                chosen = emb_path
-        if chosen is None and loc_actual is not None:
-            loc_path = os.path.join(local_dbc_dir, loc_actual, f)
-            if os.path.isfile(loc_path):
-                chosen = loc_path
-        if chosen is None:
-            # Keep one path for error reporting (prefer local path if we have a folder)
-            if loc_actual is not None:
-                chosen = os.path.join(local_dbc_dir, loc_actual, f)
-            elif emb_actual is not None:
-                chosen = os.path.join(embedded_dir, emb_actual, f)
-            else:
-                chosen = os.path.join(local_dbc_dir, vehicle.strip(), f)
-        paths.append(chosen)
+            paths.append(os.path.join(embedded_dir, emb_actual, f))
+        else:
+            paths.append(os.path.join(embedded_dir, vehicle.strip(), f))
     return paths
 
 
-def resolve_all_dbc_paths(vehicle: str, dbc_files: list | None, local_dbc_dir: str) -> list[str]:
-    """All DBC paths for a vehicle. Uses explicit dbc_files when provided, else every .dbc in vehicle folders."""
+def resolve_all_dbc_paths(vehicle: str, dbc_files: list | None, _local_dbc_dir: str = "") -> list[str]:
+    """All DBC paths for a vehicle from Embedded-Sharepoint."""
     files = [f for f in (dbc_files or []) if str(f).strip()]
     if files:
-        return [p for p in resolve_dbc_paths(vehicle, files, local_dbc_dir) if os.path.isfile(p)]
-    _, emb_actual, loc_actual = resolve_vehicle(vehicle, local_dbc_dir)
+        return [p for p in resolve_dbc_paths(vehicle, files) if os.path.isfile(p)]
+    _, emb_actual, _ = resolve_vehicle(vehicle)
     embedded_dir = get_embedded_dbc_dir()
-    paths: list[str] = []
-    seen: set[str] = set()
-    for actual in (emb_actual, loc_actual):
-        if not actual:
-            continue
-        for base in (os.path.join(embedded_dir, actual), os.path.join(local_dbc_dir, actual)):
-            if not os.path.isdir(base):
-                continue
-            for name in sorted(os.listdir(base)):
-                if not name.lower().endswith(".dbc"):
-                    continue
-                full = os.path.join(base, name)
-                if full not in seen and os.path.isfile(full):
-                    seen.add(full)
-                    paths.append(full)
-    return paths
+    if not emb_actual:
+        return []
+    base = os.path.join(embedded_dir, emb_actual)
+    if not os.path.isdir(base):
+        return []
+    return [
+        os.path.join(base, name)
+        for name in sorted(os.listdir(base))
+        if name.lower().endswith(".dbc") and os.path.isfile(os.path.join(base, name))
+    ]

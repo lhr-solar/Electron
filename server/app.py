@@ -106,6 +106,7 @@ class FileRename(BaseModel): old_name: str; new_name: str
 class VehicleCreate(BaseModel): name: str
 class TcpConfigCreate(BaseModel): name: str; ip: str; port: int
 class TcpConfigUpdate(BaseModel): name: str; ip: str; port: int
+class TcpAutoUpdate(BaseModel): auto: str | None = None
 class TcpTestRequest(BaseModel): ip: str; port: int = 8187
 
 
@@ -219,30 +220,111 @@ async def send_status_updates(sio: socketio.AsyncServer):
         await emit_status_update()
         await asyncio.sleep(0.25)
 
+def _list_vehicle_dbc_names(vehicle: str) -> list[str]:
+    """Return sorted .dbc filenames for a vehicle from Embedded-Sharepoint."""
+    _, emb_actual, _ = _resolve_vehicle(vehicle)
+    names: dict[str, str] = {}
+    if emb_actual is not None:
+        emb_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
+        if os.path.isdir(emb_dir):
+            for f in os.listdir(emb_dir):
+                full = os.path.join(emb_dir, f)
+                if f.lower().endswith(".dbc") and os.path.isfile(full):
+                    names[f.lower()] = f
+    return [names[k] for k in sorted(names.keys())]
+
+
+async def _maybe_server_autostart():
+    """If server mode has an optional TCP auto preset, apply HighNoon+all DBCs and start."""
+    if not IS_SERVER_MODE:
+        return
+    from server.util.tcp_configs import get_auto_id, get_config
+
+    auto_id = await asyncio.to_thread(get_auto_id)
+    if not auto_id:
+        logger.info("Server auto-start: no auto TCP config set; skipping.")
+        return
+    preset = await asyncio.to_thread(get_config, auto_id)
+    if not preset:
+        logger.warning("Server auto-start: auto id '%s' not found; skipping.", auto_id)
+        return
+
+    vehicle = settings.DEFAULT_DBC_VEHICLE or "HighNoon"
+    dbc_files = await asyncio.to_thread(_list_vehicle_dbc_names, vehicle)
+    if not dbc_files:
+        logger.warning("Server auto-start: no DBC files for vehicle '%s'; skipping.", vehicle)
+        return
+
+    settings.update_setting("INPUT_MODE", "canp_tcp")
+    settings.update_setting("CANP_TCP_IP", preset["ip"])
+    settings.update_setting("CANP_TCP_PORT", int(preset["port"]))
+    settings.update_setting("DBC_VEHICLE", vehicle)
+    settings.update_setting("DBC_FILES", dbc_files)
+    logger.info(
+        "Server auto-start: preset=%s (%s:%s) vehicle=%s dbcs=%d",
+        auto_id, preset["ip"], preset["port"], vehicle, len(dbc_files),
+    )
+
+    try:
+        _validate_and_raise()
+    except HTTPException as e:
+        logger.error("Server auto-start validation failed: %s", e.detail)
+        return
+
+    config = settings.get_effective_config()
+    if not config:
+        logger.error("Server auto-start: invalid effective config.")
+        return
+    influx_write_enabled = config.get("INFLUX_WRITE_ENABLED", True)
+    if influx_write_enabled and not influx_client:
+        logger.warning("Server auto-start: InfluxDB not connected; starting without writes.")
+        settings.update_setting("INFLUX_WRITE_ENABLED", False)
+        influx_write_enabled = False
+        config = settings.get_effective_config()
+    writer: InfluxDBWriter | None = None
+    if influx_write_enabled and influx_client:
+        target_bucket = config.get("INFLUX_BUCKET", "debug")
+        if not _is_event_bucket_name(target_bucket):
+            writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
+        else:
+            logger.warning("Server auto-start: refusing event bucket; starting without writes.")
+    try:
+        await telemetry_service.start(writer, sio=sio, influx_client=influx_client)
+        logger.info("Server auto-start: telemetry service started.")
+    except Exception:
+        logger.exception("Server auto-start: failed to start telemetry service.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global influx_client
     logger.info("--- Application starting up... ---")
-    logger.info("Runtime directories: DBC=%s LOG=%s TRASH=%s EMBEDDED=%s",
-                settings.DBC_DIR, settings.LOG_DIR, settings.TRASH_DIR, settings.EMBEDDED_DBC_DIR)
-    
-    # Check and create directories
-    for dir_key in ["DBC_DIR", "LOG_DIR", "TRASH_DIR"]:
-        dir_path = getattr(settings, dir_key)
+    logger.info(
+        "Runtime directories: DATA=%s LOG=%s TRASH=%s DB=%s EMBEDDED=%s",
+        settings.DATA_FOLDER, settings.LOG_DIR, settings.TRASH_DIR, settings.DB_DIR, settings.EMBEDDED_DBC_DIR,
+    )
+
+    for dir_path in (settings.DATA_FOLDER, settings.LOG_DIR, settings.TRASH_DIR, settings.DB_DIR):
         if not os.path.exists(dir_path):
             logger.warning(f"Directory '{dir_path}' not found. Creating it.")
-            os.makedirs(dir_path)
+            os.makedirs(dir_path, exist_ok=True)
         else:
             logger.info(f"Directory '{dir_path}' found.")
 
     config = settings.get_effective_config()
     try:
-        influx_client = InfluxDBClient(url=config['INFLUX_URL'], token=config['INFLUX_TOKEN'], org=config['INFLUX_ORG'])
-        if not influx_client.ping(): raise Exception("Ping failed")
+        import concurrent.futures
+        influx_client = InfluxDBClient(url=config['INFLUX_URL'], token=config['INFLUX_TOKEN'], org=config['INFLUX_ORG'], timeout=2000)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            ok = pool.submit(influx_client.ping).result(timeout=3)
+        if not ok:
+            raise Exception("Ping failed")
         logger.info("InfluxDB connection successful.")
     except Exception as e:
         logger.error(f"Failed to connect to InfluxDB on startup: {e}")
         influx_client = None
+
+    await _maybe_server_autostart()
     
     status_task = asyncio.create_task(send_status_updates(sio))
     yield
@@ -345,9 +427,11 @@ async def runtime_info():
         "serve_static_client": SERVE_STATIC_CLIENT,
         "data_dirs": {
             "app_data_dir": settings.APP_DATA_DIR,
-            "dbc_dir": settings.DBC_DIR,
+            "data_folder": settings.DATA_FOLDER,
             "log_dir": settings.LOG_DIR,
             "trash_dir": settings.TRASH_DIR,
+            "db_dir": settings.DB_DIR,
+            "embedded_dbc_dir": settings.EMBEDDED_DBC_DIR,
         },
     }
 
@@ -403,41 +487,25 @@ async def update_config(update: ConfigUpdate):
 
 @app.get("/api/dbc/vehicles")
 async def list_dbc_vehicles():
-    """List vehicle folders combining local DBC_DIR and Embedded-Sharepoint.
-    Cross-referenced by case-insensitive + trim; Embedded-Sharepoint spelling preferred.
-    """
-    display, _, _ = get_vehicle_folders(settings.DBC_DIR)
+    """List vehicle folders from Embedded-Sharepoint."""
+    display, _, _ = get_vehicle_folders()
     return sorted(display.values())
 
 @app.get("/api/dbc/vehicles/{vehicle}/files")
 async def list_dbc_files(vehicle: str):
-    """List .dbc files for a vehicle from Embedded-Sharepoint and local DBC_DIR.
-    Vehicle is matched case-insensitively with trim; Embedded-Sharepoint files take priority when names collide.
-    Returns list of {name, source} where source is 'embedded' or 'local'.
-    """
+    """List .dbc files for a vehicle from Embedded-Sharepoint."""
     if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
         raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    _, emb_actual, loc_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
-    if emb_actual is None and loc_actual is None:
+    _, emb_actual, _ = _resolve_vehicle(vehicle)
+    if emb_actual is None:
         raise HTTPException(status_code=404, detail="Vehicle not found.")
     result = {}
-    if emb_actual is not None:
-        emb_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
-        if os.path.isdir(emb_dir):
-            for f in os.listdir(emb_dir):
-                full = os.path.join(emb_dir, f)
-                if f.lower().endswith(".dbc") and os.path.isfile(full):
-                    key = f.lower()
-                    result[key] = {"name": f, "source": "embedded"}
-    if loc_actual is not None:
-        loc_dir = os.path.join(settings.DBC_DIR, loc_actual)
-        if os.path.isdir(loc_dir):
-            for f in os.listdir(loc_dir):
-                full = os.path.join(loc_dir, f)
-                if f.lower().endswith(".dbc") and os.path.isfile(full):
-                    key = f.lower()
-                    if key not in result:
-                        result[key] = {"name": f, "source": "local"}
+    emb_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
+    if os.path.isdir(emb_dir):
+        for f in os.listdir(emb_dir):
+            full = os.path.join(emb_dir, f)
+            if f.lower().endswith(".dbc") and os.path.isfile(full):
+                result[f.lower()] = {"name": f, "source": "embedded"}
     return [result[k] for k in sorted(result.keys())]
 
 @app.get("/api/serial-ports")
@@ -459,6 +527,20 @@ async def check_pcan_prerequisites():
 async def list_tcp_configs():
     from server.util.tcp_configs import list_configs
     return await asyncio.to_thread(list_configs)
+
+@app.get("/api/tcp/auto")
+async def get_tcp_auto():
+    from server.util.tcp_configs import get_auto_id
+    return {"auto": await asyncio.to_thread(get_auto_id)}
+
+@app.put("/api/tcp/auto")
+async def update_tcp_auto(body: TcpAutoUpdate):
+    from server.util.tcp_configs import set_auto_id
+    try:
+        auto = await asyncio.to_thread(set_auto_id, body.auto)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"auto": auto}
 
 @app.post("/api/tcp/configs")
 async def create_tcp_config(body: TcpConfigCreate):
@@ -568,102 +650,19 @@ async def rename_file_endpoint(directory_key: str, body: FileRename):
 
 @app.post("/api/dbc/vehicles")
 async def create_vehicle(body: VehicleCreate):
-    name = body.name.strip()
-    if not name or ".." in name or "/" in name or "\\" in name:
-        raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    path = os.path.join(settings.DBC_DIR, name)
-    if os.path.exists(path): raise HTTPException(status_code=409, detail=f"Vehicle '{name}' already exists.")
-    os.makedirs(path)
-    return {"message": f"Vehicle '{name}' created."}
+    raise HTTPException(status_code=403, detail="DBCs come from Embedded-Sharepoint; local vehicles are disabled.")
 
 @app.post("/api/dbc/vehicles/{vehicle}/files")
 async def upload_dbc_file(vehicle: str, file: UploadFile = File(...), overwrite: bool = False):
-    if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
-        raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    display, emb_actual, local_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
-    if display is None:
-        raise HTTPException(status_code=404, detail="Vehicle not found.")
-    # Use local folder if present, else create with display name (Embedded-Sharepoint spelling)
-    local_dir_name = local_actual if local_actual is not None else display
-    dir_path = os.path.join(settings.DBC_DIR, local_dir_name)
-    if not os.path.isdir(dir_path):
-        os.makedirs(dir_path, exist_ok=True)
-    safe_name = os.path.basename(file.filename)
-    if not safe_name or safe_name in (".", "..") or any(sep in safe_name for sep in ("/", "\\")):
-        raise HTTPException(status_code=400, detail="Invalid filename.")
-    file_path = os.path.join(dir_path, safe_name)
-    from fastapi import status as http_status
-    existing = await list_dbc_files(vehicle)
-    lower_names = {entry["name"].lower() for entry in existing}
-    if safe_name.lower() in lower_names:
-        raise HTTPException(
-            status_code=http_status.HTTP_409_CONFLICT,
-            detail=f"DBC '{safe_name}' already exists (including Embedded-Sharepoint).",
-        )
-    if os.path.exists(file_path) and not overwrite:
-        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=f"File '{safe_name}' already exists.")
-    if os.path.exists(file_path) and overwrite:
-        move_to_trash(dir_path, safe_name)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    return {"filename": safe_name}
+    raise HTTPException(status_code=403, detail="DBCs come from Embedded-Sharepoint; uploads are disabled.")
 
 @app.delete("/api/dbc/vehicles/{vehicle}/files")
 async def delete_dbc_file(vehicle: str, action: FileAction):
-    if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
-        raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    _, emb_actual, local_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
-    if local_actual is None:
-        raise HTTPException(status_code=404, detail="Vehicle not found.")
-    dir_path = os.path.join(settings.DBC_DIR, local_actual)
-    if not os.path.isdir(dir_path):
-        raise HTTPException(status_code=404, detail="Vehicle not found.")
-    safe_name = os.path.basename(action.filename)
-    if not safe_name or safe_name in (".", "..") or any(sep in safe_name for sep in ("/", "\\")):
-        raise HTTPException(status_code=400, detail="Invalid filename.")
-    if emb_actual is not None:
-        emb_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
-        if os.path.isdir(emb_dir):
-            for f in os.listdir(emb_dir):
-                if f.lower() == safe_name.lower():
-                    raise HTTPException(status_code=403, detail="Cannot delete DBC from Embedded-Sharepoint.")
-    file_path = os.path.join(dir_path, safe_name)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found.")
-    move_to_trash(dir_path, safe_name)
-    return {"message": f"File '{safe_name}' moved to trash."}
+    raise HTTPException(status_code=403, detail="Cannot modify Embedded-Sharepoint DBCs.")
 
 @app.put("/api/dbc/vehicles/{vehicle}/files/rename")
 async def rename_dbc_file(vehicle: str, body: FileRename):
-    if ".." in vehicle or "/" in vehicle or "\\" in vehicle:
-        raise HTTPException(status_code=400, detail="Invalid vehicle name.")
-    _, emb_actual, local_actual = _resolve_vehicle(vehicle, settings.DBC_DIR)
-    if local_actual is None:
-        raise HTTPException(status_code=404, detail="Vehicle not found.")
-    dir_path = os.path.join(settings.DBC_DIR, local_actual)
-    if not os.path.isdir(dir_path):
-        raise HTTPException(status_code=404, detail="Vehicle not found.")
-    old_name = os.path.basename(body.old_name)
-    new_name = os.path.basename(body.new_name)
-    for nm in (old_name, new_name):
-        if not nm or nm in (".", "..") or any(sep in nm for sep in ("/", "\\")):
-            raise HTTPException(status_code=400, detail="Invalid filename.")
-    if emb_actual is not None:
-        emb_dir = os.path.join(settings.EMBEDDED_DBC_DIR, emb_actual)
-        if os.path.isdir(emb_dir):
-            for f in os.listdir(emb_dir):
-                if f.lower() == old_name.lower():
-                    raise HTTPException(status_code=403, detail="Cannot rename DBC from Embedded-Sharepoint.")
-    old_path = os.path.join(dir_path, old_name)
-    new_path = os.path.join(dir_path, new_name)
-    if not os.path.exists(old_path):
-        raise HTTPException(status_code=404, detail="File not found.")
-    existing = await list_dbc_files(vehicle)
-    lower_names = {entry["name"].lower() for entry in existing}
-    if new_name.lower() in lower_names:
-        raise HTTPException(status_code=409, detail=f"DBC '{new_name}' already exists.")
-    os.rename(old_path, new_path)
-    return {"message": f"Renamed '{old_name}' to '{new_name}'."}
+    raise HTTPException(status_code=403, detail="Cannot modify Embedded-Sharepoint DBCs.")
 
 
 @app.get("/api/dbc/vehicles/{vehicle}/files/{filename}/schema")
@@ -675,7 +674,7 @@ async def get_dbc_schema(vehicle: str, filename: str):
     if not safe_name or safe_name in (".", "..") or any(sep in safe_name for sep in ("/", "\\")):
         raise HTTPException(status_code=400, detail="Invalid filename.")
     # Resolve full path using the same vehicle resolution / embedded precedence as runtime
-    paths = resolve_dbc_paths(vehicle, [safe_name], settings.DBC_DIR)
+    paths = resolve_dbc_paths(vehicle, [safe_name])
     if not paths:
         raise HTTPException(status_code=404, detail="DBC not found.")
     dbc_path = paths[0]
@@ -822,7 +821,7 @@ async def decode_events_csv(body: DecodeCsvRequest):
 
     def dbc_paths_for_vehicle(vehicle: str) -> list[str]:
         v = (vehicle or "").strip() or default_vehicle
-        return resolve_all_dbc_paths(v, dbc_files, settings.DBC_DIR)
+        return resolve_all_dbc_paths(v, dbc_files)
 
     try:
         zip_bytes, meta = generate_decoded_csv_zip(
@@ -948,7 +947,7 @@ async def analytics_pivot(body: AnalyticsPivotRequest):
 async def analytics_validate(body: AnalyticsValidateRequest):
     """Validate saved analytics views against DBC; returns errors and passing views only."""
     try:
-        valid, errors = validate_views(body.views or [], dbc_dir=settings.DBC_DIR)
+        valid, errors = validate_views(body.views or [], dbc_dir="")
         return {
             "ok": len(errors) == 0,
             "validViews": valid,

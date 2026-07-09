@@ -162,20 +162,19 @@ In packaged executable mode, defaults move to a user workspace:
 - macOS: `~/Documents/Electron`
 - Linux: `~/Documents/Electron`
 
-On first run the backend bootstraps this folder and logs setup progress in terminal:
+On first run the backend bootstraps data dirs and logs setup progress in terminal:
 
-- creates `dbc/`, `logs/`, `.trash/`
-- initializes `Embedded-Sharepoint/`
+- under `DATA_FOLDER` (default: project root): `logs/`, `.trash/`, `.db/`
+- DBCs come from `Embedded-Sharepoint/can/dbc/` only
+- initializes `Embedded-Sharepoint/` when missing
   - copies bundled data when present
   - or clones from `EMBEDDED_SHAREPOINT_GIT_URL` when configured
   - or falls back to an empty scaffold with error logs
 
 You can override with:
 
+- `DATA_FOLDER` — root for `logs/`, `.trash/`, `.db/` (also bind-mounted into Influx/Grafana)
 - `APP_DATA_DIR`
-- `DBC_DIR`
-- `LOG_DIR`
-- `TRASH_DIR`
 - `ELECTRON_HOME`
 - `FORCE_USER_WORKSPACE`
 - `EMBEDDED_SHAREPOINT_DIR`

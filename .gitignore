@@ -4,6 +4,7 @@ build/
 artifacts/
 *.spec
 logs
+.db
 **/__pycache__
 */venv
 data/
@@ -14,6 +15,7 @@ dist
 .env.local
 .env.*.local
 .env
+.deploy-server.env
 server.ssh.profile
 
 grafana/**/

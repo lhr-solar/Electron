@@ -9,6 +9,7 @@ import {
   PanelRightClose,
   LineChart,
   ScrollText,
+  Lock,
 } from 'lucide-react';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { LiveMessageLog } from './components/LiveMessageLog';
@@ -197,9 +198,34 @@ function ServerViewerApp() {
   const toggleSideLog = useCallback(() => setSideLogOpen((v) => !v), []);
 
   return (
-    <AppShell title="Electron" tabs={SERVER_VIEWER_PAGES} page={page} onNavigate={navigate}>
+    <AppShell
+      title="Electron"
+      tabs={SERVER_VIEWER_PAGES}
+      page={page}
+      onNavigate={navigate}
+      rightExtra={
+        <a
+          href="/manage"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '5px 10px',
+            borderRadius: 4,
+            border: '1px solid #2a2a30',
+            color: '#d4d4d8',
+            textDecoration: 'none',
+            fontSize: 13,
+            background: '#151518',
+          }}
+        >
+          <Lock size={13} strokeWidth={1.75} />
+          Manage
+        </a>
+      }
+    >
       <div style={{ flex: 1, display: page === 'live-log' ? 'flex' : 'none', minHeight: 0 }}>
-        {page === 'live-log' ? <LiveMessageLog /> : null}
+        {page === 'live-log' ? <LiveMessageLog variant="stage" /> : null}
       </div>
       {['dashboard', 'analytics', 'dbc-viewer'].map((id) => {
         const Component = id === 'dashboard' ? SignalDashboard : id === 'analytics' ? Analytics : DbcViewer;

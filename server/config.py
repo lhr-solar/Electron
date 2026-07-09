@@ -21,24 +21,36 @@ class Configuration:
         self.APP_DATA_DIR = self._resolve_app_data_dir()
 
         # --- Environment-based Paths ---
-        self.DBC_DIR = self._resolve_runtime_path("DBC_DIR", "dbc")
-        self.LOG_DIR = self._resolve_runtime_path("LOG_DIR", "logs")
-        self.TRASH_DIR = self._resolve_runtime_path("TRASH_DIR", ".trash")
+        # DATA_FOLDER: logs, trash, Influx .db. Default = project root (./).
+        self.DATA_FOLDER = self._resolve_data_folder()
+        self.LOG_DIR = os.path.join(self.DATA_FOLDER, "logs")
+        self.TRASH_DIR = os.path.join(self.DATA_FOLDER, ".trash")
+        self.DB_DIR = os.path.join(self.DATA_FOLDER, ".db")
+        # DBCs come from Embedded-Sharepoint only (no local DBC_DIR).
         self.EMBEDDED_SHAREPOINT_DIR = self._resolve_runtime_path("EMBEDDED_SHAREPOINT_DIR", "Embedded-Sharepoint")
+        if not os.path.isabs(self.EMBEDDED_SHAREPOINT_DIR):
+            self.EMBEDDED_SHAREPOINT_DIR = os.path.join(self.PROJECT_ROOT, self.EMBEDDED_SHAREPOINT_DIR)
         self.EMBEDDED_DBC_DIR = os.path.join(self.EMBEDDED_SHAREPOINT_DIR, "can", "dbc")
+
+        for path in (self.DATA_FOLDER, self.LOG_DIR, self.TRASH_DIR, self.DB_DIR):
+            try:
+                os.makedirs(path, exist_ok=True)
+            except OSError as exc:
+                logger.exception("Failed to create directory '%s': %s", path, exc)
 
         if self.USE_USER_WORKSPACE:
             self._bootstrap_user_workspace()
 
         # Expose for utility modules that do not import settings directly.
         os.environ.setdefault("EMBEDDED_DBC_DIR", self.EMBEDDED_DBC_DIR)
+        os.environ.setdefault("DATA_FOLDER", self.DATA_FOLDER)
 
         # --- Default Settings ---
         self.DEFAULT_DBC_VEHICLE = os.environ.get("DEFAULT_DBC_VEHICLE", "HighNoon")
         self.INPUT_MODE = 'tcp'
         self.COMMON_CONFIG = {
             "DBC_VEHICLE": self.DEFAULT_DBC_VEHICLE,
-            "DBC_FILES": [],  # list of .dbc filenames under DBC_DIR/<vehicle>/
+            "DBC_FILES": [],  # list of .dbc filenames under Embedded-Sharepoint/can/dbc/<vehicle>/
             "PRINT_CAN_INFO": False,
             "CLEAR_DEBUG_BUCKET_ON_STARTUP": False,
             "INFLUX_WRITE_ENABLED": True,
@@ -105,18 +117,29 @@ class Configuration:
             return explicit
         return os.path.join(self._resolve_documents_dir(), "Electron")
 
+    def _resolve_data_folder(self):
+        explicit = (os.environ.get("DATA_FOLDER") or "").strip()
+        if explicit:
+            path = os.path.expanduser(explicit)
+            if not os.path.isabs(path):
+                path = os.path.join(self.PROJECT_ROOT, path)
+            return os.path.abspath(path)
+        if self.USE_USER_WORKSPACE:
+            return self.USER_WORKSPACE_DIR
+        return self.PROJECT_ROOT
+
     def _resolve_runtime_path(self, env_key: str, default_relative: str):
         explicit = os.environ.get(env_key)
         if explicit:
             return explicit
         if self.USE_USER_WORKSPACE:
             return os.path.join(self.USER_WORKSPACE_DIR, default_relative)
-        return default_relative
+        return os.path.join(self.PROJECT_ROOT, default_relative)
 
     def _bootstrap_user_workspace(self):
         logger.info("Using user workspace: %s", self.USER_WORKSPACE_DIR)
         logger.info("First-time setup check: preparing support directories.")
-        for path in [self.USER_WORKSPACE_DIR, self.DBC_DIR, self.LOG_DIR, self.TRASH_DIR]:
+        for path in [self.DATA_FOLDER, self.LOG_DIR, self.TRASH_DIR, self.DB_DIR]:
             try:
                 os.makedirs(path, exist_ok=True)
             except OSError as exc:

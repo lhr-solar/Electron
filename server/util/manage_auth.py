@@ -88,6 +88,7 @@ _PROTECTED_EXACT = {
     ("POST", "/api/restart"),
     ("POST", "/api/config"),
     ("POST", "/api/tcp/configs"),
+    ("PUT", "/api/tcp/auto"),
     ("POST", "/api/tcp/test"),
     ("POST", "/api/dbc/vehicles"),
     ("POST", "/api/events/decode-csv"),

@@ -17,6 +17,9 @@ const INPUT_MODES = [
   { value: 'file', label: 'File' },
 ];
 
+const SERVER_INPUT_MODES = INPUT_MODES.filter((m) => m.value === 'tcp' || m.value === 'canp_tcp');
+const SERVER_MODE_VALUES = new Set(SERVER_INPUT_MODES.map((m) => m.value));
+
 const SOURCE_MODE_ICON_SIZE = 14;
 const SOURCE_MODE_ICONS = {
   serial_canadapter: Usb,
@@ -101,9 +104,12 @@ export function TelemetryDashboard() {
   const [tcpModalOpen, setTcpModalOpen] = useState(false);
   const [dbModalOpen, setDbModalOpen] = useState(false);
   const [tcpConfigs, setTcpConfigs] = useState([]);
+  const [appMode, setAppMode] = useState(null); // 'server' | 'client' | null
   const canDownloadBackend = !backendConnected && !!backendDownloadUrl;
   const selectAllDbcOnLoadRef = useRef(false);
 
+  const isServerMode = appMode === 'server';
+  const availableModes = isServerMode ? SERVER_INPUT_MODES : INPUT_MODES;
   const inputMode = config?.INPUT_MODE || 'tcp';
 
   const loadConfig = useCallback(() => {
@@ -113,6 +119,12 @@ export function TelemetryDashboard() {
         setSavedConfig(data);
       })
       .catch((e) => notifications.show({ title: 'Config', message: e.message, color: 'red' }));
+  }, []);
+
+  const loadAppMode = useCallback(() => {
+    apiJson('/api/runtime-info')
+      .then((info) => setAppMode(info.mode === 'server' ? 'server' : 'client'))
+      .catch(() => setAppMode('client'));
   }, []);
 
   const loadSerialPorts = useCallback(() => {
@@ -172,7 +184,14 @@ export function TelemetryDashboard() {
     loadLogFiles();
     loadVehicles();
     loadTcpConfigs();
-  }, [loadConfig, loadSerialPorts, loadLogFiles, loadVehicles, loadTcpConfigs]);
+    loadAppMode();
+  }, [loadConfig, loadSerialPorts, loadLogFiles, loadVehicles, loadTcpConfigs, loadAppMode]);
+
+  useEffect(() => {
+    if (!isServerMode || !config || status.service_running) return;
+    if (SERVER_MODE_VALUES.has(config.INPUT_MODE)) return;
+    setConfig((prev) => (prev ? { ...prev, INPUT_MODE: 'canp_tcp' } : null));
+  }, [isServerMode, config, status.service_running]);
 
   useEffect(() => {
     if (inputMode === 'pcan') {
@@ -586,7 +605,7 @@ export function TelemetryDashboard() {
         <Grid.Col span={{ base: 12, sm: 6 }} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
           <Text size="sm" c="dimmed" mb={4}>Source</Text>
           <Group gap="xs" mb="xs" wrap="wrap" align="stretch">
-            {INPUT_MODES.map((m) => {
+            {availableModes.map((m) => {
               const Icon = SOURCE_MODE_ICONS[m.value];
               return (
                 <Button
@@ -658,8 +677,9 @@ export function TelemetryDashboard() {
         opened={tcpModalOpen}
         onClose={() => setTcpModalOpen(false)}
         onRefresh={loadTcpConfigs}
-        currentIp={config.TCP_IP}
-        currentPort={config.TCP_PORT}
+        currentIp={inputMode === 'canp_tcp' ? config.CANP_TCP_IP : config.TCP_IP}
+        currentPort={inputMode === 'canp_tcp' ? config.CANP_TCP_PORT : config.TCP_PORT}
+        isServerMode={isServerMode}
       />
       <DatabaseManagementModal
         opened={dbModalOpen}

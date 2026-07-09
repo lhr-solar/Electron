@@ -38,7 +38,9 @@ function formatValue3(value) {
   return String(value);
 }
 
-export function LiveMessageLog() {
+/** variant: "sidebar" (default) | "stage" (server-mode centered live log) */
+export function LiveMessageLog({ variant = 'sidebar' }) {
+  const stage = variant === 'stage';
   const [messages, setMessages] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch] = useState('');
@@ -149,31 +151,88 @@ export function LiveMessageLog() {
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  return (
+  const panel = (
     <Box
-      style={{
-        width: LIVE_LOG_WIDTH,
-        minWidth: LIVE_LOG_WIDTH,
-        height: '100%',
-        maxHeight: '100%',
-        borderLeft: '1px solid var(--border)',
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: 'var(--bg)',
-        overflow: 'hidden',
-      }}
+      style={
+        stage
+          ? {
+              width: 'min(720px, 100%)',
+              height: 'min(78vh, 820px)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              borderRadius: 12,
+              border: '1px solid #2a2a30',
+              background: 'linear-gradient(180deg, #121216 0%, #0c0c0f 100%)',
+              boxShadow: '0 18px 48px rgba(0,0,0,0.45)',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            }
+          : {
+              width: LIVE_LOG_WIDTH,
+              minWidth: LIVE_LOG_WIDTH,
+              height: '100%',
+              maxHeight: '100%',
+              borderLeft: '1px solid var(--border)',
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: 'var(--bg)',
+              overflow: 'hidden',
+            }
+      }
     >
-      <Text size="xs" c="dimmed" tt="uppercase" p="md" pb="xs" style={{ borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        Live messages
-      </Text>
-      <Group gap="xs" p="xs" wrap="nowrap" style={{ flexShrink: 0, borderBottom: '1px solid var(--border)', minWidth: 0, overflow: 'hidden' }}>
+      <Group
+        justify="space-between"
+        align="center"
+        wrap="nowrap"
+        px={stage ? 'md' : 'md'}
+        py={stage ? 'sm' : undefined}
+        pb={stage ? undefined : 'xs'}
+        style={{
+          borderBottom: stage ? '1px solid #26262c' : '1px solid var(--border)',
+          flexShrink: 0,
+          paddingTop: stage ? undefined : 16,
+        }}
+      >
+        <Text
+          size={stage ? 'sm' : 'xs'}
+          c={stage ? '#d4d4d8' : 'dimmed'}
+          tt={stage ? undefined : 'uppercase'}
+          fw={stage ? 600 : undefined}
+          style={stage ? { letterSpacing: '0.04em' } : undefined}
+        >
+          {stage ? 'Live CAN' : 'Live messages'}
+        </Text>
+        {stage ? (
+          <Text size="xs" c="#71717a">
+            {filtered.length} shown
+          </Text>
+        ) : null}
+      </Group>
+      <Group
+        gap="xs"
+        p="xs"
+        wrap="nowrap"
+        style={{
+          flexShrink: 0,
+          borderBottom: stage ? '1px solid #26262c' : '1px solid var(--border)',
+          minWidth: 0,
+          overflow: 'hidden',
+          background: stage ? 'rgba(255,255,255,0.02)' : undefined,
+        }}
+      >
         <TextInput
           placeholder="Filter by ID or name..."
           size="xs"
           value={search}
           onChange={(e) => setSearch(e.currentTarget.value)}
           style={{ flex: 1, minWidth: 0 }}
-          styles={{ input: { backgroundColor: 'var(--bg-elevated)' } }}
+          styles={{
+            input: {
+              backgroundColor: stage ? '#0a0a0d' : 'var(--bg-elevated)',
+              borderColor: stage ? '#2a2a30' : undefined,
+              fontFamily: 'inherit',
+            },
+          }}
         />
         <UnstyledButton
           onClick={togglePause}
@@ -192,23 +251,11 @@ export function LiveMessageLog() {
           }}
         >
           {paused ? (
-            <Play
-              size={18}
-              strokeWidth={2.5}
-              style={{ color: '#facc15' }} // yellow highlight when paused
-            />
+            <Play size={18} strokeWidth={2.5} style={{ color: '#facc15' }} />
           ) : (
-            <Pause
-              size={18}
-              strokeWidth={2.5}
-              style={{ color: 'var(--mantine-color-dimmed)' }}
-            />
+            <Pause size={18} strokeWidth={2.5} style={{ color: 'var(--mantine-color-dimmed)' }} />
           )}
-          <Text
-            size="xs"
-            c={paused ? 'yellow' : 'dimmed'}
-            style={{ lineHeight: 1 }}
-          >
+          <Text size="xs" c={paused ? 'yellow' : 'dimmed'} style={{ lineHeight: 1 }}>
             {paused ? 'Play' : 'Pause'}
           </Text>
         </UnstyledButton>
@@ -249,11 +296,11 @@ export function LiveMessageLog() {
           minWidth: 0,
           overflowX: 'hidden',
           overflowY: 'auto',
-          padding: 8,
+          padding: stage ? 12 : 8,
           position: 'relative',
         }}
       >
-        <Stack gap={4} style={{ minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
+        <Stack gap={stage ? 6 : 4} style={{ minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
           {topSpacerHeight > 0 && <Box style={{ height: topSpacerHeight }} />}
           {visibleRows.map((msg) => {
             const isExpanded = expandedId === msg.id;
@@ -262,10 +309,10 @@ export function LiveMessageLog() {
               <Box
                 key={msg.id}
                 style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: 4,
-                  padding: '6px 8px',
-                  backgroundColor: 'var(--bg-elevated)',
+                  border: stage ? '1px solid #2a2a30' : '1px solid var(--border)',
+                  borderRadius: stage ? 6 : 4,
+                  padding: stage ? '8px 10px' : '6px 8px',
+                  backgroundColor: stage ? 'rgba(255,255,255,0.03)' : 'var(--bg-elevated)',
                   cursor: 'pointer',
                   minWidth: 0,
                   maxWidth: '100%',
@@ -274,14 +321,14 @@ export function LiveMessageLog() {
                 }}
                 onClick={() => setExpandedId((x) => (x === msg.id ? null : msg.id))}
               >
-                <Text size="xs" c="dimmed" style={{ marginBottom: 2 }}>
+                <Text size="xs" c="dimmed" style={{ marginBottom: 2, fontVariantNumeric: 'tabular-nums' }}>
                   {formatTime(msg.timestamp_ns)}
                 </Text>
                 <Group gap={6} wrap="wrap" style={{ minWidth: 0 }}>
                   <Text
                     size="sm"
                     style={{
-                      color: msg.message_name != null ? 'var(--text)' : '#ef4444',
+                      color: msg.message_name != null ? (stage ? '#e4e4e7' : 'var(--text)') : '#ef4444',
                       minWidth: 0,
                       flex: 1,
                       overflowWrap: 'anywhere',
@@ -341,6 +388,26 @@ export function LiveMessageLog() {
           </Button>
         )}
       </Box>
+    </Box>
+  );
+
+  if (!stage) return panel;
+
+  return (
+    <Box
+      style={{
+        flex: 1,
+        minHeight: 0,
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px 16px',
+        background:
+          'radial-gradient(ellipse at 50% 30%, #16161c 0%, #0a0a0b 55%, #070708 100%)',
+      }}
+    >
+      {panel}
     </Box>
   );
 }

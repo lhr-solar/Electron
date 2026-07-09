@@ -1,0 +1,17 @@
+{
+  "auto": null,
+  "configs": [
+    {
+      "id": "daq-server",
+      "name": "DAQ Server",
+      "ip": "3.141.38.115",
+      "port": 6500
+    },
+    {
+      "id": "debug",
+      "name": "debug",
+      "ip": "127.0.0.1",
+      "port": 6500
+    }
+  ]
+}

@@ -27,7 +27,7 @@ def validate_start_config() -> tuple[str | None, str | None]:
     dbc_files = config.get("DBC_FILES") or []
     if not isinstance(dbc_files, list):
         dbc_files = [f for f in str(dbc_files).split(",") if f.strip()]
-    dbc_paths = resolve_dbc_paths(vehicle, dbc_files, settings.DBC_DIR)
+    dbc_paths = resolve_dbc_paths(vehicle, dbc_files)
     if not dbc_paths:
         return "DBC error", f"No DBC files selected for vehicle '{vehicle}'."
 
