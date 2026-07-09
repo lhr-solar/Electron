@@ -1,12 +1,21 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Stack, Group, Text, Select, TextInput, Button, Box, Divider, Checkbox, Switch, Grid, ScrollArea } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notifications } from '@/lib/notify';
 import { socket } from '../socket';
-import { Power, RefreshCw, Usb, Wifi, FileText, Car, Save, Settings2, Database, Square, Cpu, Network } from 'lucide-react';
+import { Power, RefreshCw, Usb, Wifi, FileText, Car, Save, Settings2, Database, Square, Cpu, Network, Loader2 } from 'lucide-react';
 import { LogFileManagerModal, DbcFileManagerModal } from './FileManagerModals';
 import { TcpConfigModal } from './TcpConfigModal';
 import { DatabaseManagementModal } from './DatabaseManagementModal';
 import { apiJson, backendDownloadUrl } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
 const INPUT_MODES = [
   { value: 'serial_canadapter', label: 'Adapter' },
@@ -38,6 +47,8 @@ const CAN_BITRATE_OPTIONS = [
   { value: '500000', label: '500 kbps' },
   { value: '1000000', label: '1 Mbps' },
 ];
+
+const CUSTOM_PRESET = '__custom__';
 
 function configEquals(a, b) {
   if (!a || !b) return !a && !b;
@@ -79,6 +90,39 @@ function statusEquals(a, b) {
   );
 }
 
+function FieldLabel({ children, className }) {
+  return <Label className={cn('text-xs font-medium text-muted-foreground', className)}>{children}</Label>;
+}
+
+function ConfigSelect({ label, value, onValueChange, options, disabled, className, triggerClassName }) {
+  return (
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      {label && <FieldLabel>{label}</FieldLabel>}
+      <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+        <SelectTrigger size="sm" className={cn('w-full', triggerClassName)}>
+          <SelectValue placeholder="Select…" />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((opt) => (
+            <SelectItem key={opt.value} value={String(opt.value)}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function ConfigInput({ label, className, inputClassName, ...props }) {
+  return (
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      {label && <FieldLabel>{label}</FieldLabel>}
+      <Input className={cn('h-8 text-sm', inputClassName)} {...props} />
+    </div>
+  );
+}
+
 export function TelemetryDashboard() {
   const [config, setConfig] = useState(null);
   const [savedConfig, setSavedConfig] = useState(null);
@@ -98,13 +142,13 @@ export function TelemetryDashboard() {
     data_active: false,
     error_message: null,
   });
-  const [loading, setLoading] = useState({ start: false, stop: false, restart: false, save: false, tcpTest: false });
+  const [loading, setLoading] = useState({ start: false, stop: false, save: false, tcpTest: false });
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [dbcModalOpen, setDbcModalOpen] = useState(false);
   const [tcpModalOpen, setTcpModalOpen] = useState(false);
   const [dbModalOpen, setDbModalOpen] = useState(false);
   const [tcpConfigs, setTcpConfigs] = useState([]);
-  const [appMode, setAppMode] = useState(null); // 'server' | 'client' | null
+  const [appMode, setAppMode] = useState(null);
   const canDownloadBackend = !backendConnected && !!backendDownloadUrl;
   const selectAllDbcOnLoadRef = useRef(false);
 
@@ -356,73 +400,33 @@ export function TelemetryDashboard() {
       .finally(() => setLoading((l) => ({ ...l, stop: false })));
   };
 
-  const handleRestart = () => {
-    setLoading((l) => ({ ...l, restart: true }));
-    apiJson('/api/restart', { method: 'POST' })
-      .then(() => notifications.show({ title: 'Service', message: 'Restarted', color: 'green' }))
-      .catch((e) => showApiError(e, 'Restart failed'))
-      .finally(() => setLoading((l) => ({ ...l, restart: false })));
-  };
-
-  const dashboardLayout = {
-    display: 'flex',
-    flexDirection: 'column',
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-    maxWidth: 920,
-    margin: '0 auto',
-    width: '100%',
-    padding: 'var(--mantine-spacing-md)',
-  };
+  const influxWriteOn = config?.INFLUX_WRITE_ENABLED !== false && status.influx_connected;
 
   if (!config) {
     return (
-      <Box style={dashboardLayout}>
-        <Box
-          style={{
-            flex: 1,
-            minHeight: 0,
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            backgroundColor: '#0f0f11',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            textAlign: 'center',
-            padding: 24,
-          }}
-        >
-          <Text size="sm" c="dimmed">
-            {backendConnected ? 'Loading configuration...' : 'Backend not connected'}
-          </Text>
-        </Box>
+      <div className="mx-auto flex w-full max-w-[920px] flex-1 flex-col gap-4 overflow-hidden p-4">
+        <Card className="flex flex-1 flex-col gap-0 rounded-lg py-0">
+          <CardContent className="flex flex-1 items-center justify-center px-6 py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              {backendConnected ? 'Loading configuration…' : 'Backend not connected'}
+            </p>
+          </CardContent>
+        </Card>
         {canDownloadBackend && (
-          <Box
-            mt="sm"
-            p="xs"
-            style={{
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              backgroundColor: '#111114',
-            }}
-          >
-            <Group justify="space-between" wrap="wrap" gap="xs">
-              <Text size="sm" c="dimmed">Backend is offline. Download the desktop backend executable.</Text>
-              <Button
-                component="a"
-                href={backendDownloadUrl}
-                target="_blank"
-                rel="noreferrer"
-                size="xs"
-                variant="light"
-              >
-                Download backend
+          <Alert className="rounded-lg border-border bg-muted/50">
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm text-muted-foreground">
+                Backend is offline. Download the desktop backend executable.
+              </span>
+              <Button asChild variant="outline" size="xs">
+                <a href={backendDownloadUrl} target="_blank" rel="noreferrer">
+                  Download backend
+                </a>
               </Button>
-            </Group>
-          </Box>
+            </AlertDescription>
+          </Alert>
         )}
-      </Box>
+      </div>
     );
   }
 
@@ -432,86 +436,260 @@ export function TelemetryDashboard() {
       case 'serial_canadapter':
         return (
           <>
-            <Group gap="xs" align="flex-end">
-              <Select label="Port" data={serialPorts} value={config.SERIAL_PORT} onChange={(v) => setLocalConfig('SERIAL_PORT', v)} searchable disabled={disabled} size="sm" style={{ flex: 1 }} />
-              <Button variant="subtle" size="sm" onClick={loadSerialPorts} disabled={disabled} style={{ color: 'var(--text-muted)' }}><RefreshCw size={14} /></Button>
-            </Group>
-            <Select label="Baud" data={['9600', '115200']} value={String(config.SERIAL_BAUDRATE)} onChange={(v) => setLocalConfig('SERIAL_BAUDRATE', parseInt(v, 10))} disabled={disabled} size="sm" />
-            <Select label="CAN bitrate" data={CAN_BITRATE_OPTIONS} value={String(config.CAN_BITRATE)} onChange={(v) => setLocalConfig('CAN_BITRATE', parseInt(v, 10))} disabled={disabled} size="sm" />
+            <div className="flex items-end gap-2">
+              <ConfigSelect
+                label="Port"
+                className="min-w-0 flex-1"
+                value={config.SERIAL_PORT || undefined}
+                onValueChange={(v) => setLocalConfig('SERIAL_PORT', v)}
+                options={serialPorts}
+                disabled={disabled}
+              />
+              <Button variant="ghost" size="icon-sm" onClick={loadSerialPorts} disabled={disabled} title="Refresh ports">
+                <RefreshCw className="size-3.5 text-muted-foreground" />
+              </Button>
+            </div>
+            <ConfigSelect
+              label="Baud"
+              value={String(config.SERIAL_BAUDRATE)}
+              onValueChange={(v) => setLocalConfig('SERIAL_BAUDRATE', parseInt(v, 10))}
+              options={['9600', '115200'].map((b) => ({ value: b, label: b }))}
+              disabled={disabled}
+            />
+            <ConfigSelect
+              label="CAN bitrate"
+              value={String(config.CAN_BITRATE)}
+              onValueChange={(v) => setLocalConfig('CAN_BITRATE', parseInt(v, 10))}
+              options={CAN_BITRATE_OPTIONS}
+              disabled={disabled}
+            />
           </>
         );
       case 'serial_uart':
         return (
           <>
-            <Group gap="xs" align="flex-end">
-              <Select label="Port" data={serialPorts} value={config.SERIAL_PORT} onChange={(v) => setLocalConfig('SERIAL_PORT', v)} searchable disabled={disabled} size="sm" style={{ flex: 1 }} />
-              <Button variant="subtle" size="sm" onClick={loadSerialPorts} disabled={disabled} style={{ color: 'var(--text-muted)' }}><RefreshCw size={14} /></Button>
-            </Group>
-            <Select label="Baud" data={['9600', '115200', '230400', '460800', '921600']} value={String(config.SERIAL_BAUDRATE)} onChange={(v) => setLocalConfig('SERIAL_BAUDRATE', parseInt(v, 10))} disabled={disabled} size="sm" />
+            <div className="flex items-end gap-2">
+              <ConfigSelect
+                label="Port"
+                className="min-w-0 flex-1"
+                value={config.SERIAL_PORT || undefined}
+                onValueChange={(v) => setLocalConfig('SERIAL_PORT', v)}
+                options={serialPorts}
+                disabled={disabled}
+              />
+              <Button variant="ghost" size="icon-sm" onClick={loadSerialPorts} disabled={disabled} title="Refresh ports">
+                <RefreshCw className="size-3.5 text-muted-foreground" />
+              </Button>
+            </div>
+            <ConfigSelect
+              label="Baud"
+              value={String(config.SERIAL_BAUDRATE)}
+              onValueChange={(v) => setLocalConfig('SERIAL_BAUDRATE', parseInt(v, 10))}
+              options={['9600', '115200', '230400', '460800', '921600'].map((b) => ({ value: b, label: b }))}
+              disabled={disabled}
+            />
           </>
         );
       case 'pcan': {
-        const channelOptions = pcanChannels.length > 0 ? pcanChannels.map((c) => ({ value: c.channel, label: c.channel })) : [{ value: 'PCAN_USBBUS1', label: 'PCAN_USBBUS1' }, { value: 'PCAN_USBBUS2', label: 'PCAN_USBBUS2' }];
+        const channelOptions = pcanChannels.length > 0
+          ? pcanChannels.map((c) => ({ value: c.channel, label: c.channel }))
+          : [{ value: 'PCAN_USBBUS1', label: 'PCAN_USBBUS1' }, { value: 'PCAN_USBBUS2', label: 'PCAN_USBBUS2' }];
         return (
           <>
             {pcanPrereq && !pcanPrereq.ok && (
-              <Box p="xs" mb="xs" style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 4 }}>
-                <Text size="xs" c="red">{pcanPrereq.message}</Text>
-                {pcanPrereq.hint && <Text size="xs" c="dimmed" mt={4}>{pcanPrereq.hint}</Text>}
-              </Box>
+              <Alert className="rounded-md border-signal-red/30 bg-signal-red/10">
+                <AlertDescription>
+                  <p className="text-xs text-signal-red">{pcanPrereq.message}</p>
+                  {pcanPrereq.hint && <p className="mt-1 text-xs text-muted-foreground">{pcanPrereq.hint}</p>}
+                </AlertDescription>
+              </Alert>
             )}
-            <Group gap="xs" align="flex-end">
-              <Select label="Channel" data={channelOptions} value={config.PCAN_CHANNEL || 'PCAN_USBBUS1'} onChange={(v) => setLocalConfig('PCAN_CHANNEL', v)} searchable disabled={disabled} size="sm" style={{ flex: 1 }} />
-              <Button variant="subtle" size="sm" onClick={loadPcanChannels} disabled={disabled} title="Detect PCAN devices"><RefreshCw size={14} /></Button>
-            </Group>
-            <Select label="CAN bitrate" data={CAN_BITRATE_OPTIONS} value={String(config.PCAN_BITRATE ?? 500000)} onChange={(v) => setLocalConfig('PCAN_BITRATE', parseInt(v, 10))} disabled={disabled} size="sm" />
-            <TextInput label="Device ID (optional)" placeholder="Optional" value={config.PCAN_DEVICE_ID != null && config.PCAN_DEVICE_ID !== '' ? String(config.PCAN_DEVICE_ID) : ''} onChange={(e) => { const v = e.currentTarget.value.trim(); setLocalConfig('PCAN_DEVICE_ID', v === '' ? null : parseInt(v, 10) || null); }} disabled={disabled} size="sm" />
+            <div className="flex items-end gap-2">
+              <ConfigSelect
+                label="Channel"
+                className="min-w-0 flex-1"
+                value={config.PCAN_CHANNEL || 'PCAN_USBBUS1'}
+                onValueChange={(v) => setLocalConfig('PCAN_CHANNEL', v)}
+                options={channelOptions}
+                disabled={disabled}
+              />
+              <Button variant="ghost" size="icon-sm" onClick={loadPcanChannels} disabled={disabled} title="Detect PCAN devices">
+                <RefreshCw className="size-3.5" />
+              </Button>
+            </div>
+            <ConfigSelect
+              label="CAN bitrate"
+              value={String(config.PCAN_BITRATE ?? 500000)}
+              onValueChange={(v) => setLocalConfig('PCAN_BITRATE', parseInt(v, 10))}
+              options={CAN_BITRATE_OPTIONS}
+              disabled={disabled}
+            />
+            <ConfigInput
+              label="Device ID (optional)"
+              placeholder="Optional"
+              value={config.PCAN_DEVICE_ID != null && config.PCAN_DEVICE_ID !== '' ? String(config.PCAN_DEVICE_ID) : ''}
+              onChange={(e) => {
+                const v = e.currentTarget.value.trim();
+                setLocalConfig('PCAN_DEVICE_ID', v === '' ? null : parseInt(v, 10) || null);
+              }}
+              disabled={disabled}
+            />
           </>
         );
       }
       case 'tcp': {
-        const tcpPresetOptions = [{ value: '', label: 'Custom' }, ...tcpConfigs.map((c) => ({ value: c.id, label: `${c.name} (${c.ip}:${c.port})` }))];
-        const selectedPreset = tcpConfigs.find((c) => c.ip === config.TCP_IP && c.port === config.TCP_PORT)?.id || '';
+        const tcpPresetOptions = [
+          { value: CUSTOM_PRESET, label: 'Custom' },
+          ...tcpConfigs.map((c) => ({ value: c.id, label: `${c.name} (${c.ip}:${c.port})` })),
+        ];
+        const selectedPreset = tcpConfigs.find((c) => c.ip === config.TCP_IP && c.port === config.TCP_PORT)?.id || CUSTOM_PRESET;
         return (
           <>
-            <Group gap="xs" align="flex-end">
-              <Select label="Preset" data={tcpPresetOptions} value={selectedPreset || ''} onChange={(v) => { const c = tcpConfigs.find((x) => x.id === v); if (c) { setLocalConfig('TCP_IP', c.ip); setLocalConfig('TCP_PORT', c.port); } }} searchable disabled={disabled} size="sm" style={{ flex: 1 }} />
-              <Button variant="subtle" size="sm" onClick={() => setTcpModalOpen(true)} disabled={disabled} title="Manage TCP configs"><Settings2 size={14} /></Button>
-            </Group>
-            <Group grow>
-              <TextInput label="IP" value={config.TCP_IP || ''} onChange={(e) => setLocalConfig('TCP_IP', e.target.value)} disabled={disabled} size="sm" />
-              <TextInput label="Port" type="number" value={String(config.TCP_PORT || '')} onChange={(e) => setLocalConfig('TCP_PORT', parseInt(e.target.value, 10) || 0)} disabled={disabled} size="sm" />
-            </Group>
-            <Button variant="subtle" size="compact-sm" onClick={() => { setLoading((l) => ({ ...l, tcpTest: true })); apiJson('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.TCP_IP || '', port: config.TCP_PORT || 8187 }) }).then((res) => { if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' }); else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 }); }).catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' })).finally(() => setLoading((l) => ({ ...l, tcpTest: false }))); }} loading={loading.tcpTest} disabled={disabled || !config.TCP_IP} leftSection={<Wifi size={12} />}>Test connection</Button>
+            <div className="flex items-end gap-2">
+              <ConfigSelect
+                label="Preset"
+                className="min-w-0 flex-1"
+                value={selectedPreset}
+                onValueChange={(v) => {
+                  const c = tcpConfigs.find((x) => x.id === v);
+                  if (c) {
+                    setLocalConfig('TCP_IP', c.ip);
+                    setLocalConfig('TCP_PORT', c.port);
+                  }
+                }}
+                options={tcpPresetOptions}
+                disabled={disabled}
+              />
+              <Button variant="ghost" size="icon-sm" onClick={() => setTcpModalOpen(true)} disabled={disabled} title="Manage TCP configs">
+                <Settings2 className="size-3.5" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <ConfigInput
+                label="IP"
+                inputClassName="tabular"
+                value={config.TCP_IP || ''}
+                onChange={(e) => setLocalConfig('TCP_IP', e.target.value)}
+                disabled={disabled}
+              />
+              <ConfigInput
+                label="Port"
+                type="number"
+                inputClassName="tabular"
+                value={String(config.TCP_PORT || '')}
+                onChange={(e) => setLocalConfig('TCP_PORT', parseInt(e.target.value, 10) || 0)}
+                disabled={disabled}
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => {
+                setLoading((l) => ({ ...l, tcpTest: true }));
+                apiJson('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.TCP_IP || '', port: config.TCP_PORT || 8187 }) })
+                  .then((res) => {
+                    if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' });
+                    else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 });
+                  })
+                  .catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' }))
+                  .finally(() => setLoading((l) => ({ ...l, tcpTest: false })));
+              }}
+              disabled={disabled || !config.TCP_IP || loading.tcpTest}
+            >
+              {loading.tcpTest ? <Loader2 className="size-3.5 animate-spin" /> : <Wifi className="size-3.5" />}
+              Test connection
+            </Button>
           </>
         );
       }
       case 'canp_tcp': {
-        const tcpPresetOptions = [{ value: '', label: 'Custom' }, ...tcpConfigs.map((c) => ({ value: c.id, label: `${c.name} (${c.ip}:${c.port})` }))];
-        const selectedPreset = tcpConfigs.find((c) => c.ip === config.CANP_TCP_IP && c.port === config.CANP_TCP_PORT)?.id || '';
+        const tcpPresetOptions = [
+          { value: CUSTOM_PRESET, label: 'Custom' },
+          ...tcpConfigs.map((c) => ({ value: c.id, label: `${c.name} (${c.ip}:${c.port})` })),
+        ];
+        const selectedPreset = tcpConfigs.find((c) => c.ip === config.CANP_TCP_IP && c.port === config.CANP_TCP_PORT)?.id || CUSTOM_PRESET;
         return (
           <>
-            <Text size="xs" c="dimmed" mb={4}>Photon CANP batched frames over TCP (magic CAN1, v3).</Text>
-            <Group gap="xs" align="flex-end">
-              <Select label="Preset" data={tcpPresetOptions} value={selectedPreset || ''} onChange={(v) => { const c = tcpConfigs.find((x) => x.id === v); if (c) { setLocalConfig('CANP_TCP_IP', c.ip); setLocalConfig('CANP_TCP_PORT', c.port); } }} searchable disabled={disabled} size="sm" style={{ flex: 1 }} />
-              <Button variant="subtle" size="sm" onClick={() => setTcpModalOpen(true)} disabled={disabled} title="Manage TCP configs"><Settings2 size={14} /></Button>
-            </Group>
-            <Group grow>
-              <TextInput label="IP" value={config.CANP_TCP_IP || ''} onChange={(e) => setLocalConfig('CANP_TCP_IP', e.target.value)} disabled={disabled} size="sm" />
-              <TextInput label="Port" type="number" value={String(config.CANP_TCP_PORT ?? '')} onChange={(e) => setLocalConfig('CANP_TCP_PORT', parseInt(e.target.value, 10) || 0)} disabled={disabled} size="sm" />
-            </Group>
-            <Button variant="subtle" size="compact-sm" onClick={() => { setLoading((l) => ({ ...l, tcpTest: true })); apiJson('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.CANP_TCP_IP || '', port: config.CANP_TCP_PORT || 6500 }) }).then((res) => { if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' }); else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 }); }).catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' })).finally(() => setLoading((l) => ({ ...l, tcpTest: false }))); }} loading={loading.tcpTest} disabled={disabled || !config.CANP_TCP_IP} leftSection={<Wifi size={12} />}>Test connection</Button>
+            <p className="text-xs text-muted-foreground">Photon CANP batched frames over TCP (magic CAN1, v3).</p>
+            <div className="flex items-end gap-2">
+              <ConfigSelect
+                label="Preset"
+                className="min-w-0 flex-1"
+                value={selectedPreset}
+                onValueChange={(v) => {
+                  const c = tcpConfigs.find((x) => x.id === v);
+                  if (c) {
+                    setLocalConfig('CANP_TCP_IP', c.ip);
+                    setLocalConfig('CANP_TCP_PORT', c.port);
+                  }
+                }}
+                options={tcpPresetOptions}
+                disabled={disabled}
+              />
+              <Button variant="ghost" size="icon-sm" onClick={() => setTcpModalOpen(true)} disabled={disabled} title="Manage TCP configs">
+                <Settings2 className="size-3.5" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <ConfigInput
+                label="IP"
+                inputClassName="tabular"
+                value={config.CANP_TCP_IP || ''}
+                onChange={(e) => setLocalConfig('CANP_TCP_IP', e.target.value)}
+                disabled={disabled}
+              />
+              <ConfigInput
+                label="Port"
+                type="number"
+                inputClassName="tabular"
+                value={String(config.CANP_TCP_PORT ?? '')}
+                onChange={(e) => setLocalConfig('CANP_TCP_PORT', parseInt(e.target.value, 10) || 0)}
+                disabled={disabled}
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => {
+                setLoading((l) => ({ ...l, tcpTest: true }));
+                apiJson('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.CANP_TCP_IP || '', port: config.CANP_TCP_PORT || 6500 }) })
+                  .then((res) => {
+                    if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' });
+                    else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 });
+                  })
+                  .catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' }))
+                  .finally(() => setLoading((l) => ({ ...l, tcpTest: false })));
+              }}
+              disabled={disabled || !config.CANP_TCP_IP || loading.tcpTest}
+            >
+              {loading.tcpTest ? <Loader2 className="size-3.5 animate-spin" /> : <Wifi className="size-3.5" />}
+              Test connection
+            </Button>
           </>
         );
       }
       case 'file':
         return (
           <>
-            <Group gap="xs" align="flex-end">
-              <Select label="Log file" data={logFiles} value={config.REPLAY_FILE_PATH ? config.REPLAY_FILE_PATH.replace(/^.*[/\\]/, '') : null} onChange={(v) => setLocalConfig('REPLAY_FILE_PATH', v)} searchable disabled={disabled} size="sm" style={{ flex: 1 }} />
-              <Button variant="subtle" size="sm" onClick={loadLogFiles} disabled={disabled} style={{ color: 'var(--text-muted)' }}><RefreshCw size={14} /></Button>
-            </Group>
-            <Button variant="subtle" size="compact-sm" onClick={() => setLogModalOpen(true)} style={{ color: 'var(--text-muted)', alignSelf: 'flex-start' }} leftSection={<Settings2 size={12} />}>Edit log files</Button>
+            <div className="flex items-end gap-2">
+              <ConfigSelect
+                label="Log file"
+                className="min-w-0 flex-1"
+                value={config.REPLAY_FILE_PATH ? config.REPLAY_FILE_PATH.replace(/^.*[/\\]/, '') : undefined}
+                onValueChange={(v) => setLocalConfig('REPLAY_FILE_PATH', v)}
+                options={logFiles}
+                disabled={disabled}
+              />
+              <Button variant="ghost" size="icon-sm" onClick={loadLogFiles} disabled={disabled} title="Refresh log files">
+                <RefreshCw className="size-3.5 text-muted-foreground" />
+              </Button>
+            </div>
+            <Button variant="ghost" size="xs" className="self-start text-muted-foreground" onClick={() => setLogModalOpen(true)}>
+              <Settings2 className="size-3" />
+              Edit log files
+            </Button>
           </>
         );
       default:
@@ -519,146 +697,201 @@ export function TelemetryDashboard() {
     }
   };
 
-  const STATUS_GREEN = '#22c55e';
-  const STATUS_GRAY = '#71717a';
-  const BLUE_ACTIVE = '#3b82f6';
-  const STOP_RED = '#ef4444';
-
   const hasUnsavedChanges = config && savedConfig && !configEquals(config, savedConfig);
   const hasDbcFiles = dbcFilesForVehicle.length > 0;
   const hasDbcSelection = Array.isArray(config?.DBC_FILES) && config.DBC_FILES.length > 0;
   const allDbcSelected =
     hasDbcFiles &&
     dbcFilesForVehicle.every((e) => Array.isArray(config?.DBC_FILES) && config.DBC_FILES.includes(e.name));
+  const someDbcSelected = hasDbcSelection && !allDbcSelected;
   const hasValidDbc = hasDbcFiles && hasDbcSelection;
   const saveEnabled = hasUnsavedChanges && !status.service_running && backendConnected && hasValidDbc;
   const startEnabled = backendConnected && !status.service_running && hasValidDbc;
 
   return (
-    <Box style={dashboardLayout}>
-      {/* Top: Start/Stop */}
-      <Group gap="sm" mb="sm" wrap="wrap" justify="flex-end" align="center">
-        <Group gap="xs">
-          <Button variant="filled" size="sm" leftSection={<Power size={14} />} onClick={handleStart} loading={loading.start} disabled={!startEnabled} bg={startEnabled ? BLUE_ACTIVE : STATUS_GRAY} c={startEnabled ? 'white' : '#a1a1aa'}>Start</Button>
-          <Button variant="filled" size="sm" leftSection={<Square size={12} fill="currentColor" />} onClick={handleStop} loading={loading.stop} disabled={!status.service_running} bg={status.service_running ? STOP_RED : STATUS_GRAY} c={status.service_running ? 'white' : '#a1a1aa'}>Stop</Button>
-        </Group>
-      </Group>
+    <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col gap-4 overflow-hidden p-4">
+      <Card className="gap-0 rounded-lg py-4">
+        <CardHeader className="px-4 pb-3">
+          <CardTitle className="font-display text-sm">Service</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-end gap-2 px-4">
+          <Button size="sm" onClick={handleStart} disabled={!startEnabled || loading.start}>
+            {loading.start ? <Loader2 className="size-3.5 animate-spin" /> : <Power className="size-3.5" />}
+            Start
+          </Button>
+          <Button variant="destructive" size="sm" onClick={handleStop} disabled={!status.service_running || loading.stop}>
+            {loading.stop ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3 fill-current" />}
+            Stop
+          </Button>
+        </CardContent>
+      </Card>
+
       {canDownloadBackend && (
-        <Box
-          mb="sm"
-          p="xs"
-          style={{
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            backgroundColor: '#111114',
-          }}
-        >
-          <Group justify="space-between" wrap="wrap" gap="xs">
-            <Text size="sm" c="dimmed">Backend is offline. Download the desktop backend executable.</Text>
-            <Button
-              component="a"
-              href={backendDownloadUrl}
-              target="_blank"
-              rel="noreferrer"
-              size="xs"
-              variant="light"
-            >
-              Download backend
+        <Alert className="rounded-lg border-border bg-muted/50">
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm text-muted-foreground">
+              Backend is offline. Download the desktop backend executable.
+            </span>
+            <Button asChild variant="outline" size="xs">
+              <a href={backendDownloadUrl} target="_blank" rel="noreferrer">
+                Download backend
+              </a>
             </Button>
-          </Group>
-        </Box>
+          </AlertDescription>
+        </Alert>
       )}
 
-      {/* Main: 2 columns — scroll this area only if needed; footer stays visible */}
-      <Grid gutter="md" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <Grid.Col span={{ base: 12, sm: 6 }} style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <Text size="sm" c="dimmed" mb={4}>Vehicle</Text>
-          <Select data={vehicles.map((v) => ({ value: v, label: v }))} value={config.DBC_VEHICLE || null} onChange={setVehicle} disabled={status.service_running} size="sm" mb="xs" leftSection={<Car size={14} style={{ color: 'var(--text-muted)' }} />} />
-          {config.DBC_VEHICLE && (
-            dbcFilesForVehicle.length > 0 ? (
-              <>
-                <Group gap="xs" mb={4} justify="space-between">
-                  <Text size="sm" c="dimmed">DBC files</Text>
-                  <Button variant="subtle" size="compact-sm" onClick={() => setDbcModalOpen(true)} style={{ color: 'var(--text-muted)' }} leftSection={<Settings2 size={12} />}>Edit</Button>
-                </Group>
-                <Checkbox label={<Text size="sm" c="dimmed">Select all</Text>} size="sm" checked={allDbcSelected} onChange={(e) => { if (e.currentTarget.checked) setLocalConfig('DBC_FILES', dbcFilesForVehicle.map((f) => f.name)); else setLocalConfig('DBC_FILES', []); }} disabled={status.service_running} mb={4} />
-                <ScrollArea h={140} type="auto" scrollbarSize={6} style={{ flex: '0 1 auto' }}>
-                  <Stack gap={2}>
-                    {dbcFilesForVehicle.map((entry) => {
-                      const filename = entry.name;
-                      const selected = Array.isArray(config.DBC_FILES) && config.DBC_FILES.includes(filename);
-                      const isEmbedded = entry.source === 'embedded';
-                      return (
-                        <Checkbox key={filename} size="sm" checked={selected} onChange={(e) => toggleDbcFile(filename, e.currentTarget.checked)} disabled={status.service_running} label={isEmbedded ? `${filename} *` : filename} styles={{ label: { width: '100%' } }} />
-                      );
-                    })}
-                  </Stack>
-                </ScrollArea>
-                <Text size="sm" c="dimmed" mt={4}>* = Embedded Sharepoint</Text>
-                {!hasDbcSelection && <Text size="sm" c="orange" mt={4}>Select at least one DBC file.</Text>}
-              </>
-            ) : (
-              <Text size="sm" c="dimmed">No DBC files in this vehicle.</Text>
-            )
-          )}
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, sm: 6 }} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
-          <Text size="sm" c="dimmed" mb={4}>Source</Text>
-          <Group gap="xs" mb="xs" wrap="wrap" align="stretch">
-            {availableModes.map((m) => {
-              const Icon = SOURCE_MODE_ICONS[m.value];
-              return (
-                <Button
-                  key={m.value}
-                  variant={inputMode === m.value ? 'filled' : 'subtle'}
-                  size="xs"
-                  color="dark"
-                  onClick={() => setLocalConfig('INPUT_MODE', m.value)}
-                  disabled={status.service_running}
-                  leftSection={Icon ? <Icon size={SOURCE_MODE_ICON_SIZE} strokeWidth={2} style={{ flexShrink: 0 }} /> : undefined}
-                  styles={{
-                    root: {
-                      whiteSpace: 'normal',
-                      height: 'auto',
-                      minHeight: 36,
-                      alignItems: 'center',
-                      ...(inputMode === m.value
-                        ? { backgroundColor: 'var(--bg-hover)', color: 'var(--text)' }
-                        : { color: 'var(--text-muted)' }),
-                    },
-                    label: { whiteSpace: 'normal', lineHeight: 1.35, textAlign: 'left' },
-                    section: { flexShrink: 0 },
-                  }}
-                >
-                  {m.label}
-                </Button>
-              );
-            })}
-          </Group>
-          <Stack gap="xs" style={{ flex: 1, minHeight: 0 }}>
-            {renderModeFields()}
-          </Stack>
-        </Grid.Col>
-      </Grid>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Card className="gap-0 rounded-lg py-4">
+            <CardHeader className="px-4 pb-3">
+              <CardTitle className="font-display text-sm">Files</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 px-4">
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>Vehicle</FieldLabel>
+                <Select value={config.DBC_VEHICLE || undefined} onValueChange={setVehicle} disabled={status.service_running}>
+                  <SelectTrigger size="sm" className="w-full">
+                    <Car className="size-3.5 shrink-0 text-muted-foreground" />
+                    <SelectValue placeholder="Select vehicle…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vehicles.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-      {/* Footer: Database + Save — always visible */}
-      <Divider color="var(--border)" my="sm" />
-      <Group gap="sm" justify="space-between" align="center" wrap="nowrap">
-        <Group gap="xs">
-          <Database size={14} style={{ color: 'var(--text-muted)' }} />
-          <Switch
-            size="sm"
-            checked={config.INFLUX_WRITE_ENABLED !== false && status.influx_connected}
-            onChange={(e) => setLocalConfig('INFLUX_WRITE_ENABLED', e.currentTarget.checked)}
-            disabled={status.service_running || !status.influx_connected}
-            label={config.INFLUX_WRITE_ENABLED !== false && status.influx_connected ? 'Write on' : 'Write off'}
-            color={config.INFLUX_WRITE_ENABLED !== false && status.influx_connected ? 'green' : 'red'}
-            styles={{ label: { color: 'var(--text-muted)', fontSize: 13 } }}
-          />
-          <Button variant="subtle" size="xs" onClick={() => setDbModalOpen(true)} disabled={!status.influx_connected}>Manage</Button>
-        </Group>
-        <Button variant="filled" size="sm" leftSection={<Save size={14} />} onClick={handleSave} loading={loading.save} disabled={!saveEnabled} bg={saveEnabled ? BLUE_ACTIVE : STATUS_GRAY} c={saveEnabled ? 'white' : '#a1a1aa'} style={!saveEnabled ? { opacity: 0.8 } : {}}>Save</Button>
-      </Group>
+              {config.DBC_VEHICLE && (
+                dbcFilesForVehicle.length > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <FieldLabel className="mb-0">DBC files</FieldLabel>
+                      <Button variant="ghost" size="xs" className="h-6 text-muted-foreground" onClick={() => setDbcModalOpen(true)}>
+                        <Settings2 className="size-3" />
+                        Edit
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="dbc-select-all"
+                        checked={allDbcSelected ? true : (someDbcSelected ? 'indeterminate' : false)}
+                        onCheckedChange={(v) => {
+                          if (v === true) setLocalConfig('DBC_FILES', dbcFilesForVehicle.map((f) => f.name));
+                          else setLocalConfig('DBC_FILES', []);
+                        }}
+                        disabled={status.service_running}
+                      />
+                      <label htmlFor="dbc-select-all" className="cursor-pointer text-sm text-muted-foreground">
+                        Select all
+                      </label>
+                    </div>
+                    <ScrollArea className="h-[140px] rounded-md border border-border">
+                      <div className="flex flex-col gap-1 p-2">
+                        {dbcFilesForVehicle.map((entry) => {
+                          const filename = entry.name;
+                          const selected = Array.isArray(config.DBC_FILES) && config.DBC_FILES.includes(filename);
+                          const isEmbedded = entry.source === 'embedded';
+                          const id = `dbc-${filename}`;
+                          return (
+                            <div key={filename} className="flex items-center gap-2">
+                              <Checkbox
+                                id={id}
+                                checked={selected}
+                                onCheckedChange={(v) => toggleDbcFile(filename, v === true)}
+                                disabled={status.service_running}
+                              />
+                              <label htmlFor={id} className="flex-1 cursor-pointer truncate text-sm">
+                                {isEmbedded ? `${filename} *` : filename}
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                    <p className="text-xs text-muted-foreground">* = Embedded Sharepoint</p>
+                    {!hasDbcSelection && (
+                      <p className="text-sm text-signal-amber">Select at least one DBC file.</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No DBC files in this vehicle.</p>
+                )
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="gap-0 rounded-lg py-4">
+            <CardHeader className="px-4 pb-3">
+              <CardTitle className="font-display text-sm">Input Source</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 px-4">
+              <div className="flex flex-wrap gap-1.5">
+                {availableModes.map((m) => {
+                  const Icon = SOURCE_MODE_ICONS[m.value];
+                  const active = inputMode === m.value;
+                  return (
+                    <Button
+                      key={m.value}
+                      variant={active ? 'secondary' : 'ghost'}
+                      size="xs"
+                      className={cn(
+                        'h-auto min-h-9 whitespace-normal px-2.5 py-1.5 text-left',
+                        !active && 'text-muted-foreground'
+                      )}
+                      onClick={() => setLocalConfig('INPUT_MODE', m.value)}
+                      disabled={status.service_running}
+                    >
+                      {Icon && <Icon size={SOURCE_MODE_ICON_SIZE} strokeWidth={2} className="shrink-0" />}
+                      {m.label}
+                    </Button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-col gap-2">
+                {renderModeFields()}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <Card className="gap-0 rounded-lg py-4">
+        <CardHeader className="px-4 pb-3">
+          <CardTitle className="font-display text-sm">Options</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between gap-4 px-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <Database className="size-3.5 shrink-0 text-muted-foreground" />
+            <div className="flex items-center gap-2">
+              <Switch
+                size="sm"
+                checked={influxWriteOn}
+                onCheckedChange={(v) => setLocalConfig('INFLUX_WRITE_ENABLED', v === true)}
+                disabled={status.service_running || !status.influx_connected}
+              />
+              <span
+                className={cn(
+                  'text-sm',
+                  influxWriteOn ? 'text-signal-green' : 'text-signal-red'
+                )}
+              >
+                {influxWriteOn ? 'Write on' : 'Write off'}
+              </span>
+            </div>
+            <Button variant="ghost" size="xs" onClick={() => setDbModalOpen(true)} disabled={!status.influx_connected}>
+              Manage
+            </Button>
+          </div>
+          <Button size="sm" onClick={handleSave} disabled={!saveEnabled || loading.save}>
+            {loading.save ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+            Save
+          </Button>
+        </CardContent>
+      </Card>
 
       <LogFileManagerModal
         opened={logModalOpen}
@@ -690,6 +923,6 @@ export function TelemetryDashboard() {
         vehicle={config.DBC_VEHICLE}
         dbcFiles={config.DBC_FILES || []}
       />
-    </Box>
+    </div>
   );
 }

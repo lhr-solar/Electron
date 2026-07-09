@@ -1,7 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Box, Text, Stack, Group, Button, TextInput, Select, Table, Tabs, Badge, Checkbox, Alert } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
-import { Download, Plus, Trash2 } from 'lucide-react';
+import { Download, Plus, Trash2, Loader2, CircleAlert } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { notifications } from '@/lib/notify';
 import { apiJson, buildApiUrl } from '../lib/api';
 
 export function DatabaseManagementModal({
@@ -143,167 +170,248 @@ export function DatabaseManagementModal({
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Database management" size="lg">
-      {!influxConnected && (
-        <Alert color="red" mb="md" title="InfluxDB not connected">
-          Connect InfluxDB to manage buckets and pull recent event metadata.
-        </Alert>
-      )}
-      <Tabs defaultValue="telemetry">
-        <Tabs.List>
-          <Tabs.Tab value="telemetry">Telemetry buckets</Tabs.Tab>
-          <Tabs.Tab value="events">Events</Tabs.Tab>
-        </Tabs.List>
+    <Dialog open={opened} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto bg-popover sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="font-display">Database management</DialogTitle>
+        </DialogHeader>
 
-        <Tabs.Panel value="telemetry" pt="md">
-          <Stack gap="sm">
-            <Text size="sm" c="dimmed">
-              Telemetry data is written when Write on is enabled. Event metadata buckets are not allowed for telemetry.
-            </Text>
-            <Select
-              label="Active telemetry bucket"
-              data={bucketOptions.length ? bucketOptions : [{ value: telemetryBucket || 'debug', label: telemetryBucket || 'debug' }]}
-              value={telemetryBucket || null}
-              onChange={(v) => onBucketChange?.(v || '')}
-              disabled={loading || !influxConnected}
-            />
-            <Group align="flex-end">
-              <TextInput
-                label="New bucket"
-                placeholder="my_telemetry_bucket"
-                value={newBucket}
-                onChange={(e) => setNewBucket(e.currentTarget.value)}
-                style={{ flex: 1 }}
-                disabled={!influxConnected}
-              />
-              <Button leftSection={<Plus size={14} />} onClick={createBucket} disabled={!newBucket.trim() || !influxConnected}>
-                Add
-              </Button>
-            </Group>
-            <Table striped highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Name</Table.Th>
-                  <Table.Th>Type</Table.Th>
-                  <Table.Th />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {telemetryBuckets.map((b) => (
-                  <Table.Tr key={b.name}>
-                    <Table.Td>{b.name}</Table.Td>
-                    <Table.Td><Badge size="sm" color="blue">telemetry</Badge></Table.Td>
-                    <Table.Td>
-                      {b.name.startsWith('debug') && (
-                        <Button variant="subtle" color="red" size="xs" leftSection={<Trash2 size={12} />} onClick={() => deleteBucket(b.name)} disabled={!influxConnected}>
-                          Delete
-                        </Button>
-                      )}
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Stack>
-        </Tabs.Panel>
+        {!influxConnected && (
+          <Alert variant="destructive" className="border-signal-red/30 bg-signal-red/5">
+            <CircleAlert />
+            <AlertTitle>InfluxDB not connected</AlertTitle>
+            <AlertDescription>
+              Connect InfluxDB to manage buckets and pull recent event metadata.
+            </AlertDescription>
+          </Alert>
+        )}
 
-        <Tabs.Panel value="events" pt="md">
-          <Stack gap="sm">
-            <Text size="sm" c="dimmed">
-              Events merge local captures with recent metadata from Influx ({eventMeta.local_count} local, {eventMeta.influx_count} from Influx).
-              CSV export uses local capture files when available.
-            </Text>
-            <Group grow align="flex-end">
-              <TextInput
-                label="Range start (ISO)"
-                placeholder="2026-07-08T16:00:00.000-07:00"
-                value={rangeStart}
-                onChange={(e) => setRangeStart(e.currentTarget.value)}
-                disabled={!influxConnected}
-              />
-              <TextInput
-                label="Range end (ISO)"
-                placeholder="2026-07-08T16:30:00.000-07:00"
-                value={rangeEnd}
-                onChange={(e) => setRangeEnd(e.currentTarget.value)}
-                disabled={!influxConnected}
-              />
-            </Group>
-            <Text size="xs" c="dimmed">
-              Select events and/or a time range. Output is clipped to actual data timestamps (no empty padding).
-            </Text>
-            <Button
-              leftSection={<Download size={14} />}
-              onClick={downloadDecodedCsv}
-              loading={exporting}
-              disabled={!canExport || loading || !influxConnected}
-            >
-              Generate and download CSV
-            </Button>
-            <Table striped highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th w={36}>
-                    <Checkbox
-                      checked={allSelected}
-                      indeterminate={selectedEventIds.length > 0 && !allSelected}
-                      onChange={toggleAllEvents}
-                      aria-label="Select all events"
-                      disabled={!influxConnected}
-                    />
-                  </Table.Th>
-                  <Table.Th>Run</Table.Th>
-                  <Table.Th>Start</Table.Th>
-                  <Table.Th>End</Table.Th>
-                  <Table.Th>Capture</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {events.length === 0 && (
-                  <Table.Tr>
-                    <Table.Td colSpan={5}>
-                      <Text size="sm" c="dimmed">
-                        {influxConnected ? 'No recorded events yet.' : 'InfluxDB required to load events.'}
-                      </Text>
-                    </Table.Td>
-                  </Table.Tr>
+        <Tabs defaultValue="telemetry">
+          <TabsList>
+            <TabsTrigger value="telemetry">Telemetry buckets</TabsTrigger>
+            <TabsTrigger value="events">Events</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="telemetry" className="pt-4">
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">
+                Telemetry data is written when Write on is enabled. Event metadata buckets are not allowed for telemetry.
+              </p>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs">Active telemetry bucket</Label>
+                <Select
+                  value={telemetryBucket || undefined}
+                  onValueChange={(v) => onBucketChange?.(v || '')}
+                  disabled={loading || !influxConnected}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select bucket" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(bucketOptions.length ? bucketOptions : [{ value: telemetryBucket || 'debug', label: telemetryBucket || 'debug' }]).map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end gap-2">
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label htmlFor="new-bucket" className="text-xs">New bucket</Label>
+                  <Input
+                    id="new-bucket"
+                    placeholder="my_telemetry_bucket"
+                    value={newBucket}
+                    onChange={(e) => setNewBucket(e.currentTarget.value)}
+                    disabled={!influxConnected}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <Button
+                  onClick={createBucket}
+                  disabled={!newBucket.trim() || !influxConnected}
+                  className="shrink-0"
+                >
+                  <Plus className="size-3.5" />
+                  Add
+                </Button>
+              </div>
+              <div className="rounded-md border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="w-[100px]" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {telemetryBuckets.map((b) => (
+                      <TableRow key={b.name}>
+                        <TableCell className="tabular text-sm">{b.name}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className="border-signal-blue/30 bg-signal-blue/10 text-signal-blue"
+                          >
+                            telemetry
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {b.name.startsWith('debug') && (
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => deleteBucket(b.name)}
+                              disabled={!influxConnected}
+                              className="text-signal-red hover:text-signal-red"
+                            >
+                              <Trash2 className="size-3" />
+                              Delete
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="events" className="pt-4">
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">
+                Events merge local captures with recent metadata from Influx ({eventMeta.local_count} local, {eventMeta.influx_count} from Influx).
+                CSV export uses local capture files when available.
+              </p>
+              <div className="flex gap-2">
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label htmlFor="range-start" className="text-xs">Range start (ISO)</Label>
+                  <Input
+                    id="range-start"
+                    placeholder="2026-07-08T16:00:00.000-07:00"
+                    value={rangeStart}
+                    onChange={(e) => setRangeStart(e.currentTarget.value)}
+                    disabled={!influxConnected}
+                    className="h-8 text-sm tabular"
+                  />
+                </div>
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label htmlFor="range-end" className="text-xs">Range end (ISO)</Label>
+                  <Input
+                    id="range-end"
+                    placeholder="2026-07-08T16:30:00.000-07:00"
+                    value={rangeEnd}
+                    onChange={(e) => setRangeEnd(e.currentTarget.value)}
+                    disabled={!influxConnected}
+                    className="h-8 text-sm tabular"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select events and/or a time range. Output is clipped to actual data timestamps (no empty padding).
+              </p>
+              <Button
+                onClick={downloadDecodedCsv}
+                disabled={!canExport || loading || !influxConnected || exporting}
+              >
+                {exporting ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Download className="size-3.5" />
                 )}
-                {events.map((evt) => (
-                  <Table.Tr key={evt.id}>
-                    <Table.Td>
-                      <Checkbox
-                        checked={selectedEventIds.includes(evt.id)}
-                        onChange={() => toggleEvent(evt.id)}
-                        aria-label={`Select ${evt.display_name}`}
-                        disabled={!influxConnected || evt.source === 'influx'}
-                      />
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap={6}>
-                        <Text size="sm" fw={500}>{evt.display_name}</Text>
-                        {evt.source === 'influx' && <Badge size="xs" color="grape">influx</Badge>}
-                        {evt.influx_synced && <Badge size="xs" color="teal">synced</Badge>}
-                      </Group>
-                      <Text size="xs" c="dimmed">{evt.bucket_name}</Text>
-                    </Table.Td>
-                    <Table.Td><Text size="xs">{evt.start_time_iso}</Text></Table.Td>
-                    <Table.Td><Text size="xs">{evt.end_time_iso || '—'}</Text></Table.Td>
-                    <Table.Td><Text size="xs" style={{ fontFamily: 'monospace' }}>{evt.dump_file || '—'}</Text></Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-            {eventBuckets.length > 0 && (
-              <Box>
-                <Text size="xs" c="dimmed" mb={4}>Influx event metadata buckets</Text>
-                {eventBuckets.map((b) => (
-                  <Badge key={b.name} size="sm" color="grape" mr={4} mb={4}>{b.name}</Badge>
-                ))}
-              </Box>
-            )}
-          </Stack>
-        </Tabs.Panel>
-      </Tabs>
-    </Modal>
+                Generate and download CSV
+              </Button>
+              <div className="rounded-md border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-9">
+                        <Checkbox
+                          checked={allSelected ? true : selectedEventIds.length > 0 && !allSelected ? 'indeterminate' : false}
+                          onCheckedChange={toggleAllEvents}
+                          aria-label="Select all events"
+                          disabled={!influxConnected}
+                        />
+                      </TableHead>
+                      <TableHead>Run</TableHead>
+                      <TableHead>Start</TableHead>
+                      <TableHead>End</TableHead>
+                      <TableHead>Capture</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {events.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5}>
+                          <p className="text-sm text-muted-foreground">
+                            {influxConnected ? 'No recorded events yet.' : 'InfluxDB required to load events.'}
+                          </p>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {events.map((evt) => (
+                      <TableRow key={evt.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedEventIds.includes(evt.id)}
+                            onCheckedChange={() => toggleEvent(evt.id)}
+                            aria-label={`Select ${evt.display_name}`}
+                            disabled={!influxConnected || evt.source === 'influx'}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-sm font-medium">{evt.display_name}</span>
+                            {evt.source === 'influx' && (
+                              <Badge
+                                variant="outline"
+                                className="border-signal-purple/30 bg-signal-purple/10 text-signal-purple"
+                              >
+                                influx
+                              </Badge>
+                            )}
+                            {evt.influx_synced && (
+                              <Badge
+                                variant="outline"
+                                className="border-signal-green/30 bg-signal-green/10 text-signal-green"
+                              >
+                                synced
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="tabular text-xs text-muted-foreground">{evt.bucket_name}</p>
+                        </TableCell>
+                        <TableCell className="tabular text-xs">{evt.start_time_iso}</TableCell>
+                        <TableCell className="tabular text-xs">{evt.end_time_iso || '—'}</TableCell>
+                        <TableCell className="tabular text-xs">{evt.dump_file || '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {eventBuckets.length > 0 && (
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">Influx event metadata buckets</p>
+                  <div className="flex flex-wrap gap-1">
+                    {eventBuckets.map((b) => (
+                      <Badge
+                        key={b.name}
+                        variant="outline"
+                        className="border-signal-purple/30 bg-signal-purple/10 text-signal-purple"
+                      >
+                        {b.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Group, UnstyledButton, Text, PasswordInput, Button, Stack, Title } from '@mantine/core';
 import {
   Settings,
   LayoutDashboard,
@@ -10,6 +9,7 @@ import {
   LineChart,
   ScrollText,
   Lock,
+  Atom,
 } from 'lucide-react';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { LiveMessageLog } from './components/LiveMessageLog';
@@ -17,6 +17,10 @@ import { SignalDashboard } from './components/SignalDashboard';
 import { DbcViewer } from './components/DbcViewer';
 import { Analytics } from './components/Analytics';
 import { StatusBar } from './components/StatusBar';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { socket } from './socket';
 import { apiJson } from './lib/api';
 
@@ -45,6 +49,46 @@ function isManagePath() {
   return window.location.pathname === '/manage' || window.location.pathname.startsWith('/manage/');
 }
 
+function Wordmark({ title }) {
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      <div className="flex size-7 items-center justify-center rounded-md border border-signal-blue/30 bg-linear-to-br from-signal-blue/20 to-signal-purple/20">
+        <Atom className="size-4 text-signal-blue" strokeWidth={2} />
+      </div>
+      <span className="bg-linear-to-r from-signal-blue to-signal-purple bg-clip-text font-display text-[17px] font-bold leading-none tracking-tight text-transparent">
+        {title}
+      </span>
+    </div>
+  );
+}
+
+function TopLink({ href, active, imgSrc, alt, title }) {
+  const className = cn(
+    'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-muted-foreground transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+    active ? 'hover:bg-accent hover:text-foreground' : 'pointer-events-none opacity-40'
+  );
+  const children = (
+    <>
+      <img src={imgSrc} alt={alt} className="h-[18px] w-auto opacity-90" />
+      <ExternalLink className="size-3.5" strokeWidth={1.75} />
+    </>
+  );
+
+  if (!active) {
+    return (
+      <span title={title} className={className}>
+        {children}
+      </span>
+    );
+  }
+
+  return (
+    <a href={href} target="_blank" rel="noreferrer" title={title} className={className}>
+      {children}
+    </a>
+  );
+}
+
 function AppShell({ title, tabs, page, onNavigate, children, rightExtra }) {
   const [grafanaActive, setGrafanaActive] = useState(false);
   const [grafanaUrl, setGrafanaUrl] = useState('/grafana/');
@@ -63,25 +107,12 @@ function AppShell({ title, tabs, page, onNavigate, children, rightExtra }) {
   }, []);
 
   return (
-    <div style={{ height: '100vh', backgroundColor: '#0a0a0b', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div
-        style={{
-          borderBottom: '1px solid var(--border)',
-          flexShrink: 0,
-          backgroundColor: '#0f0f11',
-          display: 'grid',
-          gridTemplateColumns: '1fr auto 1fr',
-          alignItems: 'center',
-          gap: 12,
-          padding: '6px 16px',
-        }}
-      >
-        <Group gap="lg" align="center" wrap="nowrap" style={{ minWidth: 0, justifySelf: 'start' }}>
-          <Text size="lg" fw={600} style={{ color: '#e4e4e7', letterSpacing: '-0.02em', flexShrink: 0 }}>
-            {title}
-          </Text>
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-card px-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <Wordmark title={title} />
           {tabs?.length > 0 && (
-            <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+            <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {tabs.map(({ id, label, icon: Icon }) => (
                 <NavTab
                   key={id}
@@ -91,51 +122,33 @@ function AppShell({ title, tabs, page, onNavigate, children, rightExtra }) {
                   onClick={() => onNavigate(id)}
                 />
               ))}
-            </Group>
+            </nav>
           )}
-        </Group>
-        <StatusBar />
-        <Group gap="md" wrap="nowrap" style={{ justifySelf: 'end', flexShrink: 0 }}>
+        </div>
+
+        <div className="flex min-w-0 flex-1 justify-center">
+          <StatusBar />
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1">
           {rightExtra}
-          <a
-            href={grafanaActive ? grafanaUrl : undefined}
-            target={grafanaActive ? '_blank' : undefined}
-            rel={grafanaActive ? 'noreferrer' : undefined}
+          <TopLink
+            href={grafanaUrl}
+            active={grafanaActive}
+            imgSrc={`${import.meta.env.BASE_URL}assets/grafana_logo.svg`}
+            alt="Grafana"
             title="Open Grafana"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              opacity: grafanaActive ? 1 : 0.4,
-              pointerEvents: grafanaActive ? 'auto' : 'none',
-              color: 'var(--text-muted)',
-              textDecoration: 'none',
-            }}
-          >
-            <img src={`${import.meta.env.BASE_URL}assets/grafana_logo.svg`} alt="Grafana" style={{ height: 18, opacity: 0.9 }} />
-            <ExternalLink size={14} strokeWidth={1.75} />
-          </a>
-          <a
-            href={influxActive ? influxUrl : undefined}
-            target={influxActive ? '_blank' : undefined}
-            rel={influxActive ? 'noreferrer' : undefined}
+          />
+          <TopLink
+            href={influxUrl}
+            active={influxActive}
+            imgSrc={`${import.meta.env.BASE_URL}assets/influx_logo.svg`}
+            alt="InfluxDB"
             title="Open InfluxDB"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              opacity: influxActive ? 1 : 0.4,
-              pointerEvents: influxActive ? 'auto' : 'none',
-              color: 'var(--text-muted)',
-              textDecoration: 'none',
-            }}
-          >
-            <img src={`${import.meta.env.BASE_URL}assets/influx_logo.svg`} alt="InfluxDB" style={{ height: 18, opacity: 0.9 }} />
-            <ExternalLink size={14} strokeWidth={1.75} />
-          </a>
-        </Group>
-      </div>
-      <div style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>{children}</div>
+          />
+        </div>
+      </header>
+      <div className="relative flex min-h-0 flex-1">{children}</div>
     </div>
   );
 }
@@ -157,16 +170,19 @@ function ClientApp() {
 
   return (
     <AppShell title="Electron" tabs={CLIENT_PAGES} page={page} onNavigate={navigate}>
-      <Group align="stretch" gap={0} wrap="nowrap" style={{ flex: 1, display: page === 'control' ? 'flex' : 'none' }}>
+      <div
+        className="flex min-h-0 flex-1 flex-nowrap items-stretch"
+        style={{ display: page === 'control' ? 'flex' : 'none' }}
+      >
         <TelemetryDashboard />
         <LiveMessageLog />
-      </Group>
+      </div>
       {['dashboard', 'analytics', 'dbc-viewer'].map((id) => {
         const Component = id === 'dashboard' ? SignalDashboard : id === 'analytics' ? Analytics : DbcViewer;
         return (
-          <div key={id} style={{ flex: 1, display: page === id ? 'flex' : 'none', minHeight: 0 }}>
+          <div key={id} className="min-h-0 flex-1" style={{ display: page === id ? 'flex' : 'none' }}>
             <PageWithCollapsibleLog logOpen={sideLogOpen} onToggle={toggleSideLog}>
-              {page === id ? <Component /> : <div style={{ flex: 1, minHeight: 0 }} aria-hidden />}
+              {page === id ? <Component /> : <div className="min-h-0 flex-1" aria-hidden />}
             </PageWithCollapsibleLog>
           </div>
         );
@@ -206,33 +222,22 @@ function ServerViewerApp() {
       rightExtra={
         <a
           href="/manage"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '5px 10px',
-            borderRadius: 4,
-            border: '1px solid #2a2a30',
-            color: '#d4d4d8',
-            textDecoration: 'none',
-            fontSize: 13,
-            background: '#151518',
-          }}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-secondary px-2.5 text-[13px] font-medium text-foreground/90 transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <Lock size={13} strokeWidth={1.75} />
           Manage
         </a>
       }
     >
-      <div style={{ flex: 1, display: page === 'live-log' ? 'flex' : 'none', minHeight: 0 }}>
+      <div className="min-h-0 flex-1" style={{ display: page === 'live-log' ? 'flex' : 'none' }}>
         {page === 'live-log' ? <LiveMessageLog variant="stage" /> : null}
       </div>
       {['dashboard', 'analytics', 'dbc-viewer'].map((id) => {
         const Component = id === 'dashboard' ? SignalDashboard : id === 'analytics' ? Analytics : DbcViewer;
         return (
-          <div key={id} style={{ flex: 1, display: page === id ? 'flex' : 'none', minHeight: 0 }}>
+          <div key={id} className="min-h-0 flex-1" style={{ display: page === id ? 'flex' : 'none' }}>
             <PageWithCollapsibleLog logOpen={sideLogOpen} onToggle={toggleSideLog}>
-              {page === id ? <Component /> : <div style={{ flex: 1, minHeight: 0 }} aria-hidden />}
+              {page === id ? <Component /> : <div className="min-h-0 flex-1" aria-hidden />}
             </PageWithCollapsibleLog>
           </div>
         );
@@ -261,20 +266,31 @@ function ManageLogin({ onSuccess }) {
   };
 
   return (
-    <div style={{ flex: 1, display: 'grid', placeItems: 'center', background: '#0a0a0b' }}>
-      <form onSubmit={submit} style={{ width: 320, padding: 24, border: '1px solid #1f1f23', borderRadius: 8, background: '#0f0f11' }}>
-        <Stack gap="md">
-          <Title order={3} c="#e4e4e7">Manage login</Title>
-          <Text size="sm" c="dimmed">Password required to control this server.</Text>
-          <PasswordInput
-            label="Password"
-            value={password}
-            onChange={(e) => setPassword(e.currentTarget.value)}
-            autoFocus
-          />
-          {error ? <Text size="sm" c="red">{error}</Text> : null}
-          <Button type="submit" loading={loading}>Sign in</Button>
-        </Stack>
+    <div className="grid flex-1 place-items-center bg-background">
+      <form
+        onSubmit={submit}
+        className="w-80 rounded-xl border border-border bg-card p-6 shadow-2xl shadow-black/40"
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h3 className="font-display text-lg font-semibold text-foreground">Manage login</h3>
+            <p className="text-sm text-muted-foreground">Password required to control this server.</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="manage-password">Password</Label>
+            <Input
+              id="manage-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.currentTarget.value)}
+              autoFocus
+            />
+          </div>
+          {error ? <p className="text-sm text-signal-red">{error}</p> : null}
+          <Button type="submit" disabled={loading}>
+            {loading ? 'Signing in…' : 'Sign in'}
+          </Button>
+        </div>
       </form>
     </div>
   );
@@ -305,7 +321,7 @@ function ServerManageApp() {
 
   if (authed === null) {
     return (
-      <div style={{ height: '100vh', background: '#0a0a0b', display: 'grid', placeItems: 'center', color: '#a1a1aa' }}>
+      <div className="grid h-screen place-items-center bg-background text-sm text-muted-foreground">
         Checking session…
       </div>
     );
@@ -313,7 +329,7 @@ function ServerManageApp() {
 
   if (!authed) {
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="flex h-screen flex-col">
         <ManageLogin onSuccess={() => setAuthed(true)} />
       </div>
     );
@@ -326,9 +342,9 @@ function ServerManageApp() {
       page="control"
       onNavigate={() => {}}
       rightExtra={
-        <UnstyledButton onClick={logout} style={{ color: '#a1a1aa', fontSize: 13 }}>
+        <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground">
           Log out
-        </UnstyledButton>
+        </Button>
       }
     >
       <PageWithCollapsibleLog logOpen={sideLogOpen} onToggle={() => setSideLogOpen((v) => !v)}>
@@ -350,7 +366,7 @@ function App() {
 
   if (mode === null) {
     return (
-      <div style={{ height: '100vh', background: '#0a0a0b', display: 'grid', placeItems: 'center', color: '#a1a1aa' }}>
+      <div className="grid h-screen place-items-center bg-background text-sm text-muted-foreground">
         Loading…
       </div>
     );
@@ -366,62 +382,34 @@ const PageWithCollapsibleLog = React.memo(function PageWithCollapsibleLog({ chil
   const sidebarWidth = 320;
 
   return (
-    <div style={{ flex: 1, display: 'flex', position: 'relative', minHeight: 0, minWidth: 0 }}>
+    <div className="relative flex min-h-0 min-w-0 flex-1">
       <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          minHeight: 0,
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          transition: 'margin-right 200ms ease',
-          marginRight: logOpen ? sidebarWidth : 0,
-        }}
+        className="flex h-full min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-200 ease-out"
+        style={{ marginRight: logOpen ? sidebarWidth : 0 }}
       >
         {children}
       </div>
 
       <div
-        style={{
-          position: 'absolute',
-          top: '50%',
-          right: logOpen ? sidebarWidth : 0,
-          transform: 'translateY(-50%)',
-          zIndex: 3,
-        }}
+        className="absolute top-1/2 z-[3] -translate-y-1/2 transition-[right] duration-200 ease-out"
+        style={{ right: logOpen ? sidebarWidth : 0 }}
       >
-        <UnstyledButton
+        <button
           onClick={onToggle}
           title={logOpen ? 'Hide live log' : 'Show live log'}
-          style={{
-            width: 26,
-            height: 72,
-            borderRadius: '12px 0 0 12px',
-            border: '1px solid var(--border)',
-            borderRight: 'none',
-            backgroundColor: '#0f0f11',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#a1a1aa',
-            boxShadow: '0 0 12px rgba(0,0,0,0.6)',
-          }}
+          className="flex h-[72px] w-[26px] items-center justify-center rounded-l-xl border border-r-0 border-border bg-card text-muted-foreground shadow-[0_0_12px_rgba(0,0,0,0.6)] transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          {logOpen ? <PanelRightClose size={16} strokeWidth={1.75} /> : <PanelRightOpen size={16} strokeWidth={1.75} />}
-        </UnstyledButton>
+          {logOpen ? (
+            <PanelRightClose size={16} strokeWidth={1.75} />
+          ) : (
+            <PanelRightOpen size={16} strokeWidth={1.75} />
+          )}
+        </button>
       </div>
 
       <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          height: '100%',
-          width: logOpen ? sidebarWidth : 0,
-          overflow: 'hidden',
-          transition: 'width 220ms ease',
-        }}
+        className="absolute right-0 top-0 h-full overflow-hidden transition-[width] duration-200 ease-out"
+        style={{ width: logOpen ? sidebarWidth : 0 }}
       >
         {logOpen && <LiveMessageLog />}
       </div>
@@ -431,23 +419,18 @@ const PageWithCollapsibleLog = React.memo(function PageWithCollapsibleLog({ chil
 
 function NavTab({ icon, label, active, onClick }) {
   return (
-    <UnstyledButton
+    <button
       onClick={onClick}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '6px 12px',
-        borderRadius: 4,
-        backgroundColor: active ? '#27272a' : 'transparent',
-        color: active ? '#e4e4e7' : '#71717a',
-      }}
+      className={cn(
+        'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset',
+        active
+          ? 'bg-accent text-foreground'
+          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+      )}
     >
       {icon}
-      <Text size="sm" style={{ color: 'inherit' }}>
-        {label}
-      </Text>
-    </UnstyledButton>
+      <span>{label}</span>
+    </button>
   );
 }
 

@@ -1,7 +1,23 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Modal, Box, Text, Stack, Group, Button, TextInput, Select, ActionIcon } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
-import { Upload, Trash2, Pencil, Check, X, Plus, FolderPlus } from 'lucide-react';
+import { Upload, Trash2, Pencil, Check, X, FolderPlus, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
+import { notifications } from '@/lib/notify';
 import { apiJson, buildApiUrl } from '../lib/api';
 
 function DropZone({ accept, onFiles }) {
@@ -23,37 +39,34 @@ function DropZone({ accept, onFiles }) {
   const handleDragLeave = useCallback(() => setDragOver(false), []);
 
   return (
-    <Box
+    <div
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onClick={() => inputRef.current?.click()}
-      style={{
-        border: `2px dashed ${dragOver ? 'var(--mantine-color-blue-6)' : '#3f3f46'}`,
-        borderRadius: 8,
-        padding: '24px 16px',
-        textAlign: 'center',
-        cursor: 'pointer',
-        backgroundColor: dragOver ? 'rgba(59,130,246,0.06)' : '#0f0f11',
-        transition: 'border-color 150ms, background-color 150ms',
-      }}
+      className={cn(
+        'cursor-pointer rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors',
+        dragOver
+          ? 'border-signal-blue bg-signal-blue/5'
+          : 'border-border-strong bg-muted/30 hover:border-signal-blue/50 hover:bg-signal-blue/5'
+      )}
     >
-      <Upload size={24} style={{ color: '#71717a', marginBottom: 8 }} />
-      <Text size="sm" c="dimmed">Drop files here or click to browse</Text>
-      <Text size="xs" c="dimmed" mt={4}>Accepts {accept}</Text>
+      <Upload className="mx-auto mb-2 size-6 text-muted-foreground" />
+      <p className="text-sm text-muted-foreground">Drop files here or click to browse</p>
+      <p className="mt-1 text-xs text-muted-foreground">Accepts {accept}</p>
       <input
         ref={inputRef}
         type="file"
         accept={accept}
         multiple
-        style={{ display: 'none' }}
+        className="hidden"
         onChange={(e) => {
           const files = Array.from(e.target.files);
           if (files.length > 0) onFiles(files);
           e.target.value = '';
         }}
       />
-    </Box>
+    </div>
   );
 }
 
@@ -82,23 +95,13 @@ function FileRow({ name, onDelete, onRename, readOnly = false, embedded = false 
   };
 
   return (
-    <Group
-      gap="xs"
-      wrap="nowrap"
-      style={{
-        padding: '6px 10px',
-        borderRadius: 4,
-        backgroundColor: '#0f0f11',
-        border: '1px solid #1f1f23',
-      }}
-    >
+    <div className="flex items-center gap-1 rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
       {editing ? (
         <>
-          <TextInput
+          <Input
             value={newName}
             onChange={(e) => setNewName(e.currentTarget.value)}
-            size="xs"
-            style={{ flex: 1 }}
+            className="h-7 flex-1 text-xs"
             onKeyDown={(e) => {
               if (e.key === 'Enter') confirmRename(e);
               if (e.key === 'Escape') cancelEdit(e);
@@ -106,38 +109,56 @@ function FileRow({ name, onDelete, onRename, readOnly = false, embedded = false 
             autoFocus
             onClick={(e) => e.stopPropagation()}
           />
-          <ActionIcon size="sm" variant="subtle" color="green" onClick={confirmRename}>
-            <Check size={14} />
-          </ActionIcon>
-          <ActionIcon size="sm" variant="subtle" color="gray" onClick={cancelEdit}>
-            <X size={14} />
-          </ActionIcon>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={confirmRename}
+            className="text-signal-green hover:text-signal-green"
+          >
+            <Check className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={cancelEdit}
+            className="text-muted-foreground"
+          >
+            <X className="size-3.5" />
+          </Button>
         </>
       ) : (
         <>
-          <Group gap={4} justify="space-between" style={{ flex: 1 }}>
-            <Text size="sm" style={{ color: '#e4e4e7', wordBreak: 'break-all' }}>
-              {name}
-            </Text>
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-1">
+            <span className="tabular break-all text-sm text-foreground">{name}</span>
             {embedded && (
-              <Text size="xs" c="dimmed" style={{ opacity: 0.7 }}>
-                *
-              </Text>
+              <span className="shrink-0 text-xs text-muted-foreground opacity-70">*</span>
             )}
-          </Group>
+          </div>
           {!readOnly && (
             <>
-              <ActionIcon size="sm" variant="subtle" color="gray" onClick={startEdit} title="Rename">
-                <Pencil size={14} />
-              </ActionIcon>
-              <ActionIcon size="sm" variant="subtle" color="red" onClick={() => onDelete(name)} title="Delete">
-                <Trash2 size={14} />
-              </ActionIcon>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={startEdit}
+                title="Rename"
+                className="text-muted-foreground"
+              >
+                <Pencil className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => onDelete(name)}
+                title="Delete"
+                className="text-signal-red hover:text-signal-red"
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
             </>
           )}
         </>
       )}
-    </Group>
+    </div>
   );
 }
 
@@ -198,30 +219,34 @@ export function LogFileManagerModal({ opened, onClose, onFilesChanged }) {
   };
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title="Log Files"
-      centered
-      size="md"
-      styles={{
-        header: { backgroundColor: '#0a0a0b', borderBottom: '1px solid #1f1f23' },
-        body: { backgroundColor: '#0a0a0b' },
-        content: { backgroundColor: '#0a0a0b' },
-      }}
-    >
-      <Stack gap="md">
-        <DropZone accept=".txt, .log" onFiles={handleUpload} />
-        {loading && <Text size="xs" c="dimmed">Uploading...</Text>}
-        <Text size="xs" c="dimmed" tt="uppercase">{files.length} file{files.length !== 1 ? 's' : ''}</Text>
-        <Stack gap={6}>
-          {files.sort().map((f) => (
-            <FileRow key={f} name={f} onDelete={handleDelete} onRename={handleRename} />
-          ))}
-          {files.length === 0 && <Text size="sm" c="dimmed">No log files found.</Text>}
-        </Stack>
-      </Stack>
-    </Modal>
+    <Dialog open={opened} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto bg-popover sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-display">Log Files</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4">
+          <DropZone accept=".txt, .log" onFiles={handleUpload} />
+          {loading && (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              Uploading...
+            </p>
+          )}
+          <p className="text-xs uppercase text-muted-foreground">
+            {files.length} file{files.length !== 1 ? 's' : ''}
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {[...files].sort().map((f) => (
+              <FileRow key={f} name={f} onDelete={handleDelete} onRename={handleRename} />
+            ))}
+            {files.length === 0 && (
+              <p className="text-sm text-muted-foreground">No log files found.</p>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -320,88 +345,111 @@ export function DbcFileManagerModal({ opened, onClose, vehicles, currentVehicle,
   };
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title="DBC Files"
-      centered
-      size="md"
-      styles={{
-        header: { backgroundColor: '#0a0a0b', borderBottom: '1px solid #1f1f23' },
-        body: { backgroundColor: '#0a0a0b' },
-        content: { backgroundColor: '#0a0a0b' },
-      }}
-    >
-      <Stack gap="md">
-        <Group gap="xs" align="flex-end">
-          <Select
-            label="Vehicle"
-            data={vehicles.map((v) => ({ value: v, label: v }))}
-            value={selectedVehicle || null}
-            onChange={(v) => setSelectedVehicle(v || '')}
-            searchable
-            size="sm"
-            style={{ flex: 1 }}
-          />
-          <Button
-            size="sm"
-            variant="subtle"
-            onClick={() => setAddingVehicle((a) => !a)}
-            title="Add vehicle"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            <FolderPlus size={16} />
-          </Button>
-        </Group>
+    <Dialog open={opened} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto bg-popover sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-display">DBC Files</DialogTitle>
+        </DialogHeader>
 
-        {addingVehicle && (
-          <Group gap="xs">
-            <TextInput
-              placeholder="New vehicle name"
-              size="xs"
-              value={newVehicleName}
-              onChange={(e) => setNewVehicleName(e.currentTarget.value)}
-              style={{ flex: 1 }}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleAddVehicle(); }}
-              autoFocus
-            />
-            <ActionIcon size="md" variant="subtle" color="green" onClick={handleAddVehicle}>
-              <Check size={14} />
-            </ActionIcon>
-            <ActionIcon size="md" variant="subtle" color="gray" onClick={() => { setAddingVehicle(false); setNewVehicleName(''); }}>
-              <X size={14} />
-            </ActionIcon>
-          </Group>
-        )}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-end gap-2">
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Label className="text-xs">Vehicle</Label>
+              <Select
+                value={selectedVehicle || undefined}
+                onValueChange={(v) => setSelectedVehicle(v || '')}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vehicles.map((v) => (
+                    <SelectItem key={v} value={v}>
+                      {v}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setAddingVehicle((a) => !a)}
+              title="Add vehicle"
+              className="text-muted-foreground"
+            >
+              <FolderPlus className="size-4" />
+            </Button>
+          </div>
 
-        {selectedVehicle && (
-          <>
-            <DropZone accept=".dbc" onFiles={handleUpload} />
-            {loading && <Text size="xs" c="dimmed">Uploading...</Text>}
-            <Text size="xs" c="dimmed" tt="uppercase">{files.length} file{files.length !== 1 ? 's' : ''}</Text>
-            <Stack gap={6}>
-              {files
-                .slice()
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((f) => (
-                  <FileRow
-                    key={f.name}
-                    name={f.name}
-                    onDelete={handleDelete}
-                    onRename={handleRename}
-                    readOnly={f.source === 'embedded'}
-                    embedded={f.source === 'embedded'}
-                  />
-                ))}
-              {files.length === 0 && <Text size="sm" c="dimmed">No DBC files in this vehicle.</Text>}
-            </Stack>
-          </>
-        )}
+          {addingVehicle && (
+            <div className="flex items-center gap-1">
+              <Input
+                placeholder="New vehicle name"
+                value={newVehicleName}
+                onChange={(e) => setNewVehicleName(e.currentTarget.value)}
+                className="h-8 flex-1 text-xs"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddVehicle(); }}
+                autoFocus
+              />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleAddVehicle}
+                className="text-signal-green hover:text-signal-green"
+              >
+                <Check className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => { setAddingVehicle(false); setNewVehicleName(''); }}
+                className="text-muted-foreground"
+              >
+                <X className="size-3.5" />
+              </Button>
+            </div>
+          )}
 
-        {!selectedVehicle && (
-          <Text size="sm" c="dimmed" ta="center" py="md">Select or add a vehicle to manage DBC files.</Text>
-        )}
-      </Stack>
-    </Modal>
+          {selectedVehicle && (
+            <>
+              <DropZone accept=".dbc" onFiles={handleUpload} />
+              {loading && (
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="size-3 animate-spin" />
+                  Uploading...
+                </p>
+              )}
+              <p className="text-xs uppercase text-muted-foreground">
+                {files.length} file{files.length !== 1 ? 's' : ''}
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {[...files]
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((f) => (
+                    <FileRow
+                      key={f.name}
+                      name={f.name}
+                      onDelete={handleDelete}
+                      onRename={handleRename}
+                      readOnly={f.source === 'embedded'}
+                      embedded={f.source === 'embedded'}
+                    />
+                  ))}
+                {files.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No DBC files in this vehicle.</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {!selectedVehicle && (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              Select or add a vehicle to manage DBC files.
+            </p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

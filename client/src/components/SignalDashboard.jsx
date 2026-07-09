@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useDeferredValue } from 'react';
-import { Box, Text, Stack, Group, TextInput, ActionIcon, Button, Checkbox, Divider, ScrollArea } from '@mantine/core';
 import { Search, RotateCcw, Pause, Play } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { socket } from '../socket';
 
 const UI_FLUSH_INTERVAL_MS = 80;
@@ -27,18 +34,6 @@ function loadStringKey(key, fallback) {
     return fallback;
   }
 }
-
-/** Checkbox styles for dark sidebar: visible border + light check icon. */
-const filterCheckboxStyles = {
-  input: {
-    backgroundColor: 'var(--bg-hover)',
-    borderColor: '#52525b',
-    cursor: 'pointer',
-  },
-  icon: {
-    color: '#fafafa',
-  },
-};
 
 function formatTime(timestampNs) {
   const ms = Number(timestampNs) / 1e6;
@@ -317,284 +312,288 @@ export function SignalDashboard() {
   }, [filteredEntries]);
   const visibleCacheKeys = useMemo(() => Object.keys(visibleByCacheKey).sort(), [visibleByCacheKey]);
 
+  const valueTone = paused ? 'text-foreground' : 'text-signal-green';
+
   return (
-    <Box
-      style={{
-        flex: 1,
-        height: '100%',
-        backgroundColor: 'var(--bg)',
-        padding: 24,
-        minHeight: 0,
-      }}
-    >
-      <Group gap="md" mb="lg" align="center">
-        <Text size="md" fw={600} style={{ color: '#e4e4e7' }}>Signal Dashboard</Text>
-        <ActionIcon
-          variant="subtle"
-          color={paused ? 'yellow' : 'gray'}
-          size="sm"
-          title={paused ? 'Resume live updates' : 'Pause live updates'}
-          onClick={() => {
-            const next = !paused;
-            setPaused(next);
-            pausedRef.current = next;
-            if (!next) {
-              // Avoid large burst merge after resume.
-              pendingBatchesRef.current = [];
-            }
-          }}
-        >
-          {paused ? <Play size={14} /> : <Pause size={14} />}
-        </ActionIcon>
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          size="sm"
-          title="Reset dashboard"
-          onClick={() => {
-            pendingBatchesRef.current = [];
-            setCache({});
-            socket.emit('reset_cache');
-          }}
-        >
-          <RotateCcw size={14} />
-        </ActionIcon>
-      </Group>
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-background p-6">
+      <div className="mb-4 flex items-center gap-2">
+        <h2 className="font-display text-sm font-semibold text-foreground">Signal Dashboard</h2>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className={cn(paused && 'text-signal-amber hover:text-signal-amber')}
+              onClick={() => {
+                const next = !paused;
+                setPaused(next);
+                pausedRef.current = next;
+                if (!next) {
+                  // Avoid large burst merge after resume.
+                  pendingBatchesRef.current = [];
+                }
+              }}
+            >
+              {paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            {paused ? 'Resume live updates' : 'Pause live updates'}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => {
+                pendingBatchesRef.current = [];
+                setCache({});
+                socket.emit('reset_cache');
+              }}
+            >
+              <RotateCcw className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            Reset dashboard
+          </TooltipContent>
+        </Tooltip>
+      </div>
 
       {cacheKeys.length === 0 && (
-        <Text c="dimmed" size="sm" ta="center" mt="xl">
+        <p className="mt-8 text-center text-sm text-muted-foreground">
           No messages received yet. Start the telemetry service to see signals.
-        </Text>
+        </p>
       )}
 
       {cacheKeys.length > 0 && (
-        <div style={{ display: 'flex', gap: 16, minHeight: 0, height: 'calc(100% - 44px)' }}>
-          <Box
-            style={{
-              width: 300,
-              minWidth: 300,
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              backgroundColor: 'var(--bg-elevated)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <Box p="sm" style={{ borderBottom: '1px solid var(--border)' }}>
-              <TextInput
-                placeholder="Filter by ECU, vehicle, ID, or name..."
-                size="xs"
-                value={search}
-                onChange={(e) => setSearch(e.currentTarget.value)}
-                leftSection={<Search size={12} />}
-                styles={{ input: { backgroundColor: 'var(--bg-hover)' } }}
-              />
-            </Box>
-            <ScrollArea style={{ flex: 1 }} type="auto" scrollbarSize={8}>
-              <Box p="sm">
-                <Group justify="space-between" mb={6}>
-                  <Text size="xs" fw={600} c="dimmed">CAN IDs</Text>
-                  <Group gap={4}>
+        <div className="flex min-h-0 flex-1 gap-4">
+          <aside className="flex w-[300px] min-w-[300px] flex-col overflow-hidden rounded-lg border border-border bg-card">
+            <div className="border-b border-border p-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Filter by ECU, vehicle, ID, or name..."
+                  className="h-7 pl-8 text-xs"
+                  value={search}
+                  onChange={(e) => setSearch(e.currentTarget.value)}
+                />
+              </div>
+            </div>
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="p-2">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground">CAN IDs</span>
+                  <div className="flex gap-0.5">
                     <Button
-                      variant="subtle"
-                      size="compact-xs"
+                      variant="ghost"
+                      size="xs"
+                      className="h-6 text-signal-blue hover:text-signal-blue"
                       onClick={() => setSelectedIdKeys(idOptions.map((o) => o.key))}
                     >
                       Select all
                     </Button>
                     <Button
-                      variant="subtle"
-                      size="compact-xs"
-                      color="gray"
+                      variant="ghost"
+                      size="xs"
+                      className="h-6 text-muted-foreground"
                       onClick={() => setSelectedIdKeys([])}
                     >
                       Deselect all
                     </Button>
-                  </Group>
-                </Group>
-                <Stack gap={4} mb="sm">
-                  {idOptions.map((o) => (
-                    <Checkbox
-                      key={o.key}
-                      size="xs"
-                      color="teal"
-                      styles={filterCheckboxStyles}
-                      checked={selectedIdsSet.has(o.key)}
-                      onChange={(e) => {
-                        const checked = e.currentTarget.checked;
-                        setSelectedIdKeys((prev) => {
-                          const base = prev === undefined ? idOptions.map((x) => x.key) : [...prev];
-                          if (checked) {
-                            return base.includes(o.key) ? base : [...base, o.key];
-                          }
-                          return base.filter((k) => k !== o.key);
-                        });
-                      }}
-                      label={
-                        <Text size="xs" style={{ color: '#d4d4d8' }}>
-                          {o.canId} <span style={{ color: '#71717a' }}>({o.ecu})</span>
-                        </Text>
-                      }
-                    />
-                  ))}
-                </Stack>
+                  </div>
+                </div>
+                <div className="mb-2 flex flex-col gap-1">
+                  {idOptions.map((o) => {
+                    const inputId = `can-id-${o.key}`;
+                    return (
+                      <div key={o.key} className="flex items-start gap-2">
+                        <Checkbox
+                          id={inputId}
+                          className="mt-0.5"
+                          checked={selectedIdsSet.has(o.key)}
+                          onCheckedChange={(checked) => {
+                            const on = checked === true;
+                            setSelectedIdKeys((prev) => {
+                              const base = prev === undefined ? idOptions.map((x) => x.key) : [...prev];
+                              if (on) {
+                                return base.includes(o.key) ? base : [...base, o.key];
+                              }
+                              return base.filter((k) => k !== o.key);
+                            });
+                          }}
+                        />
+                        <Label htmlFor={inputId} className="cursor-pointer text-xs leading-snug font-normal text-foreground">
+                          <span className="tabular">{o.canId}</span>{' '}
+                          <span className="text-muted-foreground">({o.ecu})</span>
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </div>
 
-                <Divider my="xs" />
+                <Separator className="my-2" />
 
-                <Group justify="space-between" mb={6}>
-                  <Text size="xs" fw={600} c="dimmed">ECUs</Text>
-                  <Group gap={4}>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground">ECUs</span>
+                  <div className="flex gap-0.5">
                     <Button
-                      variant="subtle"
-                      size="compact-xs"
+                      variant="ghost"
+                      size="xs"
+                      className="h-6 text-signal-blue hover:text-signal-blue"
                       onClick={() => setSelectedEcus(ecuOptions)}
                     >
                       Select all
                     </Button>
                     <Button
-                      variant="subtle"
-                      size="compact-xs"
-                      color="gray"
+                      variant="ghost"
+                      size="xs"
+                      className="h-6 text-muted-foreground"
                       onClick={() => setSelectedEcus([])}
                     >
                       Deselect all
                     </Button>
-                  </Group>
-                </Group>
-                <Stack gap={4}>
-                  {ecuOptions.map((ecu) => (
-                    <Checkbox
-                      key={ecu}
-                      size="xs"
-                      color="teal"
-                      styles={filterCheckboxStyles}
-                      checked={selectedEcusSet.has(ecu)}
-                      onChange={(e) => {
-                        const checked = e.currentTarget.checked;
-                        setSelectedEcus((prev) => {
-                          const base = prev === undefined ? [...ecuOptions] : [...prev];
-                          if (checked) {
-                            return base.includes(ecu) ? base : [...base, ecu];
-                          }
-                          return base.filter((x) => x !== ecu);
-                        });
-                      }}
-                      label={<Text size="xs" style={{ color: '#d4d4d8' }}>{ecu}</Text>}
-                    />
-                  ))}
-                </Stack>
-              </Box>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {ecuOptions.map((ecu) => {
+                    const inputId = `ecu-${ecu}`;
+                    return (
+                      <div key={ecu} className="flex items-center gap-2">
+                        <Checkbox
+                          id={inputId}
+                          checked={selectedEcusSet.has(ecu)}
+                          onCheckedChange={(checked) => {
+                            const on = checked === true;
+                            setSelectedEcus((prev) => {
+                              const base = prev === undefined ? [...ecuOptions] : [...prev];
+                              if (on) {
+                                return base.includes(ecu) ? base : [...base, ecu];
+                              }
+                              return base.filter((x) => x !== ecu);
+                            });
+                          }}
+                        />
+                        <Label htmlFor={inputId} className="cursor-pointer text-xs font-normal text-foreground">
+                          {ecu}
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </ScrollArea>
-          </Box>
+          </aside>
 
-          <Box style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
+          <div className="min-w-0 flex-1 overflow-y-auto">
+            <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(360px,1fr))]">
               {visibleCacheKeys.map((cacheKey) => {
                 const group = visibleByCacheKey[cacheKey];
                 const { vehicle, sender, items } = group;
                 return (
-                  <Box
+                  <div
                     key={cacheKey}
-                    style={{
-                      border: '1px solid var(--border)',
-                      borderRadius: 8,
-                      backgroundColor: 'var(--bg-elevated)',
-                      padding: 16,
-                      minWidth: 360,
-                    }}
+                    className="min-w-[360px] rounded-lg border border-border bg-card p-4"
                   >
-                    <Group gap={6} mb="sm">
-                      <Text size="sm" fw={600} style={{ color: '#e4e4e7' }}>{sender}</Text>
-                      {vehicle && <Text size="xs" c="dimmed" style={{ opacity: 0.5 }}>· {vehicle}</Text>}
-                    </Group>
-                    <Stack gap={6}>
+                    <div className="mb-2 flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-foreground">{sender}</span>
+                      {vehicle && (
+                        <span className="text-xs text-muted-foreground opacity-50">· {vehicle}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
                       {items.map(({ canId, msg }) => {
-                  const hasSignals = msg.signals && Object.keys(msg.signals).length > 0;
-                  const notFound = msg.message_name == null;
+                        const hasSignals = msg.signals && Object.keys(msg.signals).length > 0;
+                        const notFound = msg.message_name == null;
 
-                  return (
-                    <Box
-                      key={canId}
-                      style={{
-                        border: '1px solid var(--border)',
-                        borderRadius: 4,
-                        padding: '6px 8px',
-                        backgroundColor: 'var(--bg-hover)',
-                      }}
-                    >
-                      <Group gap="xs" justify="space-between" wrap="nowrap">
-                        <Text
-                          size="sm"
-                          style={{ color: notFound ? '#ef4444' : '#e4e4e7' }}
-                        >
-                          {canId}
-                          {notFound ? ' · Not Found' : ` · ${msg.message_name}`}
-                        </Text>
-                        <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-                          {msg.network}
-                        </Text>
-                      </Group>
-                      <Stack gap={4} mt="xs" pl="xs" style={{ borderLeft: '2px solid var(--border)' }}>
-                        {hasSignals && Object.entries(msg.signals).map(([name, value]) => {
-                          const unit = msg.units && msg.units[name];
-                          const unitStr = unit ? ` ${unit}` : '';
-                          // In the Signal Dashboard, hide explicit index signals for array messages.
-                          if (msg.is_array && isIndexSignalName(name)) {
-                            return null;
-                          }
-                          if (msg.is_array && value && typeof value === 'object' && !Array.isArray(value)) {
-                            const indices = Array.isArray(msg.indices) ? msg.indices : Object.keys(value).map((k) => Number(k)).sort((a, b) => a - b);
-                            return (
-                              <div key={name}>
-                                <Text size="xs" fw={500} style={{ color: 'var(--text-muted)' }}>{name}{unit ? ` (${unit})` : ''}:</Text>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 8px', paddingLeft: 8, marginTop: 2 }}>
-                                  {indices.map((idx) => {
-                                    const v = value[idx];
-                                    if (v === null || v === undefined) return null;
-                                    return (
-                                      <Text key={idx} size="xs" style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                                        [{idx}] {formatValue3(v)}
-                                      </Text>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          }
-                          return (
-                            <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
-                              {name}: {formatValue3(value)}{unitStr}
-                            </Text>
-                          );
-                        })}
-                        {msg.raw_packet && (
-                          <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', opacity: 0.6 }}>
-                            {msg.raw_packet}
-                          </Text>
-                        )}
-                        {msg.timestamp_ns > 0 && (
-                          <Text size="xs" c="dimmed" style={{ opacity: 0.5 }}>
-                            Last update: {formatTime(msg.timestamp_ns)}
-                          </Text>
-                        )}
-                      </Stack>
-                    </Box>
-                  );
+                        return (
+                          <div
+                            key={canId}
+                            className="rounded-md border border-border bg-muted/50 px-2 py-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span
+                                className={cn(
+                                  'text-sm tabular',
+                                  notFound ? 'text-signal-red' : 'text-foreground'
+                                )}
+                              >
+                                {canId}
+                                {notFound ? ' · Not Found' : ` · ${msg.message_name}`}
+                              </span>
+                              <span className="shrink-0 text-xs text-muted-foreground">{msg.network}</span>
+                            </div>
+                            <div className="mt-1 flex flex-col gap-1 border-l-2 border-border pl-2">
+                              {hasSignals && Object.entries(msg.signals).map(([name, value]) => {
+                                const unit = msg.units && msg.units[name];
+                                const unitStr = unit ? ` ${unit}` : '';
+                                // In the Signal Dashboard, hide explicit index signals for array messages.
+                                if (msg.is_array && isIndexSignalName(name)) {
+                                  return null;
+                                }
+                                if (msg.is_array && value && typeof value === 'object' && !Array.isArray(value)) {
+                                  const indices = Array.isArray(msg.indices) ? msg.indices : Object.keys(value).map((k) => Number(k)).sort((a, b) => a - b);
+                                  return (
+                                    <div key={name}>
+                                      <span className="text-xs font-medium text-muted-foreground">
+                                        {name}{unit ? ` (${unit})` : ''}:
+                                      </span>
+                                      <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 pl-2">
+                                        {indices.map((idx) => {
+                                          const v = value[idx];
+                                          if (v === null || v === undefined) return null;
+                                          return (
+                                            <span key={idx} className="text-xs text-muted-foreground">
+                                              <span className="tabular text-muted-foreground/70">[{idx}]</span>{' '}
+                                              <span className={cn('tabular', valueTone)}>{formatValue3(v)}</span>
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <p key={name} className="text-xs text-muted-foreground">
+                                    {name}:{' '}
+                                    <span className={cn('tabular', valueTone)}>
+                                      {formatValue3(value)}
+                                    </span>
+                                    {unitStr && (
+                                      <span className="text-muted-foreground">{unitStr}</span>
+                                    )}
+                                  </p>
+                                );
+                              })}
+                              {msg.raw_packet && (
+                                <p className="tabular text-xs text-muted-foreground/60">
+                                  {msg.raw_packet}
+                                </p>
+                              )}
+                              {msg.timestamp_ns > 0 && (
+                                <p className="text-xs text-muted-foreground/50">
+                                  Last update:{' '}
+                                  <span className="tabular">{formatTime(msg.timestamp_ns)}</span>
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
                       })}
-                    </Stack>
-                  </Box>
+                    </div>
+                  </div>
                 );
               })}
             </div>
             {visibleCacheKeys.length === 0 && (
-              <Text c="dimmed" size="sm" ta="center" mt="xl">
+              <p className="mt-8 text-center text-sm text-muted-foreground">
                 No signals match current filters.
-              </Text>
+              </p>
             )}
-          </Box>
+          </div>
         </div>
       )}
-    </Box>
+    </div>
   );
 }

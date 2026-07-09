@@ -1,5 +1,10 @@
 import {defineConfig} from 'vite'
 import react from '@vitejs/plugin-react-swc'
+import tailwindcss from '@tailwindcss/vite'
+import path from 'node:path'
+import {fileURLToPath} from 'node:url'
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url))
 
 function resolveBasePath() {
     const raw = (process.env.VITE_BASE_PATH || '/').trim()
@@ -13,7 +18,12 @@ const basePath = resolveBasePath()
 // https://vitejs.dev/config/
 export default defineConfig({
     base: basePath,
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
+    resolve: {
+        alias: {
+            '@': path.resolve(rootDir, 'src'),
+        },
+    },
     server: {
         port: 3001,
         open: '/',
@@ -39,7 +49,7 @@ export default defineConfig({
             output: {
                 manualChunks: {
                     react: ['react', 'react-dom'],
-                    mantine: ['@mantine/core', '@mantine/hooks', '@mantine/notifications'],
+                    vendor: ['radix-ui', 'motion', 'sonner'],
                     'lucide-react': ['lucide-react'],
                 },
             },

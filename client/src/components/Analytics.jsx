@@ -1,26 +1,48 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActionIcon,
-  Box,
-  Button,
-  Group,
-  Modal,
-  NumberInput,
-  Paper,
-  ScrollArea,
-  Select,
-  SimpleGrid,
-  Stack,
-  Table,
-  Text,
-} from '@mantine/core';
-import { useDisclosure, useLocalStorage } from '@mantine/hooks';
-import { notifications } from '@mantine/notifications';
+import { useDisclosure, useLocalStorage } from '@/lib/hooks';
+import { notifications } from '@/lib/notify';
 import { ChevronDown, ChevronUp, Pencil, Plus, Trash2, Upload, Download } from 'lucide-react';
 import { mergePivotByFrameSignal } from '../analytics/mergeByFrame';
 import { SimpleLineChart } from './SimpleLineChart';
 import { socket } from '../socket';
 import { apiJson } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
+import { DotPattern } from '@/components/ui/dot-pattern';
+import { cn } from '@/lib/utils';
 
 const LS_KEY = 'electrol_analytics_views_v1';
 /** Ring-buffer window for analytics APIs (not shown in UI). */
@@ -85,52 +107,33 @@ function formatAnalyticsTime(isoOrString) {
   }
 }
 
-const ANALYTICS_READOUT_VALUE_SX = {
-  fontSize: 'clamp(2.5rem, 8vw, 4rem)',
-  fontWeight: 700,
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-  lineHeight: 1.15,
-  color: '#e8e8ed',
-  letterSpacing: '-0.02em',
-  wordBreak: 'break-all',
-};
-
-const ANALYTICS_READOUT_UNIT_SX = {
-  color: '#c8c8d0',
-  fontSize: 'clamp(1rem, 2.8vw, 1.4rem)',
-  fontWeight: 500,
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-};
-
 /** Large min / max / readout value block with optional unit, index line, and time. */
 function AnalyticsBigReadout({ valueDisplay, unit, indexLine, timeLine, footerHint }) {
   const missing = valueDisplay === '—';
   return (
-    <Box mt="md" py="xl" px="md" style={{ textAlign: 'center' }}>
-      <Group justify="center" align="baseline" gap="sm" wrap="wrap">
-        <Text style={ANALYTICS_READOUT_VALUE_SX}>{valueDisplay}</Text>
+    <div className="mt-4 px-4 py-8 text-center">
+      <div className="flex flex-wrap items-baseline justify-center gap-2">
+        <span className="tabular text-[clamp(2.5rem,8vw,4rem)] font-bold leading-tight tracking-tight text-foreground">
+          {valueDisplay}
+        </span>
         {unit ? (
-          <Text component="span" style={ANALYTICS_READOUT_UNIT_SX}>
+          <span className="tabular text-[clamp(1rem,2.8vw,1.4rem)] font-medium text-muted-foreground">
             {unit}
-          </Text>
+          </span>
         ) : null}
-      </Group>
+      </div>
       {indexLine != null && indexLine !== '' ? (
-        <Text size="xs" mt="sm" style={{ color: '#b0b0b8' }}>
-          {indexLine}
-        </Text>
+        <p className="mt-2 text-xs text-muted-foreground">{indexLine}</p>
       ) : null}
       {timeLine ? (
-        <Text size="xs" mt={indexLine ? 'xs' : 'md'} style={{ color: '#9898a3' }}>
+        <p className={cn('text-xs text-muted-foreground', indexLine ? 'mt-1' : 'mt-4')}>
           {formatAnalyticsTime(timeLine)}
-        </Text>
+        </p>
       ) : null}
       {footerHint && missing ? (
-        <Text size="xs" mt="md" style={{ color: '#9898a3' }}>
-          {footerHint}
-        </Text>
+        <p className="mt-4 text-xs text-muted-foreground">{footerHint}</p>
       ) : null}
-    </Box>
+    </div>
   );
 }
 
@@ -167,6 +170,123 @@ function defaultView(vehicleHint = '') {
     syncGraphArrayIndex: 0,
     signalUnit: '',
   };
+}
+
+function parseNumberInput(raw, fallback = 0) {
+  if (raw === '' || raw == null) return fallback;
+  const n = Number(raw);
+  return Number.isNaN(n) ? fallback : n;
+}
+
+function FieldSelect({ label, description, value, onValueChange, disabled, placeholder, children }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-xs">{label}</Label>
+      {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+        <SelectTrigger className="w-full" size="sm">
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>{children}</SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function FieldNumber({ label, description, min, value, onChange }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-xs">{label}</Label>
+      {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      <Input
+        type="number"
+        min={min}
+        className="h-8"
+        value={value ?? 0}
+        onChange={(e) => onChange(parseNumberInput(e.target.value, 0))}
+      />
+    </div>
+  );
+}
+
+function AnalyticsViewCardShell({
+  title,
+  subtitle,
+  viewCount,
+  viewIndex,
+  onMoveUp,
+  onMoveDown,
+  onEdit,
+  onDelete,
+  error,
+  children,
+}) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <Card className="max-w-full min-w-0 gap-0 py-0">
+      <CardHeader className="gap-1 border-b border-border px-4 py-3">
+        <div className="min-w-0">
+          <CardTitle className="truncate font-display text-sm">{title}</CardTitle>
+          <CardDescription className="truncate text-xs">{subtitle}</CardDescription>
+        </div>
+        <CardAction>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {viewCount > 1 && (
+              <>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  disabled={viewIndex <= 0}
+                  onClick={onMoveUp}
+                  title="Move up"
+                >
+                  <ChevronUp className="size-3.5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  disabled={viewIndex >= viewCount - 1}
+                  onClick={onMoveDown}
+                  title="Move down"
+                >
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => setOpen((v) => !v)}
+              title={open ? 'Collapse' : 'Expand'}
+            >
+              <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
+            </Button>
+            <Button variant="outline" size="icon-sm" onClick={onEdit} title="Edit">
+              <Pencil className="size-3.5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={onDelete}
+              title="Delete"
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+        </CardAction>
+      </CardHeader>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleContent>
+          <CardContent className="px-4 py-3">
+            {error ? <p className="mb-2 text-xs text-signal-red">{error}</p> : null}
+            {children}
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>
+  );
 }
 
 export function Analytics() {
@@ -291,9 +411,9 @@ export function Analytics() {
   const syncFrameSignalOptions = useMemo(() => {
     const msgs = syncSelectedMessages;
     if (msgs.length === 0) return [];
-    let inter = new Set(msgs[0].signals.map((s) => s.name));
+    let inter = new Set((msgs[0].signals || []).map((s) => s.name));
     for (let i = 1; i < msgs.length; i++) {
-      const n = new Set(msgs[i].signals.map((s) => s.name));
+      const n = new Set((msgs[i].signals || []).map((s) => s.name));
       inter = new Set([...inter].filter((x) => n.has(x)));
     }
     const list = [...inter].sort((a, b) => a.localeCompare(b));
@@ -488,99 +608,91 @@ export function Analytics() {
     notifications.show({ message: 'Merged valid views from last upload.' });
   };
 
+  const isEditingExisting = editing?.id && views?.some((x) => x.id === editing.id);
+
   return (
-    <Box
-      style={{
-        height: '100%',
-        minHeight: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        backgroundColor: '#0a0a0b',
-      }}
-    >
-      <Box px="md" pt="md" style={{ flexShrink: 0 }}>
-        <Group justify="space-between" mb="md" wrap="wrap">
-          <Text fw={600} size="lg" style={{ color: '#e4e4e7' }}>
-            Analytics
-          </Text>
-          <Group gap="xs">
-            <Button leftSection={<Plus size={16} />} size="sm" variant="light" onClick={openNew}>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+      <div className="shrink-0 px-4 pt-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-display text-sm font-semibold text-foreground">Analytics</h2>
+          <div className="flex flex-wrap items-center gap-1">
+            <Button size="sm" onClick={openNew}>
+              <Plus className="size-4" />
               Add view
             </Button>
-            <Button leftSection={<Download size={16} />} size="sm" variant="default" onClick={downloadJson}>
+            <Button size="sm" variant="outline" onClick={downloadJson}>
+              <Download className="size-4" />
               Download JSON
             </Button>
-            <label style={{ cursor: 'pointer' }}>
+            <label className="cursor-pointer">
               <input
                 type="file"
                 accept="application/json,.json"
-                style={{ display: 'none' }}
+                className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   e.target.value = '';
                   if (f) onUploadFile(f);
                 }}
               />
-              <Button component="span" leftSection={<Upload size={16} />} size="sm" variant="default">
-                Upload JSON
+              <Button size="sm" variant="outline" asChild>
+                <span>
+                  <Upload className="size-4" />
+                  Upload JSON
+                </span>
               </Button>
             </label>
-          </Group>
-        </Group>
-      </Box>
+          </div>
+        </div>
+      </div>
 
       {uploadErrors.length > 0 && (
-        <Box px="md" style={{ flexShrink: 0 }}>
-        <Paper withBorder p="sm" mb="md" style={{ borderColor: '#b45309', background: '#1a1206' }}>
-          <Text size="sm" fw={600} mb="xs" c="orange">
-            Validation errors
-          </Text>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>View</Table.Th>
-                <Table.Th>Path</Table.Th>
-                <Table.Th>Detail</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {uploadErrors.map((e, i) => (
-                <Table.Tr key={i}>
-                  <Table.Td style={{ fontFamily: 'monospace', fontSize: 12 }}>{String(e.viewId ?? '—')}</Table.Td>
-                  <Table.Td style={{ fontFamily: 'monospace', fontSize: 12 }}>{e.path}</Table.Td>
-                  <Table.Td style={{ fontSize: 12 }}>{e.detail}</Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-          {pendingValid.length > 0 && (
-            <Button mt="sm" size="xs" onClick={mergeValidImports}>
-              Import {pendingValid.length} valid view(s) anyway
-            </Button>
-          )}
-        </Paper>
-        </Box>
+        <div className="shrink-0 px-4">
+          <Card className="mb-4 gap-0 border-signal-amber/40 bg-signal-amber/5 py-0">
+            <CardContent className="px-4 py-3">
+              <p className="mb-2 text-sm font-semibold text-signal-amber">Validation errors</p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>View</TableHead>
+                    <TableHead>Path</TableHead>
+                    <TableHead>Detail</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {uploadErrors.map((e, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="tabular text-xs">{String(e.viewId ?? '—')}</TableCell>
+                      <TableCell className="tabular text-xs">{e.path}</TableCell>
+                      <TableCell className="text-xs">{e.detail}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {pendingValid.length > 0 && (
+                <Button size="xs" className="mt-2" onClick={mergeValidImports}>
+                  Import {pendingValid.length} valid view(s) anyway
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
-      <Box
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          WebkitOverflowScrolling: 'touch',
-          paddingLeft: 16,
-          paddingRight: 16,
-          paddingBottom: 16,
-        }}
-      >
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4">
         {(views || []).length === 0 ? (
-          <Text c="dimmed" size="sm">
-            No views yet. Add a view for live min / max / graph, large readout, or FrameID sync.
-          </Text>
+          <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-border px-6 py-16 text-center">
+            <DotPattern className="text-muted-foreground/15" width={20} height={20} />
+            <p className="relative text-sm text-muted-foreground">
+              No views yet. Add a view for live min / max / graph, large readout, or FrameID sync.
+            </p>
+            <Button size="sm" className="relative mt-4" onClick={openNew}>
+              <Plus className="size-4" />
+              Add view
+            </Button>
+          </div>
         ) : (
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md" verticalSpacing="md" style={{ minWidth: 0 }}>
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {(views || []).map((v, index) => (
               <AnalyticsViewCard
                 key={v.id}
@@ -594,245 +706,268 @@ export function Analytics() {
                 onDelete={() => removeView(v.id)}
               />
             ))}
-          </SimpleGrid>
+          </div>
         )}
-      </Box>
+      </div>
 
-      <Modal opened={opened} onClose={close} title={editing?.id && views?.some((x) => x.id === editing.id) ? 'Edit view' : 'New view'} size="lg">
-        {editing && (
-          <Stack gap="sm">
-            <Select
-              label="Vehicle"
-              data={vehicles}
-              value={editing.vehicle || null}
-              onChange={(x) =>
-                setEditing((e) => ({
-                  ...e,
-                  vehicle: x || '',
-                  dbcFilename: '',
-                  messageId: null,
-                  syncMessageIds: [],
-                  syncFrameSignalName: '',
-                }))
-              }
-              searchable
-            />
-            <Select
-              label="DBC file"
-              data={dbcFiles.map((f) => ({ value: f.name, label: f.source === 'embedded' ? `${f.name} *` : f.name }))}
-              value={editing.dbcFilename || null}
-              onChange={(x) =>
-                setEditing((e) => ({
-                  ...e,
-                  dbcFilename: x || '',
-                  messageId: null,
-                  syncMessageIds: [],
-                  syncFrameSignalName: '',
-                }))
-              }
-              disabled={!editing.vehicle}
-              searchable
-            />
-            <Select
-              label="View type"
-              data={[
-                { value: 'min', label: 'Min' },
-                { value: 'max', label: 'Max' },
-                { value: 'graph', label: 'Graph (time series)' },
-                { value: 'readout', label: 'Large readout (current value)' },
-                { value: 'sync', label: 'FrameID sync (combined signals)' },
-              ]}
-              value={editing.viewType}
-              onChange={(x) => {
-                const vt = x || 'graph';
-                setEditing((e) => ({
-                  ...e,
-                  viewType: vt,
-                  ...(vt === 'sync'
-                    ? {
-                        messageId: null,
-                        signalName: '',
-                        syncMessageIds: e.syncMessageIds || [],
-                        syncFrameSignalName: e.syncFrameSignalName || '',
-                      }
-                    : {
-                        syncFrameSignalName: '',
-                        syncMessageIds: [],
-                        syncGraphArrayIndex: 0,
-                        syncFieldsByMessage: undefined,
-                      }),
-                }));
-              }}
-            />
+      <Dialog open={opened} onOpenChange={(o) => { if (!o) { close(); setEditing(null); } }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{isEditingExisting ? 'Edit view' : 'New view'}</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <div className="flex flex-col gap-2">
+              <FieldSelect
+                label="Vehicle"
+                value={editing.vehicle || undefined}
+                onValueChange={(x) =>
+                  setEditing((e) => ({
+                    ...e,
+                    vehicle: x || '',
+                    dbcFilename: '',
+                    messageId: null,
+                    syncMessageIds: [],
+                    syncFrameSignalName: '',
+                  }))
+                }
+              >
+                {vehicles.map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {v}
+                  </SelectItem>
+                ))}
+              </FieldSelect>
 
-            {editing.viewType === 'sync' ? (
-              <>
-                <Text size="xs" c="dimmed">
-                  Add one or more CAN messages (different arbitration ids allowed). Pick the exact DBC signal used as the
-                  rolling frame counter; rows are aligned by matching that value and closest timestamp.
-                </Text>
-                <Paper withBorder p="sm" radius="sm" style={{ background: '#0f0f11', borderColor: 'var(--border)' }}>
-                  <Group justify="space-between" mb="xs">
-                    <Text size="sm" fw={600}>
-                      Messages
-                    </Text>
-                    <Button
-                      size="xs"
-                      variant="light"
-                      disabled={!messages.length}
-                      onClick={() =>
-                        setEditing((e) => ({
-                          ...e,
-                          syncMessageIds: [...(e.syncMessageIds || []), messages[0].id],
-                        }))
-                      }
-                    >
-                      Add message
-                    </Button>
-                  </Group>
-                  {(editing.syncMessageIds || []).length === 0 ? (
-                    <Text size="xs" c="dimmed">
-                      Add at least one CAN message.
-                    </Text>
-                  ) : (
-                    <Stack gap={6}>
-                      {(editing.syncMessageIds || []).map((mid, idx) => (
-                        <Group key={idx} justify="space-between" wrap="nowrap" gap="xs" align="flex-start">
-                          <Select
-                            style={{ flex: 1, minWidth: 0 }}
-                            placeholder="Select CAN message"
-                            data={messages.map((m) => ({
-                              value: String(m.id),
-                              label: `${m.name} (${m.id_hex})`,
-                            }))}
-                            value={mid != null ? String(mid) : null}
-                            onChange={(x) => {
-                              const v = x != null ? parseInt(x, 10) : null;
-                              setEditing((e) => {
-                                const next = [...(e.syncMessageIds || [])];
-                                next[idx] = v;
-                                return { ...e, syncMessageIds: next };
-                              });
-                            }}
-                            disabled={!schema}
-                            searchable
-                          />
-                          <ActionIcon
-                            size="sm"
-                            variant="default"
-                            color="red"
-                            mt={4}
-                            onClick={() =>
-                              setEditing((e) => ({
-                                ...e,
-                                syncMessageIds: (e.syncMessageIds || []).filter((_, i) => i !== idx),
-                              }))
-                            }
+              <FieldSelect
+                label="DBC file"
+                value={editing.dbcFilename || undefined}
+                disabled={!editing.vehicle}
+                onValueChange={(x) =>
+                  setEditing((e) => ({
+                    ...e,
+                    dbcFilename: x || '',
+                    messageId: null,
+                    syncMessageIds: [],
+                    syncFrameSignalName: '',
+                  }))
+                }
+              >
+                {dbcFiles.map((f) => (
+                  <SelectItem key={f.name} value={f.name}>
+                    {f.source === 'embedded' ? `${f.name} *` : f.name}
+                  </SelectItem>
+                ))}
+              </FieldSelect>
+
+              <FieldSelect
+                label="View type"
+                value={editing.viewType}
+                onValueChange={(x) => {
+                  const vt = x || 'graph';
+                  setEditing((e) => ({
+                    ...e,
+                    viewType: vt,
+                    ...(vt === 'sync'
+                      ? {
+                          messageId: null,
+                          signalName: '',
+                          syncMessageIds: e.syncMessageIds || [],
+                          syncFrameSignalName: e.syncFrameSignalName || '',
+                        }
+                      : {
+                          syncFrameSignalName: '',
+                          syncMessageIds: [],
+                          syncGraphArrayIndex: 0,
+                          syncFieldsByMessage: undefined,
+                        }),
+                  }));
+                }}
+              >
+                <SelectItem value="min">Min</SelectItem>
+                <SelectItem value="max">Max</SelectItem>
+                <SelectItem value="graph">Graph (time series)</SelectItem>
+                <SelectItem value="readout">Large readout (current value)</SelectItem>
+                <SelectItem value="sync">FrameID sync (combined signals)</SelectItem>
+              </FieldSelect>
+
+              {editing.viewType === 'sync' ? (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Add one or more CAN messages (different arbitration ids allowed). Pick the exact DBC signal used as the
+                    rolling frame counter; rows are aligned by matching that value and closest timestamp.
+                  </p>
+                  <Card className="gap-0 bg-muted/40 py-0">
+                    <CardContent className="px-3 py-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold">Messages</span>
+                        <Button
+                          size="xs"
+                          variant="secondary"
+                          disabled={!messages.length}
+                          onClick={() =>
+                            setEditing((e) => ({
+                              ...e,
+                              syncMessageIds: [...(e.syncMessageIds || []), messages[0].id],
+                            }))
+                          }
+                        >
+                          Add message
+                        </Button>
+                      </div>
+                      {(editing.syncMessageIds || []).length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Add at least one CAN message.</p>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          {(editing.syncMessageIds || []).map((mid, idx) => (
+                            <div key={idx} className="flex items-start gap-1">
+                              <Select
+                                value={mid != null ? String(mid) : undefined}
+                                disabled={!schema}
+                                onValueChange={(x) => {
+                                  const v = x != null ? parseInt(x, 10) : null;
+                                  setEditing((e) => {
+                                    const next = [...(e.syncMessageIds || [])];
+                                    next[idx] = v;
+                                    return { ...e, syncMessageIds: next };
+                                  });
+                                }}
+                              >
+                                <SelectTrigger className="min-w-0 flex-1" size="sm">
+                                  <SelectValue placeholder="Select CAN message" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {messages.map((m) => (
+                                    <SelectItem key={m.id} value={String(m.id)}>
+                                      {m.name} ({m.id_hex})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                variant="outline"
+                                size="icon-sm"
+                                className="mt-0.5 shrink-0 text-destructive hover:text-destructive"
+                                onClick={() =>
+                                  setEditing((e) => ({
+                                    ...e,
+                                    syncMessageIds: (e.syncMessageIds || []).filter((_, i) => i !== idx),
+                                  }))
+                                }
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                  <FieldSelect
+                    label="Frame sync signal"
+                    description="Exact name from DBC (shared by all messages above), e.g. FrameID_…"
+                    value={editing.syncFrameSignalName || undefined}
+                    disabled={syncFrameSignalOptions.length === 0}
+                    placeholder={syncSelectedMessages.length ? 'Select signal' : 'Add messages first'}
+                    onValueChange={(x) => setEditing((e) => ({ ...e, syncFrameSignalName: x || '' }))}
+                  >
+                    {syncFrameSignalOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </FieldSelect>
+                  {syncNeedsArrayIndex ? (
+                    <FieldNumber
+                      label="Array index"
+                      description="Array-indexed messages only (same index for all)."
+                      min={0}
+                      value={editing.syncGraphArrayIndex ?? 0}
+                      onChange={(x) => setEditing((e) => ({ ...e, syncGraphArrayIndex: x ?? 0 }))}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <FieldSelect
+                    label="Message"
+                    value={editing.messageId != null ? String(editing.messageId) : undefined}
+                    disabled={!schema}
+                    placeholder={loadingSchema ? 'Loading schema…' : 'Select message'}
+                    onValueChange={(x) => {
+                      const mid = x != null ? parseInt(x, 10) : null;
+                      const msg = messages.find((m) => m.id === mid);
+                      const isArr = !!(msg?.array_index_signal);
+                      setEditing((e) => ({
+                        ...e,
+                        messageId: mid,
+                        messageName: msg?.name || '',
+                        arrayMode: isArr ? e.arrayMode || 'single_index' : null,
+                      }));
+                    }}
+                  >
+                    {messages.map((m) => (
+                      <SelectItem key={m.id} value={String(m.id)}>
+                        {m.name} ({m.id_hex})
+                      </SelectItem>
+                    ))}
+                  </FieldSelect>
+                  <FieldSelect
+                    label="Signal"
+                    value={editing.signalName || undefined}
+                    disabled={editing.messageId == null}
+                    onValueChange={(x) => setEditing((e) => ({ ...e, signalName: x || '' }))}
+                  >
+                    {currentMessageSignals.map((s) => (
+                      <SelectItem key={s.name} value={s.name}>
+                        {signalSelectLabel(s)}
+                      </SelectItem>
+                    ))}
+                  </FieldSelect>
+                  {messages.find((m) => m.id === editing.messageId)?.array_index_signal ? (
+                    <>
+                      {(editing.viewType === 'min' || editing.viewType === 'max') && (
+                        <>
+                          <FieldSelect
+                            label="Array: min/max scope"
+                            value={editing.arrayMode || 'single_index'}
+                            onValueChange={(x) => setEditing((e) => ({ ...e, arrayMode: x }))}
                           >
-                            <Trash2 size={14} />
-                          </ActionIcon>
-                        </Group>
-                      ))}
-                    </Stack>
-                  )}
-                </Paper>
-                <Select
-                  label="Frame sync signal"
-                  description="Exact name from DBC (shared by all messages above), e.g. FrameID_…"
-                  data={syncFrameSignalOptions}
-                  value={editing.syncFrameSignalName || null}
-                  onChange={(x) => setEditing((e) => ({ ...e, syncFrameSignalName: x || '' }))}
-                  disabled={syncFrameSignalOptions.length === 0}
-                  placeholder={syncSelectedMessages.length ? 'Select signal' : 'Add messages first'}
-                  searchable
-                />
-                {syncNeedsArrayIndex ? (
-                  <NumberInput
-                    label="Array index"
-                    description="Array-indexed messages only (same index for all)."
-                    min={0}
-                    value={editing.syncGraphArrayIndex ?? 0}
-                    onChange={(x) => setEditing((e) => ({ ...e, syncGraphArrayIndex: x ?? 0 }))}
-                  />
-                ) : null}
-              </>
-            ) : (
-              <>
-                <Select
-                  label="Message"
-                  data={messages.map((m) => ({
-                    value: String(m.id),
-                    label: `${m.name} (${m.id_hex})`,
-                  }))}
-                  value={editing.messageId != null ? String(editing.messageId) : null}
-                  onChange={(x) => {
-                    const mid = x != null ? parseInt(x, 10) : null;
-                    const msg = messages.find((m) => m.id === mid);
-                    const isArr = !!(msg?.array_index_signal);
-                    setEditing((e) => ({
-                      ...e,
-                      messageId: mid,
-                      messageName: msg?.name || '',
-                      arrayMode: isArr ? e.arrayMode || 'single_index' : null,
-                    }));
-                  }}
-                  disabled={!schema}
-                  placeholder={loadingSchema ? 'Loading schema…' : 'Select message'}
-                  searchable
-                />
-                <Select
-                  label="Signal"
-                  data={currentMessageSignals.map((s) => ({ value: s.name, label: signalSelectLabel(s) }))}
-                  value={editing.signalName || null}
-                  onChange={(x) => setEditing((e) => ({ ...e, signalName: x || '' }))}
-                  disabled={editing.messageId == null}
-                  searchable
-                />
-                {messages.find((m) => m.id === editing.messageId)?.array_index_signal ? (
-                  <>
-                    {(editing.viewType === 'min' || editing.viewType === 'max') && (
-                      <>
-                        <Select
-                          label="Array: min/max scope"
-                          data={[
-                            { value: 'all_indices', label: 'All indexes (report index of extremum)' },
-                            { value: 'single_index', label: 'Single index only' },
-                          ]}
-                          value={editing.arrayMode || 'single_index'}
-                          onChange={(x) => setEditing((e) => ({ ...e, arrayMode: x }))}
+                            <SelectItem value="all_indices">All indexes (report index of extremum)</SelectItem>
+                            <SelectItem value="single_index">Single index only</SelectItem>
+                          </FieldSelect>
+                          {editing.arrayMode === 'single_index' && (
+                            <FieldNumber
+                              label="Array index"
+                              min={0}
+                              value={editing.arrayIndex}
+                              onChange={(x) => setEditing((e) => ({ ...e, arrayIndex: x ?? 0 }))}
+                            />
+                          )}
+                        </>
+                      )}
+                      {(editing.viewType === 'graph' || editing.viewType === 'readout') && (
+                        <FieldNumber
+                          label={editing.viewType === 'readout' ? 'Array index (readout)' : 'Graph array index'}
+                          min={0}
+                          value={editing.graphArrayIndex}
+                          onChange={(x) => setEditing((e) => ({ ...e, graphArrayIndex: x ?? 0 }))}
                         />
-                        {editing.arrayMode === 'single_index' && (
-                          <NumberInput
-                            label="Array index"
-                            min={0}
-                            value={editing.arrayIndex}
-                            onChange={(x) => setEditing((e) => ({ ...e, arrayIndex: x ?? 0 }))}
-                          />
-                        )}
-                      </>
-                    )}
-                    {(editing.viewType === 'graph' || editing.viewType === 'readout') && (
-                      <NumberInput
-                        label={editing.viewType === 'readout' ? 'Array index (readout)' : 'Graph array index'}
-                        min={0}
-                        value={editing.graphArrayIndex}
-                        onChange={(x) => setEditing((e) => ({ ...e, graphArrayIndex: x ?? 0 }))}
-                      />
-                    )}
-                  </>
-                ) : null}
-              </>
-            )}
-            <Group justify="flex-end" mt="md">
-              <Button variant="default" onClick={close}>
-                Cancel
-              </Button>
-              <Button onClick={saveEditor}>Save</Button>
-            </Group>
-          </Stack>
-        )}
-      </Modal>
-    </Box>
+                      )}
+                    </>
+                  ) : null}
+                </>
+              )}
+              <DialogFooter className="mt-4">
+                <Button variant="outline" onClick={() => { close(); setEditing(null); }}>
+                  Cancel
+                </Button>
+                <Button onClick={saveEditor}>Save</Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
@@ -957,58 +1092,22 @@ function StandardAnalyticsViewCard({
     run({ silent: true });
   }, [liveTick, run]);
 
+  const title =
+    view.viewType === 'readout' ? 'Readout' : view.viewType.toUpperCase() + ' · ' + view.signalName;
+  const subtitle = `${view.vehicle} / ${view.dbcFilename} / ${view.messageName || view.messageId}`;
+
   return (
-    <Paper
-      withBorder
-      p="md"
-      radius="md"
-      style={{ background: '#0f0f11', borderColor: 'var(--border)', minWidth: 0, maxWidth: '100%' }}
+    <AnalyticsViewCardShell
+      title={title}
+      subtitle={subtitle}
+      viewCount={viewCount}
+      viewIndex={viewIndex}
+      onMoveUp={onMoveUp}
+      onMoveDown={onMoveDown}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      error={err}
     >
-      <Group justify="space-between" align="flex-start" wrap="nowrap" mb="xs">
-        <Box style={{ minWidth: 0 }}>
-          <Text fw={600} size="sm" truncate style={{ color: '#e4e4e7' }}>
-            {view.viewType === 'readout' ? 'Readout' : view.viewType.toUpperCase()} · {view.signalName}
-          </Text>
-          <Text size="xs" truncate style={{ color: '#a1a1aa' }}>
-            {view.vehicle} / {view.dbcFilename} / {view.messageName || view.messageId}
-          </Text>
-        </Box>
-        <Group gap={4} wrap="nowrap">
-          {viewCount > 1 && (
-            <>
-              <ActionIcon
-                variant="default"
-                size="sm"
-                disabled={viewIndex <= 0}
-                onClick={onMoveUp}
-                title="Move up"
-              >
-                <ChevronUp size={14} />
-              </ActionIcon>
-              <ActionIcon
-                variant="default"
-                size="sm"
-                disabled={viewIndex >= viewCount - 1}
-                onClick={onMoveDown}
-                title="Move down"
-              >
-                <ChevronDown size={14} />
-              </ActionIcon>
-            </>
-          )}
-          <ActionIcon variant="default" size="sm" onClick={onEdit} title="Edit">
-            <Pencil size={14} />
-          </ActionIcon>
-          <ActionIcon variant="default" size="sm" color="red" onClick={onDelete} title="Delete">
-            <Trash2 size={14} />
-          </ActionIcon>
-        </Group>
-      </Group>
-      {err && (
-        <Text size="xs" c="red" mb="xs">
-          {err}
-        </Text>
-      )}
       {(view.viewType === 'min' || view.viewType === 'max') && stat && (
         <AnalyticsBigReadout
           valueDisplay={stat.value == null ? '—' : formatReadoutValue(stat.value)}
@@ -1026,12 +1125,12 @@ function StandardAnalyticsViewCard({
           footerHint={!series.length ? 'No samples in buffer yet for this signal.' : null}
         />
       )}
-      {view.viewType === 'graph' && series.length > 0 && (
-        <Box mt="sm" style={{ overflowX: 'auto' }}>
-          <SimpleLineChart points={series} width={640} height={220} />
-        </Box>
+      {view.viewType === 'graph' && (
+        <div className="mt-2 overflow-x-auto">
+          <SimpleLineChart points={series} width={640} height={220} stroke="var(--chart-2)" />
+        </div>
       )}
-    </Paper>
+    </AnalyticsViewCardShell>
   );
 }
 
@@ -1108,122 +1207,85 @@ function SyncAnalyticsViewCard({
 
   const title = frameSig ? `${frameSig} Sync` : 'Sync';
   const idsLabel = (view.syncMessageIds || []).map((id) => canIdHex(id)).join(', ');
+  const subtitle = `${view.vehicle} / ${view.dbcFilename}${idsLabel ? ` · ${idsLabel}` : ''}`;
 
   return (
-    <Paper
-      withBorder
-      p="md"
-      radius="md"
-      style={{ background: '#0f0f11', borderColor: 'var(--border)', minWidth: 0, maxWidth: '100%' }}
+    <AnalyticsViewCardShell
+      title={title}
+      subtitle={subtitle}
+      viewCount={viewCount}
+      viewIndex={viewIndex}
+      onMoveUp={onMoveUp}
+      onMoveDown={onMoveDown}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      error={err}
     >
-      <Group justify="space-between" align="flex-start" wrap="nowrap" mb="xs">
-        <Box style={{ minWidth: 0 }}>
-          <Text fw={600} size="sm" truncate>
-            {title}
-          </Text>
-          <Text size="xs" c="dimmed" truncate>
-            {view.vehicle} / {view.dbcFilename}
-            {idsLabel ? ` · ${idsLabel}` : ''}
-          </Text>
-        </Box>
-        <Group gap={4} wrap="nowrap">
-          {viewCount > 1 && (
-            <>
-              <ActionIcon
-                variant="default"
-                size="sm"
-                disabled={viewIndex <= 0}
-                onClick={onMoveUp}
-                title="Move up"
-              >
-                <ChevronUp size={14} />
-              </ActionIcon>
-              <ActionIcon
-                variant="default"
-                size="sm"
-                disabled={viewIndex >= viewCount - 1}
-                onClick={onMoveDown}
-                title="Move down"
-              >
-                <ChevronDown size={14} />
-              </ActionIcon>
-            </>
-          )}
-          <ActionIcon variant="default" size="sm" onClick={onEdit} title="Edit">
-            <Pencil size={14} />
-          </ActionIcon>
-          <ActionIcon variant="default" size="sm" color="red" onClick={onDelete} title="Delete">
-            <Trash2 size={14} />
-          </ActionIcon>
-        </Group>
-      </Group>
-      {err && (
-        <Text size="xs" c="red" mb="xs">
-          {err}
-        </Text>
-      )}
       {!blocks.length ? (
-        <Text size="xs" c="dimmed">
+        <p className="text-xs text-muted-foreground">
           Open edit and save once to attach DBC field lists (or re-import validated JSON).
-        </Text>
+        </p>
       ) : (
         <>
           {pivotTruncated && (
-            <Text size="xs" c="dimmed" mb="xs">
+            <p className="mb-2 text-xs text-muted-foreground">
               Buffer window truncated rows (per message); increase ring buffer or narrow time if needed.
-            </Text>
+            </p>
           )}
-          <ScrollArea h={360} type="auto" scrollbarSize={6}>
-            <Table fontSize="xs" striped highlightOnHover withTableBorder>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th style={{ whiteSpace: 'nowrap' }}>Time</Table.Th>
-                  <Table.Th style={{ whiteSpace: 'nowrap' }}>{frameSig}</Table.Th>
+          <ScrollArea className="h-[360px]">
+            <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="whitespace-nowrap">Time</TableHead>
+                  <TableHead className="whitespace-nowrap">{frameSig}</TableHead>
                   {blocks.map((b) => (
-                    <Table.Th key={b.messageId} style={{ minWidth: 140 }}>
-                      <Text size="xs" fw={600} lineClamp={2}>
+                    <TableHead key={b.messageId} className="min-w-[140px]">
+                      <span className="line-clamp-2 text-xs font-semibold">
                         {b.messageName || 'Message'}
-                      </Text>
-                      <Text size="10px" c="dimmed">
-                        {canIdHex(b.messageId)}
-                      </Text>
-                    </Table.Th>
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">{canIdHex(b.messageId)}</span>
+                    </TableHead>
                   ))}
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {mergedRows.length === 0 ? (
-                  <Table.Tr>
-                    <Table.Td colSpan={2 + blocks.length}>
-                      <Text size="xs" c="dimmed">
+                  <TableRow>
+                    <TableCell colSpan={2 + blocks.length}>
+                      <span className="text-xs text-muted-foreground">
                         No aligned rows yet (need matching {frameSig} across messages in the buffer).
-                      </Text>
-                    </Table.Td>
-                  </Table.Tr>
+                      </span>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   mergedRows.map((row, i) => (
-                    <Table.Tr key={i}>
-                      <Table.Td style={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                    <TableRow key={i}>
+                      <TableCell className="tabular whitespace-nowrap">
                         {String(row.t ?? '').slice(0, 28)}
-                      </Table.Td>
-                      <Table.Td style={{ fontFamily: 'monospace' }}>
+                      </TableCell>
+                      <TableCell className="tabular">
                         {row.frameId != null && Number.isFinite(Number(row.frameId))
                           ? formatValueCompact(Number(row.frameId))
                           : '—'}
-                      </Table.Td>
+                      </TableCell>
                       {row.byMessage?.map((bm, j) => (
-                        <Table.Td key={j} style={{ fontSize: 11, lineHeight: 1.35, maxWidth: 320 }}>
+                        <TableCell
+                          key={j}
+                          className="max-w-[320px] text-[11px] leading-snug whitespace-normal"
+                        >
                           {formatPivotRowSignalsCell(bm.row, frameSig)}
-                        </Table.Td>
+                        </TableCell>
                       ))}
-                    </Table.Tr>
+                    </TableRow>
                   ))
                 )}
-              </Table.Tbody>
+              </TableBody>
             </Table>
+            </div>
           </ScrollArea>
         </>
       )}
-    </Paper>
+    </AnalyticsViewCardShell>
   );
 }

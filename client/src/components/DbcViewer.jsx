@@ -1,6 +1,27 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Group, Stack, Text, Select, ScrollArea, TextInput, UnstyledButton, Checkbox } from '@mantine/core';
-import { Car, FileText } from 'lucide-react';
+import { Car, FileText, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import {
   ECU_NONE,
   formatCanIdHex,
@@ -38,6 +59,24 @@ function bitRangeLine(s) {
   return null;
 }
 
+/** @param {Record<string, unknown>} s */
+function signalStartBit(s) {
+  const br = s.bit_range;
+  if (Array.isArray(br) && br.length >= 1) return fmt(br[0]);
+  if (s.start_bit != null) return fmt(s.start_bit);
+  return '—';
+}
+
+/** @param {Record<string, unknown>} s */
+function signalLength(s) {
+  if (s.length != null) return fmt(s.length);
+  const br = s.bit_range;
+  if (Array.isArray(br) && br.length >= 2) {
+    return fmt(Number(br[1]) - Number(br[0]) + 1);
+  }
+  return '—';
+}
+
 const SORT_OPTIONS = [
   { value: 'id-asc', label: 'ID · ascending' },
   { value: 'id-desc', label: 'ID · descending' },
@@ -55,57 +94,55 @@ const SEARCH_FIELD_ROWS = [
 /** @param {{ active: boolean; children: React.ReactNode; onClick: () => void }} p */
 function MiniToggle({ active, children, onClick }) {
   return (
-    <UnstyledButton
+    <Button
       type="button"
+      variant="outline"
+      size="xs"
       onClick={onClick}
-      style={{
-        padding: '4px 10px',
-        borderRadius: 4,
-        fontSize: 12,
-        border: '1px solid var(--border)',
-        backgroundColor: active ? '#27272a' : 'transparent',
-        color: active ? '#e4e4e7' : '#71717a',
-      }}
+      className={cn(
+        'h-7 border-border px-2.5 text-xs',
+        active
+          ? 'border-signal-blue/30 bg-signal-blue/10 text-foreground hover:bg-signal-blue/15'
+          : 'bg-transparent text-muted-foreground hover:bg-accent'
+      )}
     >
       {children}
-    </UnstyledButton>
+    </Button>
   );
 }
 
 /** @param {{ children: React.ReactNode; onClick: () => void }} p */
 function MiniLinkButton({ children, onClick }) {
   return (
-    <UnstyledButton
+    <Button
       type="button"
+      variant="link"
+      size="xs"
       onClick={onClick}
-      style={{
-        padding: '2px 6px',
-        fontSize: 12,
-        color: '#71717a',
-      }}
+      className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground"
     >
       {children}
-    </UnstyledButton>
+    </Button>
   );
 }
 
 /** @param {{ label: string; active: boolean; onClick: () => void }} p */
 function EcuPill({ label, active, onClick }) {
   return (
-    <UnstyledButton
+    <Button
       type="button"
+      variant="outline"
+      size="xs"
       onClick={onClick}
-      style={{
-        padding: '4px 10px',
-        borderRadius: 4,
-        fontSize: 12,
-        border: '1px solid var(--border)',
-        backgroundColor: active ? '#27272a' : 'transparent',
-        color: active ? '#e4e4e7' : '#71717a',
-      }}
+      className={cn(
+        'h-7 border-border px-2.5 text-xs',
+        active
+          ? 'border-signal-purple/30 bg-signal-purple/10 text-foreground hover:bg-signal-purple/15'
+          : 'bg-transparent text-muted-foreground hover:bg-accent'
+      )}
     >
       {label}
-    </UnstyledButton>
+    </Button>
   );
 }
 
@@ -118,116 +155,110 @@ function DbcMessageCard({ msg, idFormat }) {
   const idStr = formatMessageId(msg, idFormat);
 
   return (
-    <Box
-      style={{
-        border: '1px solid var(--border)',
-        borderRadius: 6,
-        padding: 10,
-        backgroundColor: '#18181b',
-      }}
-    >
-      <Group gap={6} mb={4} justify="space-between" wrap="nowrap" align="flex-start">
-        <Text size="sm" fw={600} style={{ color: '#e4e4e7', wordBreak: 'break-word' }}>
-          <Text span ff="monospace" style={{ color: '#a1a1aa', marginRight: 6 }}>
-            {idStr}
-          </Text>
-          · {name}
-        </Text>
-        <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
-          <Text size="xs" c="dimmed">
+    <div className="overflow-hidden rounded-md border border-border bg-card">
+      <div className="flex items-start justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="tabular text-sm font-semibold text-signal-blue">{idStr}</span>
+            <span className="text-sm font-semibold text-foreground break-words">{name}</span>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <Badge variant="outline" className="tabular border-border text-muted-foreground">
             DLC {fmt(dlc)}
-          </Text>
+          </Badge>
           {ecu ? (
-            <Text size="xs" c="dimmed" style={{ opacity: 0.85 }}>
-              ECU: {ecu}
-            </Text>
+            <Badge
+              variant="outline"
+              className="border-signal-purple/30 bg-signal-purple/10 text-signal-purple"
+            >
+              {ecu}
+            </Badge>
           ) : (
-            <Text size="xs" c="dimmed" fs="italic">
-              no sender
-            </Text>
+            <span className="text-xs italic text-muted-foreground">no sender</span>
           )}
-        </Group>
-      </Group>
+        </div>
+      </div>
+
       {signals.length > 0 ? (
-        <Stack gap={6} mt={6}>
-          {signals.map((s) => {
-            if (!s || typeof s !== 'object') return null;
-            const sig = /** @type {Record<string, unknown>} */ (s);
-            const bits = bitRangeLine(sig);
-            const choices = sig.choices;
-            const choiceEntries =
-              choices && typeof choices === 'object' && !Array.isArray(choices)
-                ? Object.entries(choices)
-                : [];
-            return (
-              <Box
-                key={String(sig.name)}
-                pt={6}
-                style={{ borderTop: '1px solid var(--border)' }}
-              >
-                <Group gap={6} wrap="wrap" mb={2}>
-                  <Text size="xs" fw={500} style={{ color: 'var(--text)' }}>
+        <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="h-8 px-3 text-xs">Signal</TableHead>
+              <TableHead className="h-8 px-3 text-xs">Type</TableHead>
+              <TableHead className="h-8 px-3 text-xs">Start</TableHead>
+              <TableHead className="h-8 px-3 text-xs">Len</TableHead>
+              <TableHead className="h-8 px-3 text-xs">Scale</TableHead>
+              <TableHead className="h-8 px-3 text-xs">Offset</TableHead>
+              <TableHead className="h-8 px-3 text-xs">Min</TableHead>
+              <TableHead className="h-8 px-3 text-xs">Max</TableHead>
+              <TableHead className="h-8 px-3 text-xs">Unit</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {signals.map((s) => {
+              if (!s || typeof s !== 'object') return null;
+              const sig = /** @type {Record<string, unknown>} */ (s);
+              const bits = bitRangeLine(sig);
+              const choices = sig.choices;
+              const choiceEntries =
+                choices && typeof choices === 'object' && !Array.isArray(choices)
+                  ? Object.entries(choices)
+                  : [];
+              return (
+                <TableRow key={String(sig.name)} className="align-top">
+                  <TableCell className="px-3 py-2 text-xs font-medium text-foreground">
                     {String(sig.name ?? '')}
-                  </Text>
-                  {sig.data_type ? (
-                    <Text size="xs" c="dimmed">
-                      {String(sig.data_type)}
-                    </Text>
-                  ) : null}
-                  {bits ? (
-                    <Text size="xs" c="dimmed">
-                      bits {bits}
-                    </Text>
-                  ) : null}
-                  {sig.unit ? (
-                    <Text size="xs" c="dimmed">
-                      unit {String(sig.unit)}
-                    </Text>
-                  ) : null}
-                </Group>
-                {(sig.scale != null ||
-                  sig.offset != null ||
-                  sig.min != null ||
-                  sig.max != null) && (
-                  <Text size="xs" ff="monospace" c="dimmed" mt={2}>
-                    {[
-                      sig.scale != null ? `scale=${fmt(sig.scale)}` : null,
-                      sig.offset != null ? `offset=${fmt(sig.offset)}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    {(sig.min != null || sig.max != null) && (
-                      <>
-                        {(sig.scale != null || sig.offset != null) ? ' · ' : ''}
-                        range [{fmt(sig.min)}, {fmt(sig.max)}]
-                      </>
-                    )}
-                  </Text>
-                )}
-                {choiceEntries.length > 0 ? (
-                  <Text size="xs" c="dimmed" mt={4}>
-                    values:{' '}
-                    {choiceEntries.map(([val, label]) => (
-                      <Text span key={val} mr="xs">
-                        <Text span ff="monospace" c="dimmed">
-                          {val}
-                        </Text>
-                        {' = '}
-                        {String(label)}
-                      </Text>
-                    ))}
-                  </Text>
-                ) : null}
-              </Box>
-            );
-          })}
-        </Stack>
+                    {choiceEntries.length > 0 ? (
+                      <p className="mt-1 text-xs font-normal text-muted-foreground">
+                        {choiceEntries.map(([val, label]) => (
+                          <span key={val} className="mr-2 inline-block">
+                            <span className="tabular">{val}</span>
+                            {' = '}
+                            {String(label)}
+                          </span>
+                        ))}
+                      </p>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs text-muted-foreground">
+                    {sig.data_type ? String(sig.data_type) : '—'}
+                  </TableCell>
+                  <TableCell className="tabular px-3 py-2 text-xs text-muted-foreground">
+                    {signalStartBit(sig)}
+                  </TableCell>
+                  <TableCell className="tabular px-3 py-2 text-xs text-muted-foreground">
+                    {signalLength(sig)}
+                  </TableCell>
+                  <TableCell className="tabular px-3 py-2 text-xs text-muted-foreground">
+                    {sig.scale != null ? fmt(sig.scale) : '—'}
+                  </TableCell>
+                  <TableCell className="tabular px-3 py-2 text-xs text-muted-foreground">
+                    {sig.offset != null ? fmt(sig.offset) : '—'}
+                  </TableCell>
+                  <TableCell className="tabular px-3 py-2 text-xs text-muted-foreground">
+                    {sig.min != null ? fmt(sig.min) : '—'}
+                  </TableCell>
+                  <TableCell className="tabular px-3 py-2 text-xs text-muted-foreground">
+                    {sig.max != null ? fmt(sig.max) : '—'}
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-xs text-muted-foreground">
+                    {sig.unit ? String(sig.unit) : '—'}
+                    {bits ? (
+                      <p className="tabular mt-0.5 text-[11px] text-muted-foreground/70">{bits}</p>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+        </div>
       ) : (
-        <Text size="xs" c="dimmed" mt={4}>
-          No signals defined.
-        </Text>
+        <p className="px-3 py-2 text-xs text-muted-foreground">No signals defined.</p>
       )}
-    </Box>
+    </div>
   );
 }
 
@@ -366,27 +397,12 @@ export function DbcViewer() {
   );
 
   return (
-    <Box
-      style={{
-        flex: 1,
-        height: '100%',
-        minHeight: 0,
-        padding: 24,
-        backgroundColor: '#0a0a0b',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <Stack gap="sm" style={{ flexShrink: 0 }}>
-        <Text size="md" fw={600} style={{ color: '#e4e4e7' }}>
-          DBC Viewer
-        </Text>
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background p-6">
+      <div className="flex shrink-0 flex-col gap-2">
+        <h2 className="font-display text-sm font-semibold text-foreground">DBC Viewer</h2>
         {schema ? (
-          <Text size="sm" c="dimmed">
-            <Text span ff="monospace" fz="sm">
-              {schema.filename}
-            </Text>
+          <p className="text-sm text-muted-foreground">
+            <span className="tabular text-sm">{schema.filename}</span>
             {' · '}
             {schema.vehicle} · {messages.length} messages
             {uniqueNodes.length > 0 && (
@@ -395,94 +411,143 @@ export function DbcViewer() {
                 {uniqueNodes.length} sender{uniqueNodes.length !== 1 ? 's' : ''}
               </>
             )}
-          </Text>
+          </p>
         ) : (
-          <Text size="sm" c="dimmed">
-            Select a vehicle and DBC file
-          </Text>
+          <p className="text-sm text-muted-foreground">Select a vehicle and DBC file</p>
         )}
 
-        <Group gap="sm" align="flex-end" wrap="wrap">
-          <Select
-            label="Vehicle"
-            placeholder="Select vehicle"
-            data={vehicleOptions}
-            value={vehicle || null}
-            onChange={(v) => setVehicle(v ?? '')}
-            size="sm"
-            clearable
-            searchable
-            leftSection={<Car size={14} style={{ color: 'var(--text-muted)' }} />}
-            style={{ width: 220 }}
-          />
-          <Select
-            label="DBC file"
-            placeholder={vehicle ? 'Select DBC' : 'Select vehicle first'}
-            data={dbcOptions}
-            value={dbc || null}
-            onChange={(v) => setDbc(v ?? '')}
-            size="sm"
-            clearable
-            searchable
-            leftSection={<FileText size={14} style={{ color: 'var(--text-muted)' }} />}
-            style={{ width: 260 }}
-            disabled={!vehicle || dbcOptions.length === 0}
-          />
-          <TextInput
-            label="Search"
-            placeholder="IDs, ECUs, messages, signals, enums…"
-            value={search}
-            onChange={(e) => setSearch(e.currentTarget.value)}
-            autoComplete="off"
-            size="sm"
-            style={{ flex: '1 1 200px', minWidth: 160, maxWidth: 420 }}
-          />
-          <Select
-            label="Sort"
-            data={SORT_OPTIONS}
-            value={messageSort}
-            onChange={(v) => setMessageSort(v ?? 'id-asc')}
-            size="sm"
-            style={{ width: 160 }}
-          />
-        </Group>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Vehicle</Label>
+            <div className="flex items-center gap-1">
+              <Select value={vehicle || undefined} onValueChange={setVehicle}>
+                <SelectTrigger className="h-8 w-[220px] text-xs" size="sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Car className="size-3.5 shrink-0 text-muted-foreground" />
+                    <SelectValue placeholder="Select vehicle" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {vehicleOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {vehicle ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground"
+                  onClick={() => setVehicle('')}
+                  aria-label="Clear vehicle"
+                >
+                  <X className="size-3" />
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">DBC file</Label>
+            <div className="flex items-center gap-1">
+              <Select
+                value={dbc || undefined}
+                onValueChange={setDbc}
+                disabled={!vehicle || dbcOptions.length === 0}
+              >
+                <SelectTrigger className="h-8 w-[260px] text-xs" size="sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                    <SelectValue placeholder={vehicle ? 'Select DBC' : 'Select vehicle first'} />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {dbcOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {dbc ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground"
+                  onClick={() => setDbc('')}
+                  aria-label="Clear DBC file"
+                >
+                  <X className="size-3" />
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex min-w-[160px] flex-1 flex-col gap-1" style={{ maxWidth: 420 }}>
+            <Label className="text-xs text-muted-foreground">Search</Label>
+            <Input
+              placeholder="IDs, ECUs, messages, signals, enums…"
+              value={search}
+              onChange={(e) => setSearch(e.currentTarget.value)}
+              autoComplete="off"
+              className="h-8 text-xs"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Sort</Label>
+            <Select value={messageSort} onValueChange={(v) => setMessageSort(v ?? 'id-asc')}>
+              <SelectTrigger className="h-8 w-[160px] text-xs" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         {vehicle ? (
-          <Text size="xs" c="dimmed">
-            * = Embedded Sharepoint DBC
-          </Text>
+          <p className="text-xs text-muted-foreground">* = Embedded Sharepoint DBC</p>
         ) : null}
 
-        <Group gap="md" align="center" wrap="wrap">
-          <Text size="xs" c="dimmed" style={{ minWidth: 64 }}>
-            Search in
-          </Text>
-          {SEARCH_FIELD_ROWS.map(([key, label]) => (
-            <Checkbox
-              key={key}
-              label={label}
-              checked={searchIn[key]}
-              onChange={() => toggleSearchField(key)}
-              size="xs"
-              styles={{ label: { color: '#a1a1aa' } }}
-            />
-          ))}
-          <Group gap={4}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="min-w-16 text-xs text-muted-foreground">Search in</span>
+          {SEARCH_FIELD_ROWS.map(([key, label]) => {
+            const inputId = `dbc-search-${key}`;
+            return (
+              <div key={key} className="flex items-center gap-1.5">
+                <Checkbox
+                  id={inputId}
+                  checked={searchIn[key]}
+                  onCheckedChange={() => toggleSearchField(key)}
+                />
+                <Label htmlFor={inputId} className="cursor-pointer text-xs font-normal text-muted-foreground">
+                  {label}
+                </Label>
+              </div>
+            );
+          })}
+          <div className="flex gap-0.5">
             <MiniLinkButton onClick={selectAllSearchFields}>All</MiniLinkButton>
             <MiniLinkButton onClick={deselectAllSearchFields}>None</MiniLinkButton>
-          </Group>
-        </Group>
+          </div>
+        </div>
 
-        <Group gap="sm" align="center" wrap="wrap">
-          <Text size="xs" c="dimmed">
-            ECUs
-          </Text>
-          <Text size="xs" c="dimmed" fs="italic">
-            from senders
-          </Text>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">ECUs</span>
+          <span className="text-xs italic text-muted-foreground">from senders</span>
           <MiniLinkButton onClick={selectAllEcus}>All</MiniLinkButton>
           <MiniLinkButton onClick={deselectAllEcus}>None</MiniLinkButton>
-          <Group gap={6} wrap="wrap" style={{ flex: 1 }}>
+          <div className="flex flex-1 flex-wrap gap-1.5">
             {ecuOptions.map((id) => (
               <EcuPill
                 key={id}
@@ -491,75 +556,55 @@ export function DbcViewer() {
                 onClick={() => toggleEcu(id)}
               />
             ))}
-          </Group>
-        </Group>
+          </div>
+        </div>
 
-        <Group gap="sm" align="center" wrap="wrap">
-          <Text size="xs" c="dimmed">
-            CAN ID
-          </Text>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">CAN ID</span>
           <MiniToggle active={idSearchFormat === 'hex'} onClick={() => setIdSearchFormat('hex')}>
             Hex
           </MiniToggle>
           <MiniToggle active={idSearchFormat === 'decimal'} onClick={() => setIdSearchFormat('decimal')}>
             Decimal
           </MiniToggle>
-        </Group>
-      </Stack>
+        </div>
+      </div>
 
-      <Box
-        style={{
-          flex: 1,
-          minHeight: 0,
-          marginTop: 16,
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          backgroundColor: '#0f0f11',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
         {!schema && (
-          <Box p="md">
-            <Text size="sm" c="dimmed">
+          <div className="p-4">
+            <p className="text-sm text-muted-foreground">
               {loadingSchema
                 ? 'Loading DBC schema…'
                 : dbc
                   ? 'Failed to load schema or no messages found.'
                   : 'Select a vehicle and DBC file to view details.'}
-            </Text>
-          </Box>
+            </p>
+          </div>
         )}
         {schema && (
-          <ScrollArea style={{ height: '100%' }} type="auto" scrollbarSize={8}>
-            <Box p="md">
-              <Text size="sm" c="dimmed" mb="sm">
-                Messages ({sortedMessages.length})
-              </Text>
-              <Stack gap="sm">
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="p-4">
+              <p className="mb-2 text-sm text-muted-foreground">Messages ({sortedMessages.length})</p>
+              <div className="flex flex-col gap-2">
                 {sortedMessages.length === 0 ? (
-                  <Text size="sm" c="dimmed">
-                    No messages match ECU and search filters.
-                  </Text>
+                  <p className="text-sm text-muted-foreground">No messages match ECU and search filters.</p>
                 ) : (
                   sortedMessages.map((m) => (
                     <DbcMessageCard key={`${m.id}-${m.name}`} msg={m} idFormat={idSearchFormat} />
                   ))
                 )}
-              </Stack>
+              </div>
               {uniqueNodes.length > 0 && (
-                <Box mt="lg" pt="md" style={{ borderTop: '1px solid var(--border)' }}>
-                  <Text size="xs" c="dimmed" mb={6}>
-                    Senders ({uniqueNodes.length})
-                  </Text>
-                  <Text size="sm" style={{ color: '#e4e4e7' }}>
-                    {uniqueNodes.join(', ')}
-                  </Text>
-                </Box>
+                <div className="mt-6 border-t border-border pt-4">
+                  <p className="mb-1.5 text-xs text-muted-foreground">Senders ({uniqueNodes.length})</p>
+                  <p className="text-sm text-foreground">{uniqueNodes.join(', ')}</p>
+                </div>
               )}
-            </Box>
+            </div>
           </ScrollArea>
         )}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }

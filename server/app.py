@@ -68,6 +68,7 @@ RESERVED_SPA_PREFIXES = ("api", "grafana", "influx", "socket.io", "assets", "man
 TRUTHY_VALUES = {"1", "true", "yes", "on"}
 SERVE_STATIC_CLIENT = os.environ.get("SERVE_STATIC_CLIENT", "1").strip().lower() in TRUTHY_VALUES
 STATUS_HEALTH_TTL_SEC = float(os.environ.get("STATUS_HEALTH_TTL_SEC", "2.0"))
+STATUS_HEALTH_TIMEOUT_SEC = float(os.environ.get("STATUS_HEALTH_TIMEOUT_SEC", "0.4"))
 
 def _parse_origins(raw: str):
     raw = (raw or "*").strip()
@@ -85,16 +86,19 @@ if HTTP_CORS_ORIGINS == ["*"]:
         "http://127.0.0.1:4000",
     ]
 ALLOW_CREDENTIALS = True
-SOCKET_CORS_ORIGINS = os.environ.get("SOCKET_CORS_ORIGINS", os.environ.get("CORS_ORIGINS", "*")).strip()
-if SOCKET_CORS_ORIGINS == "*":
-    SOCKET_CORS_ORIGINS = HTTP_CORS_ORIGINS
+# Keep Socket.IO at "*" when unset. Remapping to the HTTP localhost list breaks
+# same-origin public hosts (e.g. Cloudflare Tunnel) — Engine.IO returns 400.
+_socket_cors_raw = os.environ.get("SOCKET_CORS_ORIGINS", os.environ.get("CORS_ORIGINS", "*")).strip()
+if _socket_cors_raw == "*":
+    SOCKET_CORS_ORIGINS = "*"
 else:
-    SOCKET_CORS_ORIGINS = [x.strip() for x in SOCKET_CORS_ORIGINS.split(",") if x.strip()]
+    SOCKET_CORS_ORIGINS = [x.strip() for x in _socket_cors_raw.split(",") if x.strip()]
 
 _status_health_cache = {
     "checked_at": 0.0,
     "influx_connected": False,
     "grafana_active": False,
+    "refreshing": False,
 }
 
 # --- Pydantic Models ---
@@ -167,26 +171,56 @@ def move_to_trash(directory: str, filename: str):
 def _check_grafana_health():
     base = os.environ.get("GRAFANA_URL", "http://127.0.0.1:3000").rstrip("/")
     subpath = os.environ.get("GRAFANA_SUBPATH", "/grafana").rstrip("/")
-    for path in (f"{subpath}/api/health", f"{subpath}/healthz", f"{subpath}/"):
+    # One fast probe — avoid multi-path 3s timeouts that stall status on connect.
+    for path in (f"{subpath}/api/health", "/api/health"):
         try:
             req = urllib.request.Request(base + path)
-            with urllib.request.urlopen(req, timeout=3) as r:
+            with urllib.request.urlopen(req, timeout=STATUS_HEALTH_TIMEOUT_SEC) as r:
                 if 200 <= r.status < 400:
                     return True
-        except (urllib.error.URLError, OSError):
-            pass
+        except (urllib.error.URLError, OSError, TimeoutError):
+            continue
     return False
 
+def _check_influx_health():
+    if not influx_client:
+        return False
+    try:
+        return bool(influx_client.ping())
+    except Exception:
+        return False
+
+async def _refresh_health_cache():
+    influx_ok, grafana_ok = await asyncio.gather(
+        asyncio.to_thread(_check_influx_health),
+        asyncio.to_thread(_check_grafana_health),
+    )
+    _status_health_cache["influx_connected"] = influx_ok
+    _status_health_cache["grafana_active"] = grafana_ok
+    _status_health_cache["checked_at"] = time.monotonic()
+    return influx_ok, grafana_ok
+
+def _cached_health():
+    """Never blocks — returns last known Grafana/Influx flags."""
+    return _status_health_cache["influx_connected"], _status_health_cache["grafana_active"]
+
 async def _get_cached_health(force_refresh: bool = False):
+    # Stale-while-revalidate: only block when explicitly forced (background loop).
+    if force_refresh:
+        return await _refresh_health_cache()
     now = time.monotonic()
     expired = (now - _status_health_cache["checked_at"]) >= STATUS_HEALTH_TTL_SEC
-    if force_refresh or expired:
-        _status_health_cache["influx_connected"] = (
-            await asyncio.to_thread(influx_client.ping) if influx_client else False
-        )
-        _status_health_cache["grafana_active"] = await asyncio.to_thread(_check_grafana_health)
-        _status_health_cache["checked_at"] = now
-    return _status_health_cache["influx_connected"], _status_health_cache["grafana_active"]
+    if expired and not _status_health_cache.get("refreshing"):
+        _status_health_cache["refreshing"] = True
+
+        async def _bg():
+            try:
+                await _refresh_health_cache()
+            finally:
+                _status_health_cache["refreshing"] = False
+
+        asyncio.create_task(_bg())
+    return _cached_health()
 
 async def build_status_payload(force_health_refresh: bool = False):
     parser_status = telemetry_service.get_parser_status()
@@ -214,10 +248,27 @@ async def emit_status_update(force_health_refresh: bool = False, to: str | None 
         return
     await sio.emit("status", status)
 
+async def _post_connect(sid: str):
+    """Runs after Socket.IO connect is acknowledged — must not delay the handshake."""
+    try:
+        await emit_status_update(force_health_refresh=False, to=sid)
+        cache = telemetry_service.get_cache()
+        if cache:
+            await sio.emit("signal_cache", cache, to=sid)
+    except Exception:
+        logger.debug("post-connect work failed", exc_info=True)
+
 # --- Background Tasks & Lifespan ---
 async def send_status_updates(sio: socketio.AsyncServer):
+    # Health probes are slow when Grafana/Influx are down — never await them on the
+    # hot status path (blocks Socket.IO connect ack / saturates the thread pool).
+    health_task: asyncio.Task | None = None
     while True:
-        await emit_status_update()
+        now = time.monotonic()
+        stale = (now - _status_health_cache["checked_at"]) >= STATUS_HEALTH_TTL_SEC
+        if stale and (health_task is None or health_task.done()):
+            health_task = asyncio.create_task(_refresh_health_cache())
+        await emit_status_update(force_health_refresh=False)
         await asyncio.sleep(0.25)
 
 def _list_vehicle_dbc_names(vehicle: str) -> list[str]:
@@ -1075,12 +1126,10 @@ asgi_app = socketio.ASGIApp(sio, app)
 
 @sio.event
 async def connect(sid, environ, auth=None):
+    # Keep this handler tiny: Socket.IO only fires client `connect` after it returns.
     logger.info(f"Client connected: {sid}")
     await sio.save_session(sid, {"environ": environ or {}, "auth": auth})
-    await emit_status_update(force_health_refresh=True, to=sid)
-    cache = telemetry_service.get_cache()
-    if cache:
-        await sio.emit("signal_cache", cache, to=sid)
+    asyncio.create_task(_post_connect(sid))
 
 @sio.event
 async def disconnect(sid):

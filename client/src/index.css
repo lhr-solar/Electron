@@ -1,32 +1,191 @@
-/* Minimal shell tokens (Tesla/Uber-adjacent grays) */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Electron — telemetry cockpit design system (dark only)
+  Base: graphite near-black. Accents: bright techy signal colors.
+  Type: Space Grotesk (display) / Inter (UI) / JetBrains Mono (readouts).
+*/
 :root {
-  --bg: #0a0a0b;
-  --bg-elevated: #0f0f11;
-  --bg-hover: #18181b;
-  --border: #1f1f23;
-  --text: #e4e4e7;
-  --text-muted: #a1a1aa;
-  --hex: #a1a1aa;
-  --focus: #52525b;
-  --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --radius: 6px;
+  --radius: 0.5rem;
+
+  /* Base surfaces */
+  --background: #0a0b0e;
+  --foreground: #e8eaee;
+  --card: #101217;
+  --card-foreground: #e8eaee;
+  --popover: #14161c;
+  --popover-foreground: #e8eaee;
+
+  /* Muted / secondary / accent surfaces */
+  --muted: #16181e;
+  --muted-foreground: #8b909b;
+  --secondary: #16181e;
+  --secondary-foreground: #e8eaee;
+  --accent: #1c1f27;
+  --accent-foreground: #f3f4f7;
+
+  /* Brand + intent */
+  --primary: #4d9dff;
+  --primary-foreground: #05080d;
+  --destructive: #ff4d5e;
+  --destructive-foreground: #fff5f6;
+
+  /* Lines + focus */
+  --border: #202329;
+  --border-strong: #2b2f39;
+  --input: #23262e;
+  --ring: #4d9dff;
+
+  /* Telemetry signal palette (semantic status) */
+  --signal-green: #22e39b;
+  --signal-red: #ff4d5e;
+  --signal-amber: #ffb020;
+  --signal-blue: #4d9dff;
+  --signal-purple: #a374ff;
+  --signal-gray: #565b66;
+
+  /* Chart series */
+  --chart-1: #4d9dff;
+  --chart-2: #22e39b;
+  --chart-3: #a374ff;
+  --chart-4: #ffb020;
+  --chart-5: #ff4d5e;
+  --chart-6: #22d3ee;
+
+  /* Fonts */
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
 }
 
-html,
-body,
-#root {
-  height: 100%;
+/* Force dark scheme regardless of any .dark toggling */
+.dark {
+  --background: #0a0b0e;
+  --foreground: #e8eaee;
+  --card: #101217;
+  --card-foreground: #e8eaee;
+  --popover: #14161c;
+  --popover-foreground: #e8eaee;
+  --muted: #16181e;
+  --muted-foreground: #8b909b;
+  --secondary: #16181e;
+  --secondary-foreground: #e8eaee;
+  --accent: #1c1f27;
+  --accent-foreground: #f3f4f7;
+  --primary: #4d9dff;
+  --primary-foreground: #05080d;
+  --destructive: #ff4d5e;
+  --destructive-foreground: #fff5f6;
+  --border: #202329;
+  --border-strong: #2b2f39;
+  --input: #23262e;
+  --ring: #4d9dff;
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font);
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-signal-green: var(--signal-green);
+  --color-signal-red: var(--signal-red);
+  --color-signal-amber: var(--signal-amber);
+  --color-signal-blue: var(--signal-blue);
+  --color-signal-purple: var(--signal-purple);
+  --color-signal-gray: var(--signal-gray);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
-.mantine-Notification {
-  background-color: var(--bg-elevated) !important;
-  border: 1px solid var(--border);
-  color: var(--text);
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 30%, transparent);
+    color: var(--foreground);
+  }
+
+  /* Thin techy scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: #3a3f4a;
+    background-clip: padding-box;
+  }
+}
+
+@layer utilities {
+  /* Tabular, monospaced numerics for telemetry readouts */
+  .tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
 }

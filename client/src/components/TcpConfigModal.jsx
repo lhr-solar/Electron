@@ -1,8 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Box, Text, Stack, Group, Button, TextInput, ActionIcon, Badge } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
-import { Trash2, Pencil, Plus, Wifi, Zap } from 'lucide-react';
+import { Trash2, Pencil, Plus, Wifi, Zap, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
+import { notifications } from '@/lib/notify';
 import { apiJson } from '../lib/api';
+
+function isCurrentConfig(c, currentIp, currentPort) {
+  return (
+    String(c.ip) === String(currentIp) &&
+    Number(c.port) === Number(currentPort)
+  );
+}
 
 export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentPort, isServerMode = false }) {
   const [list, setList] = useState([]);
@@ -30,7 +49,6 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
   useEffect(() => {
     if (opened) load();
   }, [opened, load]);
-
 
   const startAdd = () => {
     setAdding(true);
@@ -144,123 +162,200 @@ export function TcpConfigModal({ opened, onClose, onRefresh, currentIp, currentP
       .finally(() => setTesting(false));
   };
 
+  const renderForm = (onSave) => (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="tcp-form-name" className="text-xs">Name</Label>
+        <Input
+          id="tcp-form-name"
+          placeholder="e.g. Main Server"
+          value={formName}
+          onChange={(e) => setFormName(e.target.value)}
+          className="h-8 text-sm"
+        />
+      </div>
+      <div className="flex gap-2">
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Label htmlFor="tcp-form-ip" className="text-xs">IP</Label>
+          <Input
+            id="tcp-form-ip"
+            value={formIp}
+            onChange={(e) => setFormIp(e.target.value)}
+            className="h-8 text-sm tabular"
+          />
+        </div>
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Label htmlFor="tcp-form-port" className="text-xs">Port</Label>
+          <Input
+            id="tcp-form-port"
+            type="number"
+            value={formPort}
+            onChange={(e) => setFormPort(e.target.value)}
+            className="h-8 text-sm tabular"
+          />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button size="xs" onClick={onSave}>Save</Button>
+        <Button variant="ghost" size="xs" onClick={cancelForm}>Cancel</Button>
+        {onSave === saveEdit && (
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => testConnection(formIp, formPort)}
+            disabled={testing}
+          >
+            {testing ? <Loader2 className="size-3 animate-spin" /> : <Wifi className="size-3" />}
+            Test
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <>
-    <Modal opened={opened} onClose={onClose} title="Manage TCP configs" size="md">
-      <Stack gap="md">
-        <Group justify="space-between">
-          <Text size="sm" c="dimmed">
-            {isServerMode
-              ? 'Presets + optional server auto-start (CANP, HighNoon, all DBCs)'
-              : 'Saved network/port presets'}
-          </Text>
-          <Button variant="subtle" size="xs" leftSection={<Plus size={12} />} onClick={startAdd} disabled={adding}>
-            Add
-          </Button>
-        </Group>
+      <Dialog open={opened} onOpenChange={(o) => { if (!o) onClose(); }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto bg-popover sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display">Manage TCP configs</DialogTitle>
+          </DialogHeader>
 
-        {adding && (
-          <Box p="sm" style={{ border: '1px solid var(--border)', borderRadius: 6, backgroundColor: '#0f0f11' }}>
-            <Stack gap="xs">
-              <TextInput label="Name" placeholder="e.g. Main Server" value={formName} onChange={(e) => setFormName(e.target.value)} size="sm" />
-              <Group grow>
-                <TextInput label="IP" value={formIp} onChange={(e) => setFormIp(e.target.value)} size="sm" />
-                <TextInput label="Port" type="number" value={formPort} onChange={(e) => setFormPort(e.target.value)} size="sm" />
-              </Group>
-              <Group>
-                <Button size="xs" onClick={saveAdd}>Save</Button>
-                <Button variant="subtle" size="xs" onClick={cancelForm}>Cancel</Button>
-              </Group>
-            </Stack>
-          </Box>
-        )}
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                {isServerMode
+                  ? 'Presets + optional server auto-start (CANP, HighNoon, all DBCs)'
+                  : 'Saved network/port presets'}
+              </p>
+              <Button variant="ghost" size="xs" onClick={startAdd} disabled={adding}>
+                <Plus className="size-3" />
+                Add
+              </Button>
+            </div>
 
-        <Stack gap={4}>
-          {list.map((c) => (
-            <Box
-              key={c.id}
-              style={{
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-                padding: '8px 12px',
-                backgroundColor: editingId === c.id ? '#18181b' : '#0f0f11',
-              }}
-            >
-              {editingId === c.id ? (
-                <Stack gap="xs">
-                  <TextInput label="Name" value={formName} onChange={(e) => setFormName(e.target.value)} size="sm" />
-                  <Group grow>
-                    <TextInput label="IP" value={formIp} onChange={(e) => setFormIp(e.target.value)} size="sm" />
-                    <TextInput label="Port" type="number" value={formPort} onChange={(e) => setFormPort(e.target.value)} size="sm" />
-                  </Group>
-                  <Group>
-                    <Button size="xs" onClick={saveEdit}>Save</Button>
-                    <Button variant="subtle" size="xs" onClick={cancelForm}>Cancel</Button>
-                    <Button variant="subtle" size="xs" onClick={() => testConnection(formIp, formPort)} loading={testing}>
-                      Test
-                    </Button>
-                  </Group>
-                </Stack>
-              ) : (
-                <Group justify="space-between">
-                  <div>
-                    <Group gap={6} align="center">
-                      <Text size="sm" fw={500}>{c.name}</Text>
-                      {isServerMode && autoId === c.id && (
-                        <Badge size="xs" color="blue" variant="light">auto</Badge>
-                      )}
-                    </Group>
-                    <Text size="xs" c="dimmed">{c.ip}:{c.port}</Text>
-                  </div>
-                  <Group gap={4}>
-                    {isServerMode && (
-                      <ActionIcon
-                        variant={autoId === c.id ? 'filled' : 'subtle'}
-                        size="sm"
-                        color={autoId === c.id ? 'blue' : 'gray'}
-                        onClick={() => setAsAuto(c.id)}
-                        loading={autoSaving}
-                        title={autoId === c.id ? 'Clear server auto-start' : 'Set as server auto-start'}
-                      >
-                        <Zap size={14} />
-                      </ActionIcon>
-                    )}
-                    <ActionIcon variant="subtle" size="sm" onClick={() => testConnection(c.ip, c.port)} loading={testing} title="Test connection">
-                      <Wifi size={14} />
-                    </ActionIcon>
-                    <ActionIcon variant="subtle" size="sm" onClick={() => startEdit(c)} title="Edit">
-                      <Pencil size={14} />
-                    </ActionIcon>
-                    <ActionIcon variant="subtle" size="sm" color="red" onClick={() => handleDelete(c)} title="Delete">
-                      <Trash2 size={14} />
-                    </ActionIcon>
-                  </Group>
-                </Group>
-              )}
-            </Box>
-          ))}
-        </Stack>
+            {adding && (
+              <div className="rounded-md border border-border bg-muted/50 p-3">
+                {renderForm(saveAdd)}
+              </div>
+            )}
 
-        {list.length === 0 && !adding && (
-          <Text size="sm" c="dimmed" ta="center" py="md">No TCP configs yet. Add one above.</Text>
-        )}
-      </Stack>
-    </Modal>
+            <div className="flex flex-col gap-1">
+              {list.map((c) => (
+                <div
+                  key={c.id}
+                  className={cn(
+                    'rounded-md border border-border px-3 py-2',
+                    editingId === c.id ? 'bg-accent' : 'bg-muted/30'
+                  )}
+                >
+                  {editingId === c.id ? (
+                    renderForm(saveEdit)
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-sm font-medium">{c.name}</span>
+                          {isCurrentConfig(c, currentIp, currentPort) && (
+                            <Badge
+                              variant="outline"
+                              className="border-signal-green/30 bg-signal-green/10 text-signal-green"
+                            >
+                              current
+                            </Badge>
+                          )}
+                          {isServerMode && autoId === c.id && (
+                            <Badge
+                              variant="outline"
+                              className="border-signal-blue/30 bg-signal-blue/10 text-signal-blue"
+                            >
+                              auto
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="tabular text-xs text-muted-foreground">
+                          {c.ip}:{c.port}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        {isServerMode && (
+                          <Button
+                            variant={autoId === c.id ? 'default' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setAsAuto(c.id)}
+                            disabled={autoSaving}
+                            title={autoId === c.id ? 'Clear server auto-start' : 'Set as server auto-start'}
+                            className={autoId === c.id ? '' : 'text-muted-foreground'}
+                          >
+                            {autoSaving ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <Zap className="size-3.5" />
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => testConnection(c.ip, c.port)}
+                          disabled={testing}
+                          title="Test connection"
+                          className="text-muted-foreground"
+                        >
+                          {testing ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Wifi className="size-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => startEdit(c)}
+                          title="Edit"
+                          className="text-muted-foreground"
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleDelete(c)}
+                          title="Delete"
+                          className="text-signal-red hover:text-signal-red"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
 
-    <Modal
-      opened={!!pendingDelete}
-      onClose={() => setPendingDelete(null)}
-      title="Delete TCP config"
-      centered
-    >
-      <Text size="sm" mb="md">
-        {pendingDelete ? `Delete "${pendingDelete.name}"? This cannot be undone.` : ''}
-      </Text>
-      <Group justify="flex-end" gap="xs">
-        <Button variant="subtle" onClick={() => setPendingDelete(null)}>Cancel</Button>
-        <Button color="red" onClick={confirmDelete}>Delete</Button>
-      </Group>
-    </Modal>
+            {list.length === 0 && !adding && (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                No TCP configs yet. Add one above.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pendingDelete} onOpenChange={(o) => { if (!o) setPendingDelete(null); }}>
+        <DialogContent className="bg-popover sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display">Delete TCP config</DialogTitle>
+            <DialogDescription>
+              {pendingDelete ? `Delete "${pendingDelete.name}"? This cannot be undone.` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDelete(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

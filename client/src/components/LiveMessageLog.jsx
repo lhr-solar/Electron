@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue } from 'react';
-import { Box, Text, Stack, Collapse, TextInput, Button, Group, UnstyledButton } from '@mantine/core';
 import { ChevronsDown, Play, Pause } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { socket } from '../socket';
 
 const MAX_MESSAGES = 500;
@@ -105,7 +109,6 @@ export function LiveMessageLog({ variant = 'sidebar' }) {
       const next = !p;
       pausedRef.current = next;
       if (!next) {
-        // Resume from a clean queue to avoid large burst rendering.
         pendingMsgsRef.current = [];
       }
       return next;
@@ -152,262 +155,177 @@ export function LiveMessageLog({ variant = 'sidebar' }) {
   }, []);
 
   const panel = (
-    <Box
+    <div
+      className={cn(
+        'flex flex-col overflow-hidden',
+        stage
+          ? 'mx-auto w-full max-w-[720px] rounded-xl border border-border-strong bg-gradient-to-b from-card to-background font-mono shadow-[0_18px_48px_rgba(0,0,0,0.45)]'
+          : 'h-full w-full shrink-0 border-l border-border bg-background'
+      )}
       style={
         stage
-          ? {
-              width: 'min(720px, 100%)',
-              height: 'min(78vh, 820px)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              borderRadius: 12,
-              border: '1px solid #2a2a30',
-              background: 'linear-gradient(180deg, #121216 0%, #0c0c0f 100%)',
-              boxShadow: '0 18px 48px rgba(0,0,0,0.45)',
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-            }
-          : {
-              width: LIVE_LOG_WIDTH,
-              minWidth: LIVE_LOG_WIDTH,
-              height: '100%',
-              maxHeight: '100%',
-              borderLeft: '1px solid var(--border)',
-              display: 'flex',
-              flexDirection: 'column',
-              backgroundColor: 'var(--bg)',
-              overflow: 'hidden',
-            }
+          ? { height: 'min(78vh, 820px)' }
+          : { width: LIVE_LOG_WIDTH, minWidth: LIVE_LOG_WIDTH }
       }
     >
-      <Group
-        justify="space-between"
-        align="center"
-        wrap="nowrap"
-        px={stage ? 'md' : 'md'}
-        py={stage ? 'sm' : undefined}
-        pb={stage ? undefined : 'xs'}
-        style={{
-          borderBottom: stage ? '1px solid #26262c' : '1px solid var(--border)',
-          flexShrink: 0,
-          paddingTop: stage ? undefined : 16,
-        }}
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-between gap-2 border-b border-border px-4',
+          stage ? 'py-2' : 'pb-1 pt-4'
+        )}
       >
-        <Text
-          size={stage ? 'sm' : 'xs'}
-          c={stage ? '#d4d4d8' : 'dimmed'}
-          tt={stage ? undefined : 'uppercase'}
-          fw={stage ? 600 : undefined}
-          style={stage ? { letterSpacing: '0.04em' } : undefined}
+        <span
+          className={cn(
+            stage
+              ? 'font-display text-sm font-semibold tracking-wide text-foreground/90'
+              : 'text-xs uppercase text-muted-foreground'
+          )}
         >
           {stage ? 'Live CAN' : 'Live messages'}
-        </Text>
+        </span>
         {stage ? (
-          <Text size="xs" c="#71717a">
-            {filtered.length} shown
-          </Text>
+          <span className="text-xs text-muted-foreground">{filtered.length} shown</span>
         ) : null}
-      </Group>
-      <Group
-        gap="xs"
-        p="xs"
-        wrap="nowrap"
-        style={{
-          flexShrink: 0,
-          borderBottom: stage ? '1px solid #26262c' : '1px solid var(--border)',
-          minWidth: 0,
-          overflow: 'hidden',
-          background: stage ? 'rgba(255,255,255,0.02)' : undefined,
-        }}
+      </div>
+
+      <div
+        className={cn(
+          'flex shrink-0 items-center gap-1 overflow-hidden border-b border-border p-1',
+          stage && 'bg-white/[0.02]'
+        )}
       >
-        <TextInput
+        <Input
           placeholder="Filter by ID or name..."
-          size="xs"
           value={search}
-          onChange={(e) => setSearch(e.currentTarget.value)}
-          style={{ flex: 1, minWidth: 0 }}
-          styles={{
-            input: {
-              backgroundColor: stage ? '#0a0a0d' : 'var(--bg-elevated)',
-              borderColor: stage ? '#2a2a30' : undefined,
-              fontFamily: 'inherit',
-            },
-          }}
-        />
-        <UnstyledButton
-          onClick={togglePause}
-          title={paused ? 'Resume updates' : 'Pause updates'}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 2,
-            padding: '4px 6px',
-            borderRadius: 4,
-            width: 44,
-            minWidth: 44,
-            flexShrink: 0,
-          }}
-        >
-          {paused ? (
-            <Play size={18} strokeWidth={2.5} style={{ color: '#facc15' }} />
-          ) : (
-            <Pause size={18} strokeWidth={2.5} style={{ color: 'var(--mantine-color-dimmed)' }} />
+          onChange={(e) => setSearch(e.target.value)}
+          className={cn(
+            'h-7 min-w-0 flex-1 text-xs',
+            stage ? 'border-border-strong bg-background' : 'bg-muted'
           )}
-          <Text size="xs" c={paused ? 'yellow' : 'dimmed'} style={{ lineHeight: 1 }}>
-            {paused ? 'Play' : 'Pause'}
-          </Text>
-        </UnstyledButton>
-        <UnstyledButton
-          onClick={() => setAutoScroll((a) => !a)}
-          title={autoScroll ? 'Scroll mode: follow latest' : 'Scroll mode: stay at position'}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 2,
-            padding: '4px 6px',
-            borderRadius: 4,
-            width: 44,
-            minWidth: 44,
-            flexShrink: 0,
-          }}
-        >
-          <ChevronsDown
-            size={20}
-            strokeWidth={2.5}
-            style={{
-              color: autoScroll ? 'var(--mantine-color-anchor)' : 'var(--mantine-color-dimmed)',
-            }}
-          />
-          <Text size="xs" c="dimmed" style={{ lineHeight: 1 }}>
-            {autoScroll ? 'Follow' : 'Pin'}
-          </Text>
-        </UnstyledButton>
-      </Group>
-      <Box
+        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={togglePause}
+              className={cn(paused ? 'text-signal-amber' : 'text-muted-foreground')}
+            >
+              {paused ? <Play className="size-4" strokeWidth={2.5} /> : <Pause className="size-4" strokeWidth={2.5} />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{paused ? 'Resume updates' : 'Pause updates'}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setAutoScroll((a) => !a)}
+              className={cn(autoScroll ? 'text-signal-blue' : 'text-muted-foreground')}
+            >
+              <ChevronsDown className="size-4" strokeWidth={2.5} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {autoScroll ? 'Scroll mode: follow latest' : 'Scroll mode: stay at position'}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+
+      <div
         ref={scrollRef}
         onScroll={handleScroll}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          minWidth: 0,
-          overflowX: 'hidden',
-          overflowY: 'auto',
-          padding: stage ? 12 : 8,
-          position: 'relative',
-        }}
+        className={cn(
+          'relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto',
+          stage ? 'p-3' : 'p-2'
+        )}
       >
-        <Stack gap={stage ? 6 : 4} style={{ minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
-          {topSpacerHeight > 0 && <Box style={{ height: topSpacerHeight }} />}
+        <div className={cn('flex w-full min-w-0 flex-col', stage ? 'gap-1.5' : 'gap-1')}>
+          {topSpacerHeight > 0 && <div style={{ height: topSpacerHeight }} />}
           {visibleRows.map((msg) => {
             const isExpanded = expandedId === msg.id;
             const hasSignals = msg.signals && Object.keys(msg.signals).length > 0;
             return (
-              <Box
+              <div
                 key={msg.id}
-                style={{
-                  border: stage ? '1px solid #2a2a30' : '1px solid var(--border)',
-                  borderRadius: stage ? 6 : 4,
-                  padding: stage ? '8px 10px' : '6px 8px',
-                  backgroundColor: stage ? 'rgba(255,255,255,0.03)' : 'var(--bg-elevated)',
-                  cursor: 'pointer',
-                  minWidth: 0,
-                  maxWidth: '100%',
-                  overflow: 'hidden',
-                  boxSizing: 'border-box',
-                }}
+                className={cn(
+                  'min-w-0 max-w-full cursor-pointer overflow-hidden rounded-md border box-border',
+                  stage
+                    ? 'border-border-strong bg-white/[0.03] px-2.5 py-2'
+                    : 'border-border bg-card px-2 py-1.5'
+                )}
                 onClick={() => setExpandedId((x) => (x === msg.id ? null : msg.id))}
               >
-                <Text size="xs" c="dimmed" style={{ marginBottom: 2, fontVariantNumeric: 'tabular-nums' }}>
+                <p className="tabular mb-0.5 text-xs text-muted-foreground">
                   {formatTime(msg.timestamp_ns)}
-                </Text>
-                <Group gap={6} wrap="wrap" style={{ minWidth: 0 }}>
-                  <Text
-                    size="sm"
-                    style={{
-                      color: msg.message_name != null ? (stage ? '#e4e4e7' : 'var(--text)') : '#ef4444',
-                      minWidth: 0,
-                      flex: 1,
-                      overflowWrap: 'anywhere',
-                      wordBreak: 'break-word',
-                    }}
+                </p>
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <p
+                    className={cn(
+                      'min-w-0 flex-1 text-sm break-words',
+                      msg.message_name != null
+                        ? 'text-foreground'
+                        : 'text-signal-red'
+                    )}
                   >
-                    {msg.can_id_hex}
+                    <span className="tabular">{msg.can_id_hex}</span>
                     {msg.message_name != null ? ` · ${msg.message_name}` : ' · Not Found'}
-                  </Text>
+                  </p>
                   {msg.sender && (
-                    <Text size="xs" c="dimmed" style={{ opacity: 0.5, flexShrink: 0, overflowWrap: 'anywhere' }}>
+                    <span className="shrink-0 text-xs text-muted-foreground/50 break-words">
                       {msg.sender}
-                    </Text>
+                    </span>
                   )}
-                </Group>
-                <Collapse in={isExpanded}>
-                  <Stack gap={4} mt="xs" pl="xs" style={{ borderLeft: '2px solid var(--border)', minWidth: 0, overflow: 'hidden' }}>
-                    {(msg.vehicle || msg.network) && (
-                      <Text size="xs" style={{ color: '#6d9eeb', opacity: 0.8, fontStyle: 'italic' }}>
-                        {[msg.vehicle, msg.network].filter(Boolean).join(' · ')}
-                      </Text>
-                    )}
-                    {hasSignals && Object.entries(msg.signals).map(([name, value]) => {
-                      const unit = msg.units && msg.units[name];
-                      return (
-                        <Text key={name} size="xs" style={{ color: 'var(--text-muted)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                          {name}: {formatValue3(value)}{unit ? ` ${unit}` : ''}
-                        </Text>
-                      );
-                    })}
-                    {msg.raw_packet && (
-                      <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', opacity: 0.6, overflowWrap: 'anywhere', wordBreak: 'break-all' }}>
-                        {msg.raw_packet}
-                      </Text>
-                    )}
-                  </Stack>
-                </Collapse>
-              </Box>
+                </div>
+                <Collapsible open={isExpanded}>
+                  <CollapsibleContent>
+                    <div className="mt-1 flex min-w-0 flex-col gap-1 overflow-hidden border-l-2 border-border pl-2">
+                      {(msg.vehicle || msg.network) && (
+                        <p className="text-xs italic text-signal-blue/80">
+                          {[msg.vehicle, msg.network].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                      {hasSignals && Object.entries(msg.signals).map(([name, value]) => {
+                        const unit = msg.units && msg.units[name];
+                        return (
+                          <p key={name} className="text-xs break-words text-muted-foreground">
+                            {name}: <span className="tabular">{formatValue3(value)}</span>
+                            {unit ? ` ${unit}` : ''}
+                          </p>
+                        );
+                      })}
+                      {msg.raw_packet && (
+                        <p className="tabular text-xs break-all text-muted-foreground/60">
+                          {msg.raw_packet}
+                        </p>
+                      )}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
             );
           })}
-          {bottomSpacerHeight > 0 && <Box style={{ height: bottomSpacerHeight }} />}
-        </Stack>
+          {bottomSpacerHeight > 0 && <div style={{ height: bottomSpacerHeight }} />}
+        </div>
         {!isAtBottom && (
           <Button
             size="xs"
-            variant="filled"
             onClick={scrollToBottom}
-            style={{
-              position: 'sticky',
-              bottom: 12,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-            }}
+            className="sticky bottom-3 left-1/2 -translate-x-1/2 shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
           >
             Scroll to bottom
           </Button>
         )}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 
   if (!stage) return panel;
 
   return (
-    <Box
-      style={{
-        flex: 1,
-        minHeight: 0,
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px 16px',
-        background:
-          'radial-gradient(ellipse at 50% 30%, #16161c 0%, #0a0a0b 55%, #070708 100%)',
-      }}
-    >
+    <div className="flex h-full w-full min-h-0 flex-1 items-center justify-center bg-[radial-gradient(ellipse_at_50%_30%,#16161c_0%,#0a0a0b_55%,#070708_100%)] px-4 py-6">
       {panel}
-    </Box>
+    </div>
   );
 }
