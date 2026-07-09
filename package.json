@@ -5,6 +5,7 @@
     "dev": "node scripts/run-python.js scripts/dev.py",
     "dev:backend": "node scripts/run-python.js scripts/run_backend.py --reload",
     "dev:frontend": "npm --prefix client run dev",
+    "build": "npm run build:frontend",
     "build:frontend": "node scripts/run-python.js scripts/build_frontend.py",
     "build:backend": "node scripts/run-python.js scripts/build_backend.py",
     "build:backend:release": "node scripts/run-python.js scripts/build_backend.py"

@@ -34,7 +34,7 @@ class Configuration:
         os.environ.setdefault("EMBEDDED_DBC_DIR", self.EMBEDDED_DBC_DIR)
 
         # --- Default Settings ---
-        self.DEFAULT_DBC_VEHICLE = os.environ.get("DEFAULT_DBC_VEHICLE", "Mcqueen")
+        self.DEFAULT_DBC_VEHICLE = os.environ.get("DEFAULT_DBC_VEHICLE", "HighNoon")
         self.INPUT_MODE = 'tcp'
         self.COMMON_CONFIG = {
             "DBC_VEHICLE": self.DEFAULT_DBC_VEHICLE,
@@ -47,6 +47,7 @@ class Configuration:
             "INFLUX_URL": "http://localhost:8086",
             "INFLUX_ORG": "LHRS",
             "INFLUX_TOKEN": os.environ.get("INFLUX_TOKEN", ""),
+            "INFLUX_TELEMETRY_BUCKET": "",
         }
         self.SERIAL_CONFIG = {
             "SERIAL_PORT": "/dev/tty.usbmodem14201",
@@ -57,10 +58,10 @@ class Configuration:
             "TCP_IP": "3.141.38.115",
             "TCP_PORT": 8187,
         }
-        # Cap'n Proto TCP: length-prefixed `server/util/capnp_schemas/can_frame.capnp` frames (see parser docs).
-        self.CAPNP_TCP_CONFIG = {
-            "CAPNP_TCP_IP": "127.0.0.1",
-            "CAPNP_TCP_PORT": 8190,
+        # CANP TCP: Photon batched binary frames (photon/network/canp.h).
+        self.CANP_TCP_CONFIG = {
+            "CANP_TCP_IP": "127.0.0.1",
+            "CANP_TCP_PORT": 6500,
         }
         self.FILE_CONFIG = {
             "REPLAY_FILE_PATH": os.path.join(self.LOG_DIR, "261_log.txt"),
@@ -160,7 +161,7 @@ class Configuration:
 
     def get_bucket(self):
         """Return the InfluxDB bucket name for the current input mode."""
-        if self.INPUT_MODE in ("tcp", "capnp_tcp"):
+        if self.INPUT_MODE in ("tcp", "canp_tcp"):
             return "telemetry_main"
         return "debug"
 
@@ -170,24 +171,24 @@ class Configuration:
         config["INPUT_MODE"] = self.INPUT_MODE
         config.update(self.PCAN_CONFIG)  # Always include for UI
         config.update(self.TCP_CONFIG)  # SLCAN TCP — include for UI when switching modes
-        config.update(self.CAPNP_TCP_CONFIG)  # Cap'n Proto TCP — include for UI when switching modes
+        config.update(self.CANP_TCP_CONFIG)  # CANP TCP — include for UI when switching modes
         if self.INPUT_MODE in ("serial_canadapter", "serial_uart"):
             config.update(self.SERIAL_CONFIG)
         elif self.INPUT_MODE == "pcan":
             config.update(self.PCAN_CONFIG)
         elif self.INPUT_MODE == 'file':
             config.update(self.FILE_CONFIG)
-        elif self.INPUT_MODE in ('tcp', 'capnp_tcp'):
+        elif self.INPUT_MODE in ('tcp', 'canp_tcp'):
             pass
         else:
             logger.error(f"Invalid INPUT_MODE '{self.INPUT_MODE}' selected.")
             return None
-        config["INFLUX_BUCKET"] = self.get_bucket()
+        config["INFLUX_BUCKET"] = (self.INFLUX_CONFIG.get("INFLUX_TELEMETRY_BUCKET") or "").strip() or self.get_bucket()
         return config
 
     def update_setting(self, key: str, value: str | int | list) -> bool:
         if key == "INPUT_MODE":
-            if value in ("serial_canadapter", "serial_uart", "pcan", "file", "tcp", "capnp_tcp"):
+            if value in ("serial_canadapter", "serial_uart", "pcan", "file", "tcp", "canp_tcp"):
                 self.INPUT_MODE = value
                 logger.info(f"Input mode updated to '{value}'")
                 return True
@@ -209,7 +210,7 @@ class Configuration:
             logger.info(f"Set PCAN_DEVICE_ID = {self.PCAN_CONFIG['PCAN_DEVICE_ID']}")
             return True
 
-        for config_dict in [self.COMMON_CONFIG, self.SERIAL_CONFIG, self.TCP_CONFIG, self.CAPNP_TCP_CONFIG, self.FILE_CONFIG, self.PCAN_CONFIG, self.INFLUX_CONFIG]:
+        for config_dict in [self.COMMON_CONFIG, self.SERIAL_CONFIG, self.TCP_CONFIG, self.CANP_TCP_CONFIG, self.FILE_CONFIG, self.PCAN_CONFIG, self.INFLUX_CONFIG]:
             if key in config_dict:
                 if key == "DBC_FILES" and not isinstance(value, list):
                     continue

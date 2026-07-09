@@ -41,7 +41,9 @@ def main():
     frontend = subprocess.Popen(frontend_cmd, cwd="client", creationflags=creationflags)
 
     print(f"Backend:  http://localhost:{args.backend_port}")
-    print(f"Frontend: http://localhost:{args.frontend_port}")
+    print(f"Manage UI: http://localhost:{args.frontend_port}/")
+    print(f"Grafana (proxied): http://localhost:{args.backend_port}/grafana/")
+    print(f"Influx (proxied): http://localhost:{args.backend_port}/influx/")
     print("Press Ctrl+C to stop both.")
 
     try:

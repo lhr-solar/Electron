@@ -25,19 +25,27 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: lhrs2025!
-
+      GF_DEFAULT_USER_LOGIN: solar
+      GF_DEFAULT_USER_PASSWORD: lhrs
+      GF_DEFAULT_USER_NAME: Solar
+      GF_DEFAULT_USER_EMAIL: solar@localhost
+      GF_DEFAULT_USER_ROLE: Viewer
+      GF_SERVER_ROOT_URL: http://localhost:4000/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       # Auto configure Grafana InfluxDB datasource
       GF_PROVISIONING_ENABLED: "true"
 
     volumes:
       - grafana_data:/var/lib/grafana
       - ./provisions:/etc/grafana/provisioning/
+      - ./grafana-init-users.sh:/usr/local/bin/grafana-init-users.sh:ro
     restart: unless-stopped
     entrypoint: [ "/bin/sh", "-c" ]
     command: >
       "echo '>>> Waiting for Grafana provisioning files...'; \
        while [ ! -f /etc/grafana/provisioning/datasources/influx.yml ]; do sleep 1; done; \
-       /run.sh"
+       /usr/local/bin/grafana-init-users.sh & \
+       exec /run.sh"
 
 
 volumes:

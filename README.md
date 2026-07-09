@@ -36,12 +36,18 @@ npm run dev
 
 `npm run dev` starts both backend (`:4000`) and frontend (`:3001`) using `scripts/dev.py`.
 
-## Individual Dev Commands
+- **Dev manage UI:** `http://localhost:3001/`
+- **Prod manage UI:** run `npm run build`, then the backend serves it at `http://localhost:4000/`
 
-- Backend only: `npm run dev:backend`
-- Frontend only: `npm run dev:frontend`
+Install backend deps after pulling (includes `httpx` for Grafana/Influx reverse proxy):
+
+```bash
+pip install -r server/requirements.txt
+```
 
 ## Start Grafana + InfluxDB
+
+Required for backend-proxied Grafana (`/grafana/`) and Influx UI (`/influx/`):
 
 ```bash
 cd grafana
@@ -49,6 +55,11 @@ docker compose up -d
 docker compose restart grafana
 cd ..
 ```
+
+## Individual Dev Commands
+
+- Backend only: `npm run dev:backend`
+- Frontend only: `npm run dev:frontend`
 
 ## Production-Like Backend Run
 
@@ -67,10 +78,10 @@ python .\scripts\run_backend.py --host 0.0.0.0 --port 4000
 ## Build Frontend (Website Artifact)
 
 ```bash
-npm run build:frontend
+npm run build
 ```
 
-Output: `client/dist/` (deploy this folder to your website host).
+Output: `client/dist/` — with `SERVE_STATIC_CLIENT=1` (default), the backend serves this at `/` on port 4000.
 
 ### Auto-deploy to GitHub Pages
 
@@ -180,10 +191,15 @@ You can override with:
 
 ## Access (Local)
 
-- Frontend dev UI: `http://localhost:3001`
-- Backend API/socket: `http://localhost:4000`
-- Grafana: `http://localhost:3000`
-- InfluxDB: `http://localhost:8086`
+| URL | What |
+|-----|------|
+| `http://localhost:3001/` | Manage UI (dev — Vite) |
+| `http://localhost:4000/` | Manage UI (prod — built `client/dist`) |
+| `http://localhost:4000/grafana/` | Grafana (proxied; needs `grafana/docker-compose`) |
+| `http://localhost:4000/influx/` | Influx UI (proxied; needs Influx running) |
+| `http://localhost:4000` | Backend API + Socket.IO |
+| `http://localhost:3000` | Grafana (direct) |
+| `http://localhost:8086` | InfluxDB (direct) |
 
 ## Optional Backend Runtime Vars
 

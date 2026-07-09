@@ -166,7 +166,7 @@ export function LiveMessageLog() {
       <Text size="xs" c="dimmed" tt="uppercase" p="md" pb="xs" style={{ borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         Live messages
       </Text>
-      <Group gap="xs" p="xs" style={{ flexShrink: 0, borderBottom: '1px solid var(--border)' }}>
+      <Group gap="xs" p="xs" wrap="nowrap" style={{ flexShrink: 0, borderBottom: '1px solid var(--border)', minWidth: 0, overflow: 'hidden' }}>
         <TextInput
           placeholder="Filter by ID or name..."
           size="xs"
@@ -246,12 +246,14 @@ export function LiveMessageLog() {
         style={{
           flex: 1,
           minHeight: 0,
-          overflow: 'auto',
+          minWidth: 0,
+          overflowX: 'hidden',
+          overflowY: 'auto',
           padding: 8,
           position: 'relative',
         }}
       >
-        <Stack gap={4}>
+        <Stack gap={4} style={{ minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
           {topSpacerHeight > 0 && <Box style={{ height: topSpacerHeight }} />}
           {visibleRows.map((msg) => {
             const isExpanded = expandedId === msg.id;
@@ -265,21 +267,38 @@ export function LiveMessageLog() {
                   padding: '6px 8px',
                   backgroundColor: 'var(--bg-elevated)',
                   cursor: 'pointer',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                  boxSizing: 'border-box',
                 }}
                 onClick={() => setExpandedId((x) => (x === msg.id ? null : msg.id))}
               >
                 <Text size="xs" c="dimmed" style={{ marginBottom: 2 }}>
                   {formatTime(msg.timestamp_ns)}
                 </Text>
-                <Group gap={6} wrap="nowrap">
-                  <Text size="sm" style={{ color: msg.message_name != null ? 'var(--text)' : '#ef4444' }}>
+                <Group gap={6} wrap="wrap" style={{ minWidth: 0 }}>
+                  <Text
+                    size="sm"
+                    style={{
+                      color: msg.message_name != null ? 'var(--text)' : '#ef4444',
+                      minWidth: 0,
+                      flex: 1,
+                      overflowWrap: 'anywhere',
+                      wordBreak: 'break-word',
+                    }}
+                  >
                     {msg.can_id_hex}
                     {msg.message_name != null ? ` · ${msg.message_name}` : ' · Not Found'}
                   </Text>
-                  {msg.sender && <Text size="xs" c="dimmed" style={{ opacity: 0.5, flexShrink: 0 }}>{msg.sender}</Text>}
+                  {msg.sender && (
+                    <Text size="xs" c="dimmed" style={{ opacity: 0.5, flexShrink: 0, overflowWrap: 'anywhere' }}>
+                      {msg.sender}
+                    </Text>
+                  )}
                 </Group>
                 <Collapse in={isExpanded}>
-                  <Stack gap={4} mt="xs" pl="xs" style={{ borderLeft: '2px solid var(--border)' }}>
+                  <Stack gap={4} mt="xs" pl="xs" style={{ borderLeft: '2px solid var(--border)', minWidth: 0, overflow: 'hidden' }}>
                     {(msg.vehicle || msg.network) && (
                       <Text size="xs" style={{ color: '#6d9eeb', opacity: 0.8, fontStyle: 'italic' }}>
                         {[msg.vehicle, msg.network].filter(Boolean).join(' · ')}
@@ -288,13 +307,13 @@ export function LiveMessageLog() {
                     {hasSignals && Object.entries(msg.signals).map(([name, value]) => {
                       const unit = msg.units && msg.units[name];
                       return (
-                        <Text key={name} size="xs" style={{ color: 'var(--text-muted)' }}>
+                        <Text key={name} size="xs" style={{ color: 'var(--text-muted)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                           {name}: {formatValue3(value)}{unit ? ` ${unit}` : ''}
                         </Text>
                       );
                     })}
                     {msg.raw_packet && (
-                      <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', opacity: 0.6 }}>
+                      <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', opacity: 0.6, overflowWrap: 'anywhere', wordBreak: 'break-all' }}>
                         {msg.raw_packet}
                       </Text>
                     )}

@@ -101,15 +101,16 @@ class CANManager:
             logger.debug("Decode failed for id %s: %s", hex(arbitration_id), e)
         return None
 
-    def process_message(self, raw_message: can.Message, slcan_packet: str):
-        """Process CAN message, write to Influx (found or not). Returns live payload for UI including sender/network."""
+    def process_message(self, raw_message: can.Message, slcan_packet: str, timestamp_ns: int | None = None):
+        """Process CAN message, write to Influx (found or not). Returns live payload for UI."""
+        ts = int(timestamp_ns if timestamp_ns is not None else time.time_ns())
         can_id_hex = f"0x{raw_message.arbitration_id:03X}"
         sender = self.id_map.get(raw_message.arbitration_id, "not_found")
         network = self.frame_id_to_network.get(raw_message.arbitration_id, "not_found")
         try:
             index_signal_name = self.array_messages.get(raw_message.arbitration_id)
             if raw_message.arbitration_id not in self.id_map:
-                self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
+                self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet, ts)
                 return {
                     "can_id_hex": can_id_hex,
                     "message_name": None,
@@ -120,12 +121,12 @@ class CANManager:
                 }
             decoded_msg = self.decode_message(raw_message.arbitration_id, raw_message.data)
             if not decoded_msg:
-                self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
+                self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet, ts)
                 return {"can_id_hex": can_id_hex, "message_name": None, "sender": sender, "network": network, "vehicle": self.vehicle_name, "signals": {}}
             message_def = self.db.get_message_by_frame_id(raw_message.arbitration_id)
             if self.print_can_info:
                 self._print_message_info(raw_message, decoded_msg, slcan_packet)
-            self._write_to_influx(raw_message.arbitration_id, decoded_msg, slcan_packet)
+            self._write_to_influx(raw_message.arbitration_id, decoded_msg, slcan_packet, ts)
             array_index = None
             signals = {}
             for k, v in decoded_msg.items():
@@ -157,10 +158,10 @@ class CANManager:
             return result
         except Exception as e:
             logger.exception("process_message error: %s", e)
-            self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet)
+            self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet, ts)
             return {"can_id_hex": can_id_hex, "message_name": None, "sender": "Unknown", "network": "not_found", "vehicle": self.vehicle_name, "signals": {}}
 
-    def _write_unknown_to_influx(self, arbitration_id, slcan_packet):
+    def _write_unknown_to_influx(self, arbitration_id, slcan_packet, timestamp_ns):
         """Write a not-found / decode-failed message to Influx with raw packet only."""
         if not self.influx_writer:
             return
@@ -173,12 +174,12 @@ class CANManager:
                 "message_name": "not_found",
             }
             fields = {"raw_packet": slcan_packet}
-            self.influx_writer.write_data(measurement, tags, fields, int(time.time_ns()))
+            self.influx_writer.write_data(measurement, tags, fields, int(timestamp_ns))
         except Exception as e:
             logger.error("Influx write (unknown) error: %s", e)
 
-    def _write_to_influx(self, arbitration_id, decoded_msg, slcan_packet):
-        """Write one point to Influx. Tags: vehicle, network (DBC name), sender, message_name [, idx]. Fields: raw_packet + decoded signals."""
+    def _write_to_influx(self, arbitration_id, decoded_msg, slcan_packet, timestamp_ns):
+        """Write one point to Influx."""
         if not self.influx_writer:
             return
         try:
@@ -187,7 +188,7 @@ class CANManager:
                 return
 
             measurement = f"{arbitration_id:X}"
-            timestamp = int(time.time_ns())
+            timestamp = int(timestamp_ns)
             sender = self.id_map.get(arbitration_id, "Unknown")
             network = self.frame_id_to_network.get(arbitration_id, "unknown")
 

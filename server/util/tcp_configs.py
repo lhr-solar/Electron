@@ -11,6 +11,12 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 TCP_CONFIGS_FILE = os.path.join(_PROJECT_ROOT, "tcp_configs.json")
 
+# From Photon networkGui.cpp DAQ Server preset + local replay/debug listener.
+DEFAULT_TCP_CONFIGS = [
+    {"id": "daq-server", "name": "DAQ Server", "ip": "3.141.38.115", "port": 6500},
+    {"id": "debug", "name": "debug", "ip": "127.0.0.1", "port": 6500},
+]
+
 
 def _load() -> list[dict]:
     if not os.path.isfile(TCP_CONFIGS_FILE):
@@ -29,13 +35,26 @@ def _save(configs: list[dict]) -> None:
         json.dump(configs, f, indent=2)
 
 
+def _ensure_defaults(configs: list[dict]) -> list[dict]:
+    existing_ids = {c.get("id") for c in configs}
+    added = False
+    for default in DEFAULT_TCP_CONFIGS:
+        if default["id"] in existing_ids:
+            continue
+        configs.append(dict(default))
+        added = True
+    if added:
+        _save(configs)
+    return configs
+
+
 def list_configs() -> list[dict]:
     """Return all TCP configs with id, name, ip, port."""
     configs = _load()
     for c in configs:
         if "id" not in c:
             c["id"] = str(uuid.uuid4())
-    return configs
+    return _ensure_defaults(configs)
 
 
 def add_config(name: str, ip: str, port: int) -> dict:

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import shutil
@@ -8,10 +9,12 @@ import urllib.error
 import uvicorn
 from contextlib import asynccontextmanager
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File, HTTPException, Body
+from fastapi import FastAPI, UploadFile, File, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 import socketio
 from influxdb_client import InfluxDBClient
 from influxdb_client.client.exceptions import InfluxDBError
@@ -26,7 +29,28 @@ from server.util.vehicle_dbc_resolve import (
     get_vehicle_folders,
     resolve_vehicle as _resolve_vehicle,
     resolve_dbc_paths,
+    resolve_all_dbc_paths,
 )
+from server.util.reverse_proxy import (
+    proxy_to_upstream,
+    grafana_disconnected,
+    influx_disconnected,
+    GRAFANA_UPSTREAM,
+    INFLUX_UPSTREAM,
+)
+from server.util.manage_auth import (
+    IS_SERVER_MODE,
+    MANAGE_PASSWORD,
+    create_session_token,
+    password_ok,
+    is_authenticated,
+    require_manage_auth,
+    set_session_cookie,
+    clear_session_cookie,
+    path_requires_manage_auth,
+    socket_manage_authenticated,
+)
+import httpx
 
 # --- Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -36,6 +60,11 @@ influx_client: InfluxDBClient | None = None
 # Path to built static client (project root / client / dist)
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 STATIC_CLIENT_DIR = os.path.join(_PROJECT_ROOT, "client", "dist")
+FAVICON_PATH = os.path.join(_PROJECT_ROOT, "client", "public", "favicon.svg")
+GRAFANA_PREFIX = "/grafana"
+INFLUX_PREFIX = "/influx"
+PROXY_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+RESERVED_SPA_PREFIXES = ("api", "grafana", "influx", "socket.io", "assets", "manage")
 TRUTHY_VALUES = {"1", "true", "yes", "on"}
 SERVE_STATIC_CLIENT = os.environ.get("SERVE_STATIC_CLIENT", "1").strip().lower() in TRUTHY_VALUES
 STATUS_HEALTH_TTL_SEC = float(os.environ.get("STATUS_HEALTH_TTL_SEC", "2.0"))
@@ -47,9 +76,19 @@ def _parse_origins(raw: str):
     return [x.strip() for x in raw.split(",") if x.strip()]
 
 HTTP_CORS_ORIGINS = _parse_origins(os.environ.get("CORS_ORIGINS", "*"))
-ALLOW_CREDENTIALS = HTTP_CORS_ORIGINS != ["*"]
+# Cookie auth / credentials:include cannot use Access-Control-Allow-Origin: *.
+if HTTP_CORS_ORIGINS == ["*"]:
+    HTTP_CORS_ORIGINS = [
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:4000",
+        "http://127.0.0.1:4000",
+    ]
+ALLOW_CREDENTIALS = True
 SOCKET_CORS_ORIGINS = os.environ.get("SOCKET_CORS_ORIGINS", os.environ.get("CORS_ORIGINS", "*")).strip()
-if SOCKET_CORS_ORIGINS != "*":
+if SOCKET_CORS_ORIGINS == "*":
+    SOCKET_CORS_ORIGINS = HTTP_CORS_ORIGINS
+else:
     SOCKET_CORS_ORIGINS = [x.strip() for x in SOCKET_CORS_ORIGINS.split(",") if x.strip()]
 
 _status_health_cache = {
@@ -61,6 +100,7 @@ _status_health_cache = {
 # --- Pydantic Models ---
 class Bucket(BaseModel): name: str
 class ConfigUpdate(BaseModel): key: str; value: str | int | list | None
+class ManageLogin(BaseModel): password: str
 class FileAction(BaseModel): filename: str
 class FileRename(BaseModel): old_name: str; new_name: str
 class VehicleCreate(BaseModel): name: str
@@ -97,6 +137,14 @@ class AnalyticsPivotRequest(BaseModel):
     limit: int = 3000
 
 
+class DecodeCsvRequest(BaseModel):
+    event_ids: list[str] | None = None
+    start_iso: str | None = None
+    end_iso: str | None = None
+    vehicle: str | None = None
+    dbc_files: list[str] | None = None
+
+
 class AnalyticsValidateRequest(BaseModel):
     version: int = 1
     views: list[dict] = Field(default_factory=list)
@@ -116,10 +164,11 @@ def move_to_trash(directory: str, filename: str):
         logger.info(f"Moved '{source_path}' to '{destination_path}'")
 
 def _check_grafana_health():
-    base = os.environ.get("GRAFANA_URL", "http://127.0.0.1:3000")
-    for path in ("/healthz", "/api/health", "/"):
+    base = os.environ.get("GRAFANA_URL", "http://127.0.0.1:3000").rstrip("/")
+    subpath = os.environ.get("GRAFANA_SUBPATH", "/grafana").rstrip("/")
+    for path in (f"{subpath}/api/health", f"{subpath}/healthz", f"{subpath}/"):
         try:
-            req = urllib.request.Request(base.rstrip("/") + path)
+            req = urllib.request.Request(base + path)
             with urllib.request.urlopen(req, timeout=3) as r:
                 if 200 <= r.status < 400:
                     return True
@@ -144,10 +193,13 @@ async def build_status_payload(force_health_refresh: bool = False):
     return {
         "service_running": telemetry_service.running,
         "influx_connected": influx_connected,
+        "influx_write_enabled": settings.COMMON_CONFIG.get("INFLUX_WRITE_ENABLED", True) and influx_connected,
         "grafana_active": grafana_active,
-        "grafana_url": os.environ.get("GRAFANA_URL", "http://127.0.0.1:3000"),
+        "grafana_url": "/grafana/",
+        "influx_url": "/influx/",
         "parser_status": parser_status.get("status", "idle") if parser_status else "idle",
         "parser_connection_state": parser_status.get("connection_state") if parser_status else None,
+        "data_active": telemetry_service.is_data_active(),
         "error_message": parser_status.get("error_message") if parser_status else None,
         "dbc_errors": telemetry_service.get_dbc_errors(),
         "influx_bucket": settings.get_bucket(),
@@ -196,7 +248,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("--- Application shutting down... ---")
     status_task.cancel()
-    if telemetry_service.running: await telemetry_service.stop()
+    if telemetry_service.running: await telemetry_service.stop(influx_client)
     if influx_client: influx_client.close()
 
 # --- FastAPI App ---
@@ -208,6 +260,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class ManageAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if path_requires_manage_auth(request.method, request.url.path):
+            try:
+                require_manage_auth(request)
+            except HTTPException as exc:
+                return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        return await call_next(request)
+
+
+app.add_middleware(ManageAuthMiddleware)
 
 # --- API Endpoints ---
 def _validate_and_raise():
@@ -231,15 +296,17 @@ async def start_service():
     writer: InfluxDBWriter | None = None
     if influx_write_enabled:
         target_bucket = config.get("INFLUX_BUCKET", "debug")
+        if _is_event_bucket_name(target_bucket):
+            raise HTTPException(status_code=400, detail="Cannot write telemetry to an event metadata bucket. Choose a telemetry bucket in Database settings.")
         writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
-    await telemetry_service.start(writer, sio=sio)
+    await telemetry_service.start(writer, sio=sio, influx_client=influx_client)
     await emit_status_update(force_health_refresh=True)
     return {"message": "Telemetry service started." if telemetry_service.running else "Telemetry service did not start."}
 
 @app.post("/api/stop")
 async def stop_service():
     if not telemetry_service.running: raise HTTPException(status_code=400, detail="Service is not running.")
-    await telemetry_service.stop()
+    await telemetry_service.stop(influx_client)
     await emit_status_update(force_health_refresh=True)
     return {"message": "Telemetry service stopped."}
 
@@ -253,12 +320,14 @@ async def restart_service():
         raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
     _validate_and_raise()
     if telemetry_service.running:
-        await telemetry_service.stop()
+        await telemetry_service.stop(influx_client)
     writer: InfluxDBWriter | None = None
     if influx_write_enabled:
         target_bucket = config.get("INFLUX_BUCKET", "debug")
+        if _is_event_bucket_name(target_bucket):
+            raise HTTPException(status_code=400, detail="Cannot write telemetry to an event metadata bucket. Choose a telemetry bucket in Database settings.")
         writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
-    await telemetry_service.start(writer, sio=sio)
+    await telemetry_service.start(writer, sio=sio, influx_client=influx_client)
     await emit_status_update(force_health_refresh=True)
     return {"message": "Telemetry service restarted."}
 
@@ -270,6 +339,9 @@ async def api_health():
 @app.get("/api/runtime-info")
 async def runtime_info():
     return {
+        "mode": "server" if IS_SERVER_MODE else "client",
+        "manage_auth_required": IS_SERVER_MODE,
+        "manage_password_configured": bool(MANAGE_PASSWORD) if IS_SERVER_MODE else False,
         "serve_static_client": SERVE_STATIC_CLIENT,
         "data_dirs": {
             "app_data_dir": settings.APP_DATA_DIR,
@@ -278,6 +350,36 @@ async def runtime_info():
             "trash_dir": settings.TRASH_DIR,
         },
     }
+
+
+@app.post("/api/manage/login")
+async def manage_login(body: ManageLogin):
+    if not IS_SERVER_MODE:
+        return {"ok": True, "authenticated": True}
+    if not MANAGE_PASSWORD:
+        raise HTTPException(status_code=503, detail="MANAGE_PASSWORD is not configured.")
+    if not password_ok(body.password):
+        raise HTTPException(status_code=401, detail="Invalid password.")
+    response = JSONResponse({"ok": True, "authenticated": True})
+    set_session_cookie(response, create_session_token())
+    return response
+
+
+@app.post("/api/manage/logout")
+async def manage_logout():
+    response = JSONResponse({"ok": True, "authenticated": False})
+    clear_session_cookie(response)
+    return response
+
+
+@app.get("/api/manage/session")
+async def manage_session(request: Request):
+    return {
+        "authenticated": is_authenticated(request),
+        "mode": "server" if IS_SERVER_MODE else "client",
+        "manage_auth_required": IS_SERVER_MODE,
+    }
+
 
 @app.get("/api/config")
 async def get_config():
@@ -292,6 +394,9 @@ async def get_config():
 @app.post("/api/config")
 async def update_config(update: ConfigUpdate):
     if telemetry_service.running: raise HTTPException(status_code=400, detail="Cannot update configuration while service is running.")
+    if update.key == "INFLUX_WRITE_ENABLED" and update.value in (True, "true", "1", 1):
+        if not influx_client or not influx_client.ping():
+            raise HTTPException(status_code=503, detail="InfluxDB must be connected to enable writes.")
     if not settings.update_setting(update.key, update.value):
         raise HTTPException(status_code=404, detail=f"Setting '{update.key}' not found or invalid.")
     return {"message": "Configuration updated successfully."}
@@ -385,12 +490,12 @@ async def test_tcp_connection(body: TcpTestRequest):
     if not (1 <= port <= 65535):
         return {"ok": False, "message": "Port must be between 1 and 65535."}
     try:
-        conn = await asyncio.wait_for(
+        reader, writer = await asyncio.wait_for(
             asyncio.open_connection(ip, port),
-            timeout=5.0
+            timeout=5.0,
         )
-        conn[0].close()
-        conn[1].close()
+        writer.close()
+        await writer.wait_closed()
         return {"ok": True, "message": f"TCP connection to {ip}:{port} successful."}
     except asyncio.TimeoutError:
         return {"ok": False, "message": "Connection timed out."}
@@ -669,14 +774,94 @@ async def get_dbc_schema(vehicle: str, filename: str):
         )
     return {"vehicle": vehicle, "filename": safe_name, "path": dbc_path, "messages": messages}
 
+def _is_event_bucket_name(name: str) -> bool:
+    index_path = os.path.join(settings.LOG_DIR, "events", "index.json")
+    if not os.path.isfile(index_path):
+        return False
+    try:
+        with open(index_path, encoding="utf-8") as f:
+            data = json.load(f)
+        for evt in data.get("events") or []:
+            if evt.get("bucket_name") == name:
+                return True
+    except Exception:
+        pass
+    return " - Run " in name
+
+
+@app.get("/api/events")
+async def list_events():
+    from server.util.event_recorder import EventRecorder
+    from server.util.influx_events import list_recent_influx_events, merge_local_and_influx_events
+
+    recorder = EventRecorder(settings.LOG_DIR, settings.INPUT_MODE, settings.COMMON_CONFIG.get("DBC_VEHICLE", ""))
+    local_events = recorder.list_events()
+    influx_connected = bool(influx_client and await asyncio.to_thread(influx_client.ping))
+    influx_events: list[dict] = []
+    if influx_connected:
+        org = settings.INFLUX_CONFIG.get("INFLUX_ORG", "")
+        influx_events = await asyncio.to_thread(list_recent_influx_events, influx_client, org)
+    merged = merge_local_and_influx_events(local_events, influx_events)
+    return {
+        "events": merged,
+        "influx_connected": influx_connected,
+        "local_count": len(local_events),
+        "influx_count": len(influx_events),
+    }
+
+
+@app.post("/api/events/decode-csv")
+async def decode_events_csv(body: DecodeCsvRequest):
+    from server.util.decode_capture import generate_decoded_csv_zip
+    from server.util.event_recorder import EventRecorder
+
+    recorder = EventRecorder(settings.LOG_DIR, settings.INPUT_MODE, settings.COMMON_CONFIG.get("DBC_VEHICLE", ""))
+    events = recorder.list_events()
+    default_vehicle = (body.vehicle or "").strip() or settings.COMMON_CONFIG.get("DBC_VEHICLE", "") or settings.DEFAULT_DBC_VEHICLE
+    dbc_files = body.dbc_files if body.dbc_files is not None else settings.COMMON_CONFIG.get("DBC_FILES") or []
+
+    def dbc_paths_for_vehicle(vehicle: str) -> list[str]:
+        v = (vehicle or "").strip() or default_vehicle
+        return resolve_all_dbc_paths(v, dbc_files, settings.DBC_DIR)
+
+    try:
+        zip_bytes, meta = generate_decoded_csv_zip(
+            events,
+            dbc_paths_for_vehicle,
+            event_ids=body.event_ids,
+            start_iso=body.start_iso,
+            end_iso=body.end_iso,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("decode-csv failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"decoded-clean_{stamp}.zip"
+    return StreamingResponse(
+        iter([zip_bytes]),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Decode-Rows": str(meta.get("rows", 0)),
+            "X-Decode-Csv-Count": str(meta.get("csv_count", 0)),
+        },
+    )
+
+
 @app.get("/api/influx/buckets")
 async def list_buckets():
     if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
-    return [b.name for b in influx_client.buckets_api().find_buckets().buckets]
+    names = [b.name for b in influx_client.buckets_api().find_buckets().buckets]
+    return [{"name": n, "is_event": _is_event_bucket_name(n)} for n in sorted(names)]
 
 @app.post("/api/influx/buckets")
 async def create_bucket(bucket: Bucket):
     if not influx_client: raise HTTPException(status_code=503, detail="InfluxDB is not connected.")
+    if _is_event_bucket_name(bucket.name):
+        raise HTTPException(status_code=403, detail="Cannot manually create event metadata buckets.")
     try:
         influx_client.buckets_api().create_bucket(bucket_name=bucket.name)
         return {"message": f"Bucket '{bucket.name}' created successfully."}
@@ -774,25 +959,133 @@ async def analytics_validate(body: AnalyticsValidateRequest):
         return {"ok": False, "validViews": [], "errors": [{"path": "/", "detail": "Validation failed unexpectedly."}]}
 
 
-# --- Socket.IO and Static Files ---
+# --- Socket.IO and routing ---
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins=SOCKET_CORS_ORIGINS)
+
+
+async def _serve_favicon() -> FileResponse:
+    if not os.path.isfile(FAVICON_PATH):
+        raise HTTPException(status_code=404, detail="Favicon not found")
+    return FileResponse(FAVICON_PATH, media_type="image/svg+xml")
+
+
+@app.get("/favicon.svg")
+@app.get("/favicon.ico")
+async def favicon():
+    return await _serve_favicon()
+
+
+@app.get("/manage")
+@app.get("/manage/")
+async def manage_root():
+    if IS_SERVER_MODE and SERVE_STATIC_CLIENT and os.path.isdir(STATIC_CLIENT_DIR):
+        index = os.path.join(STATIC_CLIENT_DIR, "index.html")
+        if not os.path.isfile(index):
+            raise HTTPException(status_code=404, detail="Portal build not found. Run npm run build.")
+        return FileResponse(index)
+    return RedirectResponse(url="/", status_code=307)
+
+
+@app.get("/manage/{path:path}")
+async def manage_path(path: str):
+    if IS_SERVER_MODE and SERVE_STATIC_CLIENT and os.path.isdir(STATIC_CLIENT_DIR):
+        # SPA assets under /manage are not used; hashes handle client routes.
+        index = os.path.join(STATIC_CLIENT_DIR, "index.html")
+        if not os.path.isfile(index):
+            raise HTTPException(status_code=404, detail="Portal build not found. Run npm run build.")
+        return FileResponse(index)
+    return RedirectResponse(url=f"/{path}" if path else "/", status_code=307)
+
+
+@app.get("/dashboard")
+@app.get("/dashboard/")
+async def dashboard_legacy_redirect():
+    return RedirectResponse(url="/influx/", status_code=307)
+
+
+@app.get("/dashboard/{path:path}")
+async def dashboard_legacy_path_redirect(path: str):
+    return RedirectResponse(url=f"/influx/{path}", status_code=307)
+
+
+@app.api_route(GRAFANA_PREFIX, methods=PROXY_METHODS)
+@app.api_route(f"{GRAFANA_PREFIX}/{{path:path}}", methods=PROXY_METHODS)
+async def grafana_proxy(request: Request, path: str = ""):
+    _, grafana_active = await _get_cached_health()
+    if not grafana_active:
+        return grafana_disconnected()
+    try:
+        return await proxy_to_upstream(
+            request,
+            GRAFANA_UPSTREAM,
+            public_prefix=GRAFANA_PREFIX,
+        )
+    except httpx.RequestError:
+        return grafana_disconnected()
+
+
+@app.api_route(INFLUX_PREFIX, methods=PROXY_METHODS)
+@app.api_route(f"{INFLUX_PREFIX}/{{path:path}}", methods=PROXY_METHODS)
+async def influx_proxy(request: Request, path: str = ""):
+    influx_connected, _ = await _get_cached_health()
+    if not influx_connected:
+        return influx_disconnected()
+    try:
+        return await proxy_to_upstream(
+            request,
+            INFLUX_UPSTREAM,
+            strip_prefix=INFLUX_PREFIX,
+            public_prefix=INFLUX_PREFIX,
+            rewrite_body_paths=True,
+        )
+    except httpx.RequestError:
+        return influx_disconnected()
+
+
 if SERVE_STATIC_CLIENT and os.path.isdir(STATIC_CLIENT_DIR):
-    app.mount("/", StaticFiles(directory=STATIC_CLIENT_DIR, html=True), name="static")
-    logger.info(f"Serving static client from {STATIC_CLIENT_DIR}")
+    assets_dir = os.path.join(STATIC_CLIENT_DIR, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/")
+    async def serve_portal_root():
+        index = os.path.join(STATIC_CLIENT_DIR, "index.html")
+        if not os.path.isfile(index):
+            raise HTTPException(status_code=404, detail="Portal build not found. Run npm run build.")
+        return FileResponse(index)
+
+    @app.get("/{spa_path:path}")
+    async def serve_portal_spa(spa_path: str):
+        head = spa_path.split("/", 1)[0]
+        if head in RESERVED_SPA_PREFIXES or spa_path in ("favicon.ico", "favicon.svg"):
+            raise HTTPException(status_code=404, detail="Not found")
+        candidate = os.path.join(STATIC_CLIENT_DIR, spa_path)
+        if os.path.isfile(candidate):
+            return FileResponse(candidate)
+        index = os.path.join(STATIC_CLIENT_DIR, "index.html")
+        if os.path.isfile(index):
+            return FileResponse(index)
+        raise HTTPException(status_code=404, detail="Portal build not found.")
+
+    logger.info(f"Serving manage portal from {STATIC_CLIENT_DIR} at /")
 else:
-    logger.info("Static client serving is disabled or client build not found.")
+    logger.info("Portal serving is disabled or client build not found.")
+
+
 asgi_app = socketio.ASGIApp(sio, app)
 
 @sio.event
-async def connect(sid, environ):
+async def connect(sid, environ, auth=None):
     logger.info(f"Client connected: {sid}")
+    await sio.save_session(sid, {"environ": environ or {}, "auth": auth})
     await emit_status_update(force_health_refresh=True, to=sid)
     cache = telemetry_service.get_cache()
     if cache:
         await sio.emit("signal_cache", cache, to=sid)
 
 @sio.event
-async def disconnect(sid): logger.info(f"Client disconnected: {sid}")
+async def disconnect(sid):
+    logger.info(f"Client disconnected: {sid}")
 
 @sio.event
 async def request_cache(sid):
@@ -800,7 +1093,16 @@ async def request_cache(sid):
     await sio.emit("signal_cache", cache, to=sid)
 
 @sio.event
-async def reset_cache(sid):
+async def reset_cache(sid, data=None):
+    if IS_SERVER_MODE:
+        session = await sio.get_session(sid)
+        environ = session.get("environ") if isinstance(session, dict) else None
+        auth = session.get("auth") if isinstance(session, dict) else None
+        if isinstance(data, dict):
+            auth = data
+        if not socket_manage_authenticated(environ or {}, auth if isinstance(auth, dict) else None):
+            await sio.emit("error", {"detail": "Manage login required."}, to=sid)
+            return
     telemetry_service.message_cache = {}
     logger.info(f"Signal cache reset by client {sid}")
 

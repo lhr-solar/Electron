@@ -4,9 +4,9 @@ import { Search, RotateCcw, Pause, Play } from 'lucide-react';
 import { socket } from '../socket';
 
 const UI_FLUSH_INTERVAL_MS = 80;
-const LS_CAN_KEYS = 'electrol_signal_dashboard_v1_can_keys';
-const LS_ECUS = 'electrol_signal_dashboard_v1_ecus';
-const LS_SEARCH = 'electrol_signal_dashboard_v1_search';
+const LS_CAN_KEYS = 'viewer_signal_dashboard_v1_can_keys';
+const LS_ECUS = 'viewer_signal_dashboard_v1_ecus';
+const LS_SEARCH = 'viewer_signal_dashboard_v1_search';
 
 function loadJsonKey(key, fallbackUndefined) {
   try {

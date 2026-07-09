@@ -91,3 +91,28 @@ def resolve_dbc_paths(vehicle: str, dbc_files: list, local_dbc_dir: str):
                 chosen = os.path.join(local_dbc_dir, vehicle.strip(), f)
         paths.append(chosen)
     return paths
+
+
+def resolve_all_dbc_paths(vehicle: str, dbc_files: list | None, local_dbc_dir: str) -> list[str]:
+    """All DBC paths for a vehicle. Uses explicit dbc_files when provided, else every .dbc in vehicle folders."""
+    files = [f for f in (dbc_files or []) if str(f).strip()]
+    if files:
+        return [p for p in resolve_dbc_paths(vehicle, files, local_dbc_dir) if os.path.isfile(p)]
+    _, emb_actual, loc_actual = resolve_vehicle(vehicle, local_dbc_dir)
+    embedded_dir = get_embedded_dbc_dir()
+    paths: list[str] = []
+    seen: set[str] = set()
+    for actual in (emb_actual, loc_actual):
+        if not actual:
+            continue
+        for base in (os.path.join(embedded_dir, actual), os.path.join(local_dbc_dir, actual)):
+            if not os.path.isdir(base):
+                continue
+            for name in sorted(os.listdir(base)):
+                if not name.lower().endswith(".dbc"):
+                    continue
+                full = os.path.join(base, name)
+                if full not in seen and os.path.isfile(full):
+                    seen.add(full)
+                    paths.append(full)
+    return paths

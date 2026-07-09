@@ -56,10 +56,10 @@ def validate_start_config() -> tuple[str | None, str | None]:
         if not os.path.isfile(path):
             return "File error", f"Replay file not found: {path}"
 
-    if input_mode in ("tcp", "capnp_tcp"):
-        if input_mode == "capnp_tcp":
-            ip = (config.get("CAPNP_TCP_IP") or "").strip()
-            port = config.get("CAPNP_TCP_PORT")
+    if input_mode in ("tcp", "canp_tcp"):
+        if input_mode == "canp_tcp":
+            ip = (config.get("CANP_TCP_IP") or "").strip()
+            port = config.get("CANP_TCP_PORT")
         else:
             ip = (config.get("TCP_IP") or "").strip()
             port = config.get("TCP_PORT")

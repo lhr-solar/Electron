@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Stack, Group, Text, Select, TextInput, Button, Box, Divider, Checkbox, Switch, Grid, ScrollArea } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { socket } from '../socket';
-import { Power, RefreshCw, Usb, Wifi, FileText, Circle, Car, Save, Settings2, Database, Square, Cpu, Network } from 'lucide-react';
+import { Power, RefreshCw, Usb, Wifi, FileText, Car, Save, Settings2, Database, Square, Cpu, Network } from 'lucide-react';
 import { LogFileManagerModal, DbcFileManagerModal } from './FileManagerModals';
 import { TcpConfigModal } from './TcpConfigModal';
+import { DatabaseManagementModal } from './DatabaseManagementModal';
 import { apiJson, backendDownloadUrl } from '../lib/api';
 
 const INPUT_MODES = [
@@ -12,7 +13,7 @@ const INPUT_MODES = [
   { value: 'serial_uart', label: 'UART' },
   { value: 'pcan', label: 'PCAN' },
   { value: 'tcp', label: 'TCP SLCAN' },
-  { value: 'capnp_tcp', label: 'Cap\'n Proto' },
+  { value: 'canp_tcp', label: 'CANP (Photon)' },
   { value: 'file', label: 'File' },
 ];
 
@@ -22,11 +23,11 @@ const SOURCE_MODE_ICONS = {
   serial_uart: Usb,
   pcan: Cpu,
   tcp: Wifi,
-  capnp_tcp: Network,
+  canp_tcp: Network,
   file: FileText,
 };
 
-const CONFIG_KEYS = ['INPUT_MODE', 'DBC_VEHICLE', 'DBC_FILES', 'SERIAL_PORT', 'SERIAL_BAUDRATE', 'CAN_BITRATE', 'TCP_IP', 'TCP_PORT', 'CAPNP_TCP_IP', 'CAPNP_TCP_PORT', 'REPLAY_FILE_PATH', 'INFLUX_WRITE_ENABLED', 'PCAN_CHANNEL', 'PCAN_BITRATE', 'PCAN_DEVICE_ID'];
+const CONFIG_KEYS = ['INPUT_MODE', 'DBC_VEHICLE', 'DBC_FILES', 'SERIAL_PORT', 'SERIAL_BAUDRATE', 'CAN_BITRATE', 'TCP_IP', 'TCP_PORT', 'CANP_TCP_IP', 'CANP_TCP_PORT', 'REPLAY_FILE_PATH', 'INFLUX_WRITE_ENABLED', 'INFLUX_TELEMETRY_BUCKET', 'PCAN_CHANNEL', 'PCAN_BITRATE', 'PCAN_DEVICE_ID'];
 
 const CAN_BITRATE_OPTIONS = [
   { value: '125000', label: '125 kbps' },
@@ -69,6 +70,7 @@ function statusEquals(a, b) {
     a.grafana_active === b.grafana_active &&
     a.parser_status === b.parser_status &&
     a.parser_connection_state === b.parser_connection_state &&
+    a.data_active === b.data_active &&
     a.error_message === b.error_message &&
     arrayShallowEqual(a.dbc_errors || [], b.dbc_errors || [])
   );
@@ -90,14 +92,17 @@ export function TelemetryDashboard() {
     grafana_active: false,
     parser_status: 'idle',
     parser_connection_state: null,
+    data_active: false,
     error_message: null,
   });
   const [loading, setLoading] = useState({ start: false, stop: false, restart: false, save: false, tcpTest: false });
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [dbcModalOpen, setDbcModalOpen] = useState(false);
   const [tcpModalOpen, setTcpModalOpen] = useState(false);
+  const [dbModalOpen, setDbModalOpen] = useState(false);
   const [tcpConfigs, setTcpConfigs] = useState([]);
   const canDownloadBackend = !backendConnected && !!backendDownloadUrl;
+  const selectAllDbcOnLoadRef = useRef(false);
 
   const inputMode = config?.INPUT_MODE || 'tcp';
 
@@ -181,7 +186,7 @@ export function TelemetryDashboard() {
     const current = config.DBC_VEHICLE?.trim() || '';
     const inList = vehicles.includes(current);
     if (inList) return;
-    const defaultName = (config.default_dbc_vehicle || 'Mcqueen').trim();
+    const defaultName = (config.default_dbc_vehicle || 'HighNoon').trim();
     const next = vehicles.includes(defaultName) ? defaultName : vehicles[0];
     if (next && next !== current) {
       setConfig((prev) => (prev ? { ...prev, DBC_VEHICLE: next } : null));
@@ -195,15 +200,19 @@ export function TelemetryDashboard() {
 
   useEffect(() => {
     if (!config || status.service_running || dbcFilesForVehicle.length === 0) return;
-    const currentVehicle = config.DBC_VEHICLE;
     const names = dbcFilesForVehicle.map((f) => (typeof f === 'string' ? f : f.name));
+    if (selectAllDbcOnLoadRef.current) {
+      selectAllDbcOnLoadRef.current = false;
+      setConfig((prev) => (prev ? { ...prev, DBC_FILES: names } : null));
+      return;
+    }
     const current = Array.isArray(config.DBC_FILES) ? config.DBC_FILES : [];
     const hasInvalidRefs = current.some((name) => !names.includes(name));
     if (!hasInvalidRefs) return;
     const savedVehicle = savedConfig?.DBC_VEHICLE;
     const savedFiles = Array.isArray(savedConfig?.DBC_FILES) ? savedConfig.DBC_FILES : [];
     const next =
-      currentVehicle === savedVehicle
+      config.DBC_VEHICLE === savedVehicle
         ? savedFiles.filter((name) => names.includes(name))
         : names;
     setConfig((prev) => (prev ? { ...prev, DBC_FILES: next.length ? next : names } : null));
@@ -250,6 +259,13 @@ export function TelemetryDashboard() {
     return () => socket.off('status', onStatus);
   }, []);
 
+  useEffect(() => {
+    if (!status.influx_connected && config && config.INFLUX_WRITE_ENABLED !== false) {
+      setConfig((c) => (c ? { ...c, INFLUX_WRITE_ENABLED: false } : c));
+      setSavedConfig((c) => (c ? { ...c, INFLUX_WRITE_ENABLED: false } : c));
+    }
+  }, [status.influx_connected, config?.INFLUX_WRITE_ENABLED]);
+
   const setLocalConfig = (key, value) => {
     if (status.service_running) return;
     setConfig((prev) => (prev ? { ...prev, [key]: value } : null));
@@ -257,7 +273,8 @@ export function TelemetryDashboard() {
 
   const setVehicle = (vehicle) => {
     if (status.service_running) return;
-    setConfig((prev) => (prev ? { ...prev, DBC_VEHICLE: vehicle } : null));
+    selectAllDbcOnLoadRef.current = true;
+    setConfig((prev) => (prev ? { ...prev, DBC_VEHICLE: vehicle, DBC_FILES: [] } : null));
   };
 
   const toggleDbcFile = (filename, selected) => {
@@ -450,21 +467,21 @@ export function TelemetryDashboard() {
           </>
         );
       }
-      case 'capnp_tcp': {
+      case 'canp_tcp': {
         const tcpPresetOptions = [{ value: '', label: 'Custom' }, ...tcpConfigs.map((c) => ({ value: c.id, label: `${c.name} (${c.ip}:${c.port})` }))];
-        const selectedPreset = tcpConfigs.find((c) => c.ip === config.CAPNP_TCP_IP && c.port === config.CAPNP_TCP_PORT)?.id || '';
+        const selectedPreset = tcpConfigs.find((c) => c.ip === config.CANP_TCP_IP && c.port === config.CANP_TCP_PORT)?.id || '';
         return (
           <>
-            <Text size="xs" c="dimmed" mb={4}>Length-prefixed Cap&apos;n Proto frames (see server/util/capnp_schemas/can_frame.capnp).</Text>
+            <Text size="xs" c="dimmed" mb={4}>Photon CANP batched frames over TCP (magic CAN1, v3).</Text>
             <Group gap="xs" align="flex-end">
-              <Select label="Preset" data={tcpPresetOptions} value={selectedPreset || ''} onChange={(v) => { const c = tcpConfigs.find((x) => x.id === v); if (c) { setLocalConfig('CAPNP_TCP_IP', c.ip); setLocalConfig('CAPNP_TCP_PORT', c.port); } }} searchable disabled={disabled} size="sm" style={{ flex: 1 }} />
+              <Select label="Preset" data={tcpPresetOptions} value={selectedPreset || ''} onChange={(v) => { const c = tcpConfigs.find((x) => x.id === v); if (c) { setLocalConfig('CANP_TCP_IP', c.ip); setLocalConfig('CANP_TCP_PORT', c.port); } }} searchable disabled={disabled} size="sm" style={{ flex: 1 }} />
               <Button variant="subtle" size="sm" onClick={() => setTcpModalOpen(true)} disabled={disabled} title="Manage TCP configs"><Settings2 size={14} /></Button>
             </Group>
             <Group grow>
-              <TextInput label="IP" value={config.CAPNP_TCP_IP || ''} onChange={(e) => setLocalConfig('CAPNP_TCP_IP', e.target.value)} disabled={disabled} size="sm" />
-              <TextInput label="Port" type="number" value={String(config.CAPNP_TCP_PORT ?? '')} onChange={(e) => setLocalConfig('CAPNP_TCP_PORT', parseInt(e.target.value, 10) || 0)} disabled={disabled} size="sm" />
+              <TextInput label="IP" value={config.CANP_TCP_IP || ''} onChange={(e) => setLocalConfig('CANP_TCP_IP', e.target.value)} disabled={disabled} size="sm" />
+              <TextInput label="Port" type="number" value={String(config.CANP_TCP_PORT ?? '')} onChange={(e) => setLocalConfig('CANP_TCP_PORT', parseInt(e.target.value, 10) || 0)} disabled={disabled} size="sm" />
             </Group>
-            <Button variant="subtle" size="compact-sm" onClick={() => { setLoading((l) => ({ ...l, tcpTest: true })); apiJson('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.CAPNP_TCP_IP || '', port: config.CAPNP_TCP_PORT || 8190 }) }).then((res) => { if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' }); else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 }); }).catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' })).finally(() => setLoading((l) => ({ ...l, tcpTest: false }))); }} loading={loading.tcpTest} disabled={disabled || !config.CAPNP_TCP_IP} leftSection={<Wifi size={12} />}>Test connection</Button>
+            <Button variant="subtle" size="compact-sm" onClick={() => { setLoading((l) => ({ ...l, tcpTest: true })); apiJson('/api/tcp/test', { method: 'POST', body: JSON.stringify({ ip: config.CANP_TCP_IP || '', port: config.CANP_TCP_PORT || 6500 }) }).then((res) => { if (res.ok) notifications.show({ title: 'Connection test', message: res.message, color: 'green' }); else notifications.show({ title: 'Connection failed', message: res.message, color: 'red', autoClose: 5000 }); }).catch((e) => notifications.show({ title: 'Test failed', message: e.message, color: 'red' })).finally(() => setLoading((l) => ({ ...l, tcpTest: false }))); }} loading={loading.tcpTest} disabled={disabled || !config.CANP_TCP_IP} leftSection={<Wifi size={12} />}>Test connection</Button>
           </>
         );
       }
@@ -483,9 +500,6 @@ export function TelemetryDashboard() {
     }
   };
 
-  const parserLabel = status.parser_status === 'running' ? 'Active' : status.parser_status === 'error' ? 'Error' : status.parser_status === 'finished' ? 'Done' : 'Idle';
-  const parserColor = status.parser_status === 'running' ? '#22c55e' : status.parser_status === 'error' ? '#ef4444' : '#71717a';
-
   const STATUS_GREEN = '#22c55e';
   const STATUS_GRAY = '#71717a';
   const BLUE_ACTIVE = '#3b82f6';
@@ -503,20 +517,8 @@ export function TelemetryDashboard() {
 
   return (
     <Box style={dashboardLayout}>
-      {/* Top: status + Start/Stop */}
-      <Group gap="sm" mb="sm" wrap="wrap" justify="space-between" align="center">
-        <Group gap="xs" style={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 12px' }}>
-          <Circle size={7} fill={backendConnected ? STATUS_GREEN : STATUS_GRAY} />
-          <Text size="sm" c="dimmed">{backendConnected ? 'Backend' : 'Off'}</Text>
-          <Circle size={7} fill={status.service_running ? STATUS_GREEN : STATUS_GRAY} />
-          <Text size="sm" c="dimmed">{status.service_running ? 'Running' : 'Stopped'}</Text>
-          <Circle size={7} fill={status.parser_status === 'running' ? STATUS_GREEN : status.parser_status === 'error' ? '#ef4444' : STATUS_GRAY} />
-          <Text size="sm" style={{ color: parserColor }}>{parserLabel === 'Active' ? 'active' : parserLabel === 'Idle' ? 'idle' : parserLabel === 'Done' ? 'done' : parserLabel.toLowerCase()}</Text>
-          <Circle size={7} fill={status.influx_connected ? STATUS_GREEN : STATUS_GRAY} />
-          <Text size="sm" c="dimmed">Influx</Text>
-          <Circle size={7} fill={status.grafana_active ? STATUS_GREEN : STATUS_GRAY} />
-          <Text size="sm" c="dimmed">Grafana</Text>
-        </Group>
+      {/* Top: Start/Stop */}
+      <Group gap="sm" mb="sm" wrap="wrap" justify="flex-end" align="center">
         <Group gap="xs">
           <Button variant="filled" size="sm" leftSection={<Power size={14} />} onClick={handleStart} loading={loading.start} disabled={!startEnabled} bg={startEnabled ? BLUE_ACTIVE : STATUS_GRAY} c={startEnabled ? 'white' : '#a1a1aa'}>Start</Button>
           <Button variant="filled" size="sm" leftSection={<Square size={12} fill="currentColor" />} onClick={handleStop} loading={loading.stop} disabled={!status.service_running} bg={status.service_running ? STOP_RED : STATUS_GRAY} c={status.service_running ? 'white' : '#a1a1aa'}>Stop</Button>
@@ -625,7 +627,16 @@ export function TelemetryDashboard() {
       <Group gap="sm" justify="space-between" align="center" wrap="nowrap">
         <Group gap="xs">
           <Database size={14} style={{ color: 'var(--text-muted)' }} />
-          <Switch size="sm" checked={config.INFLUX_WRITE_ENABLED !== false} onChange={(e) => setLocalConfig('INFLUX_WRITE_ENABLED', e.currentTarget.checked)} disabled={status.service_running} label={config.INFLUX_WRITE_ENABLED !== false ? 'Write on' : 'Write off'} color={config.INFLUX_WRITE_ENABLED !== false ? 'green' : 'red'} styles={{ label: { color: 'var(--text-muted)', fontSize: 13 } }} />
+          <Switch
+            size="sm"
+            checked={config.INFLUX_WRITE_ENABLED !== false && status.influx_connected}
+            onChange={(e) => setLocalConfig('INFLUX_WRITE_ENABLED', e.currentTarget.checked)}
+            disabled={status.service_running || !status.influx_connected}
+            label={config.INFLUX_WRITE_ENABLED !== false && status.influx_connected ? 'Write on' : 'Write off'}
+            color={config.INFLUX_WRITE_ENABLED !== false && status.influx_connected ? 'green' : 'red'}
+            styles={{ label: { color: 'var(--text-muted)', fontSize: 13 } }}
+          />
+          <Button variant="subtle" size="xs" onClick={() => setDbModalOpen(true)} disabled={!status.influx_connected}>Manage</Button>
         </Group>
         <Button variant="filled" size="sm" leftSection={<Save size={14} />} onClick={handleSave} loading={loading.save} disabled={!saveEnabled} bg={saveEnabled ? BLUE_ACTIVE : STATUS_GRAY} c={saveEnabled ? 'white' : '#a1a1aa'} style={!saveEnabled ? { opacity: 0.8 } : {}}>Save</Button>
       </Group>
@@ -649,6 +660,15 @@ export function TelemetryDashboard() {
         onRefresh={loadTcpConfigs}
         currentIp={config.TCP_IP}
         currentPort={config.TCP_PORT}
+      />
+      <DatabaseManagementModal
+        opened={dbModalOpen}
+        onClose={() => setDbModalOpen(false)}
+        influxConnected={status.influx_connected}
+        telemetryBucket={config.INFLUX_TELEMETRY_BUCKET || config.INFLUX_BUCKET}
+        onBucketChange={(v) => setLocalConfig('INFLUX_TELEMETRY_BUCKET', v)}
+        vehicle={config.DBC_VEHICLE}
+        dbcFiles={config.DBC_FILES || []}
       />
     </Box>
   );

@@ -29,7 +29,10 @@ def main():
     if args.reload:
         cmd.append("--reload")
 
-    subprocess.run(cmd, check=True, env=env)
+    try:
+        subprocess.run(cmd, check=True, env=env)
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":

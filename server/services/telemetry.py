@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import time
 from server.config import settings
 from server.util.can_manager import CANManager
 from server.util.vehicle_dbc_resolve import resolve_dbc_paths
@@ -22,6 +23,16 @@ class TelemetryService:
         self.dbc_errors = []
         self.message_cache = {}  # {sender: {can_id_hex: {message_name, network, signals, raw_packet, timestamp_ns}}}
         self.last_parser_error: str | None = None
+        self.last_packet_at: float | None = None
+        self.event_recorder = None
+
+    def note_packet_received(self):
+        self.last_packet_at = time.time()
+
+    def is_data_active(self, window_sec: float = 0.5) -> bool:
+        if not self.running or self.last_packet_at is None:
+            return False
+        return (time.time() - self.last_packet_at) < window_sec
 
     def get_parser_status(self):
         """Returns the current status of the parser. Includes last error when stopped due to parser failure."""
@@ -110,13 +121,14 @@ class TelemetryService:
                 if batch:
                     for msg in batch:
                         self._update_cache(msg)
+                    self.note_packet_received()
                     await sio.emit("live_message_batch", batch)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.exception("live_message emit: %s", e)
 
-    async def start(self, influx_writer: InfluxDBWriter, sio=None):
+    async def start(self, influx_writer: InfluxDBWriter, sio=None, influx_client=None):
         """
         Starts the telemetry service. If sio is provided, live CAN messages are emitted to clients.
         Does not start any tasks if pre-start validation fails.
@@ -136,6 +148,7 @@ class TelemetryService:
         analytics_buffer.clear()
 
         self.last_parser_error = None
+        self.last_packet_at = None
         logger.info("--- Starting Telemetry Service ---")
         
         config = settings.get_effective_config()
@@ -163,6 +176,15 @@ class TelemetryService:
             self.dbc_errors.append(f"No DBC files selected for vehicle '{vehicle}'.")
         can_manager = CANManager(dbc_paths, config, influx_writer=self.influx_writer)
         self.dbc_errors = can_manager.get_errors()
+
+        from server.util.event_recorder import EventRecorder
+        self.event_recorder = EventRecorder(
+            settings.LOG_DIR,
+            config.get("INPUT_MODE", "tcp"),
+            vehicle=vehicle,
+        )
+        if influx_client:
+            self.event_recorder.set_influx_client(influx_client)
         
         self.parser = create_async_parser(config, self.packet_queue, self.stop_event)
         self.live_message_queue = asyncio.Queue(maxsize=500) if sio else None
@@ -203,7 +225,13 @@ class TelemetryService:
             asyncio.create_task(_stop_when_parser_done())
 
         processor_task = asyncio.create_task(
-            process_packets(self.packet_queue, self.stop_event, can_manager, self.live_message_queue)
+            process_packets(
+                self.packet_queue,
+                self.stop_event,
+                can_manager,
+                self.live_message_queue,
+                event_recorder=self.event_recorder,
+            )
         )
         self.background_tasks.add(processor_task)
         processor_task.add_done_callback(self.background_tasks.discard)
@@ -215,7 +243,7 @@ class TelemetryService:
 
         logger.info(f"--- Telemetry Service Started (Mode: {config['INPUT_MODE']}) ---")
 
-    async def stop(self):
+    async def stop(self, influx_client=None):
         """Gracefully stops the telemetry service and all background tasks."""
         if not self.running:
             return
@@ -229,11 +257,20 @@ class TelemetryService:
         if self.background_tasks:
             await asyncio.gather(*self.background_tasks, return_exceptions=True)
         
+        had_influx_writer = self.influx_writer is not None
         if self.influx_writer:
             self.influx_writer.close()
+
+        if self.event_recorder:
+            if influx_client and had_influx_writer:
+                self.event_recorder.finalize_with_influx(influx_client)
+            else:
+                self.event_recorder.close_all()
+            self.event_recorder = None
         
         self.running = False
         self.parser = None
+        self.last_packet_at = None
         self.dbc_errors = []
         logger.info("Telemetry Service Stopped.")
 
