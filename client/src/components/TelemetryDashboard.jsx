@@ -898,6 +898,7 @@ export function TelemetryDashboard() {
         onBucketChange={(v) => setLocalConfig('INFLUX_TELEMETRY_BUCKET', v)}
         vehicle={config.DBC_VEHICLE}
         dbcFiles={config.DBC_FILES || []}
+        canDeleteRuns
       />
     </div>
   );

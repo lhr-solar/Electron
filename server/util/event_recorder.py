@@ -87,6 +87,34 @@ class EventRecorder:
         with self._lock:
             return list(reversed(self._events))
 
+    def delete_events(self, event_ids: list[str]) -> list[str]:
+        """Remove local events by id. Deletes capture files when present. Returns deleted ids."""
+        wanted = {str(x) for x in (event_ids or []) if x}
+        if not wanted:
+            return []
+        deleted: list[str] = []
+        with self._lock:
+            keep: list[dict] = []
+            for evt in self._events:
+                eid = str(evt.get("id") or "")
+                if eid not in wanted:
+                    keep.append(evt)
+                    continue
+                dump_path = evt.get("dump_path") or ""
+                if dump_path and os.path.isfile(dump_path):
+                    try:
+                        os.remove(dump_path)
+                    except OSError as e:
+                        logger.warning("Could not delete capture %s: %s", dump_path, e)
+                bucket = evt.get("bucket_name")
+                if bucket:
+                    self.event_bucket_names.discard(bucket)
+                deleted.append(eid)
+            if deleted:
+                self._events = keep
+                self._save_index()
+        return deleted
+
     def is_event_bucket(self, bucket_name: str) -> bool:
         return bucket_name in self.event_bucket_names
 

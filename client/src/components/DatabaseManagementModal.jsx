@@ -29,7 +29,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { notifications } from '@/lib/notify';
-import { apiJson, buildApiUrl } from '../lib/api';
+import { apiJson, buildApiUrl, getManageToken } from '../lib/api';
 
 export function DatabaseManagementModal({
   opened,
@@ -39,6 +39,8 @@ export function DatabaseManagementModal({
   onBucketChange,
   vehicle,
   dbcFiles = [],
+  canDeleteRuns = true,
+  eventsOnly = false,
 }) {
   const [buckets, setBuckets] = useState([]);
   const [events, setEvents] = useState([]);
@@ -49,21 +51,22 @@ export function DatabaseManagementModal({
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
-    if (!influxConnected) {
-      setBuckets([]);
-      setEvents([]);
-      setEventMeta({ local_count: 0, influx_count: 0 });
-      setLoading(false);
-      return;
-    }
     setLoading(true);
-    Promise.all([
-      apiJson('/api/influx/buckets'),
-      apiJson('/api/events'),
-    ])
-      .then(([bucketList, eventData]) => {
+    const tasks = [apiJson('/api/events')];
+    if (!eventsOnly) {
+      tasks.unshift(
+        influxConnected
+          ? apiJson('/api/influx/buckets')
+          : Promise.resolve([])
+      );
+    }
+    Promise.all(tasks)
+      .then((results) => {
+        const eventData = eventsOnly ? results[0] : results[1];
+        const bucketList = eventsOnly ? [] : results[0];
         setBuckets(Array.isArray(bucketList) ? bucketList : []);
         setEvents(eventData?.events || []);
         setEventMeta({
@@ -73,7 +76,7 @@ export function DatabaseManagementModal({
       })
       .catch((e) => notifications.show({ title: 'Database', message: e.message, color: 'red' }))
       .finally(() => setLoading(false));
-  }, [influxConnected]);
+  }, [influxConnected, eventsOnly]);
 
   useEffect(() => {
     if (opened) load();
@@ -91,9 +94,14 @@ export function DatabaseManagementModal({
   const eventBuckets = buckets.filter((b) => b.is_event);
   const bucketOptions = telemetryBuckets.map((b) => ({ value: b.name, label: b.name }));
 
-  const allEventIds = useMemo(() => events.map((e) => e.id), [events]);
-  const allSelected = events.length > 0 && selectedEventIds.length === events.length;
+  const selectableEvents = useMemo(
+    () => events.filter((e) => e.source !== 'influx'),
+    [events]
+  );
+  const allEventIds = useMemo(() => selectableEvents.map((e) => e.id), [selectableEvents]);
+  const allSelected = selectableEvents.length > 0 && selectedEventIds.length === selectableEvents.length;
   const canExport = selectedEventIds.length > 0 || rangeStart.trim() || rangeEnd.trim();
+  const canDelete = canDeleteRuns && selectedEventIds.length > 0;
 
   const toggleEvent = (id) => {
     setSelectedEventIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -128,9 +136,13 @@ export function DatabaseManagementModal({
     if (!canExport) return;
     setExporting(true);
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      const token = getManageToken();
+      if (token) headers['X-Manage-Token'] = token;
       const res = await fetch(buildApiUrl('/api/events/decode-csv'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers,
         body: JSON.stringify({
           event_ids: selectedEventIds.length ? selectedEventIds : null,
           start_iso: rangeStart.trim() || null,
@@ -169,6 +181,28 @@ export function DatabaseManagementModal({
     }
   };
 
+  const deleteSelectedRuns = async () => {
+    if (!canDelete) return;
+    setDeleting(true);
+    try {
+      const res = await apiJson('/api/events/delete', {
+        method: 'POST',
+        body: JSON.stringify({ event_ids: selectedEventIds }),
+      });
+      notifications.show({
+        title: 'Runs deleted',
+        message: `Removed ${res.count ?? selectedEventIds.length} run(s)`,
+        color: 'green',
+      });
+      setSelectedEventIds([]);
+      load();
+    } catch (e) {
+      notifications.show({ title: 'Delete failed', message: e.message, color: 'red' });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <Dialog open={opened} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-h-[85vh] overflow-y-auto bg-popover sm:max-w-2xl">
@@ -176,7 +210,7 @@ export function DatabaseManagementModal({
           <DialogTitle className="font-display">Database management</DialogTitle>
         </DialogHeader>
 
-        {!influxConnected && (
+        {!influxConnected && !eventsOnly && (
           <Alert variant="destructive" className="border-signal-red/30 bg-signal-red/5">
             <CircleAlert />
             <AlertTitle>InfluxDB not connected</AlertTitle>
@@ -186,9 +220,9 @@ export function DatabaseManagementModal({
           </Alert>
         )}
 
-        <Tabs defaultValue="telemetry">
+        <Tabs defaultValue={eventsOnly ? 'events' : 'telemetry'}>
           <TabsList>
-            <TabsTrigger value="telemetry">Telemetry buckets</TabsTrigger>
+            {!eventsOnly && <TabsTrigger value="telemetry">Telemetry buckets</TabsTrigger>}
             <TabsTrigger value="events">Events</TabsTrigger>
           </TabsList>
 
@@ -294,7 +328,6 @@ export function DatabaseManagementModal({
                     placeholder="2026-07-08T16:00:00.000-07:00"
                     value={rangeStart}
                     onChange={(e) => setRangeStart(e.currentTarget.value)}
-                    disabled={!influxConnected}
                     className="h-8 text-sm tabular"
                   />
                 </div>
@@ -305,25 +338,40 @@ export function DatabaseManagementModal({
                     placeholder="2026-07-08T16:30:00.000-07:00"
                     value={rangeEnd}
                     onChange={(e) => setRangeEnd(e.currentTarget.value)}
-                    disabled={!influxConnected}
                     className="h-8 text-sm tabular"
                   />
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Select events and/or a time range. Output is clipped to actual data timestamps (no empty padding).
+                Select runs and/or a time range. Output is clipped to actual data timestamps (no empty padding).
               </p>
-              <Button
-                onClick={downloadDecodedCsv}
-                disabled={!canExport || loading || !influxConnected || exporting}
-              >
-                {exporting ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Download className="size-3.5" />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={downloadDecodedCsv}
+                  disabled={!canExport || loading || exporting}
+                >
+                  {exporting ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Download className="size-3.5" />
+                  )}
+                  Generate and download CSV
+                </Button>
+                {canDeleteRuns && (
+                  <Button
+                    variant="destructive"
+                    onClick={deleteSelectedRuns}
+                    disabled={!canDelete || loading || deleting}
+                  >
+                    {deleting ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-3.5" />
+                    )}
+                    Delete selected runs
+                  </Button>
                 )}
-                Generate and download CSV
-              </Button>
+              </div>
               <div className="rounded-md border border-border">
                 <Table>
                   <TableHeader>
@@ -333,7 +381,7 @@ export function DatabaseManagementModal({
                           checked={allSelected ? true : selectedEventIds.length > 0 && !allSelected ? 'indeterminate' : false}
                           onCheckedChange={toggleAllEvents}
                           aria-label="Select all events"
-                          disabled={!influxConnected}
+                          disabled={selectableEvents.length === 0}
                         />
                       </TableHead>
                       <TableHead>Run</TableHead>
@@ -347,7 +395,7 @@ export function DatabaseManagementModal({
                       <TableRow>
                         <TableCell colSpan={5}>
                           <p className="text-sm text-muted-foreground">
-                            {influxConnected ? 'No recorded events yet.' : 'InfluxDB required to load events.'}
+                            No recorded events yet.
                           </p>
                         </TableCell>
                       </TableRow>
@@ -359,7 +407,7 @@ export function DatabaseManagementModal({
                             checked={selectedEventIds.includes(evt.id)}
                             onCheckedChange={() => toggleEvent(evt.id)}
                             aria-label={`Select ${evt.display_name}`}
-                            disabled={!influxConnected || evt.source === 'influx'}
+                            disabled={evt.source === 'influx'}
                           />
                         </TableCell>
                         <TableCell>

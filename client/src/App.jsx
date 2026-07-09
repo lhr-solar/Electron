@@ -11,6 +11,7 @@ import {
   Lock,
   Atom,
   Home,
+  Database,
 } from 'lucide-react';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
 import { LiveMessageLog } from './components/LiveMessageLog';
@@ -18,6 +19,7 @@ import { SignalDashboard } from './components/SignalDashboard';
 import { DbcViewer } from './components/DbcViewer';
 import { Analytics } from './components/Analytics';
 import { StatusBar } from './components/StatusBar';
+import { DatabaseManagementModal } from './components/DatabaseManagementModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -213,6 +215,8 @@ function ServerViewerApp() {
     return SERVER_VIEWER_PAGES.some((t) => t.id === p) ? p : SERVER_VIEWER_DEFAULT;
   });
   const [sideLogOpen, setSideLogOpen] = useState(false);
+  const [runsOpen, setRunsOpen] = useState(false);
+  const [vehicle, setVehicle] = useState('HighNoon');
 
   useEffect(() => {
     const onHashChange = () => {
@@ -222,6 +226,14 @@ function ServerViewerApp() {
     window.addEventListener('hashchange', onHashChange);
     if (!window.location.hash) window.location.hash = SERVER_VIEWER_DEFAULT;
     return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  useEffect(() => {
+    const onStatus = (status) => {
+      if (status?.vehicle) setVehicle(status.vehicle);
+    };
+    socket.on('status', onStatus);
+    return () => socket.off('status', onStatus);
   }, []);
 
   const navigate = useCallback((p) => {
@@ -236,15 +248,36 @@ function ServerViewerApp() {
       page={page}
       onNavigate={navigate}
       rightExtra={
-        <a
-          href="/manage"
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-secondary px-2.5 text-[13px] font-medium text-foreground/90 transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          <Lock size={13} strokeWidth={1.75} />
-          Manage
-        </a>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setRunsOpen(true)}
+            className="h-8 gap-1.5 px-2.5 text-[13px]"
+            title="Select runs and download CSV"
+          >
+            <Database size={13} strokeWidth={1.75} />
+            Runs
+          </Button>
+          <a
+            href="/manage"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-secondary px-2.5 text-[13px] font-medium text-foreground/90 transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <Lock size={13} strokeWidth={1.75} />
+            Manage
+          </a>
+        </div>
       }
     >
+      <DatabaseManagementModal
+        opened={runsOpen}
+        onClose={() => setRunsOpen(false)}
+        influxConnected={false}
+        vehicle={vehicle}
+        dbcFiles={[]}
+        canDeleteRuns={false}
+        eventsOnly
+      />
       <div className="min-h-0 flex-1" style={{ display: page === 'live-log' ? 'flex' : 'none' }}>
         {page === 'live-log' ? <LiveMessageLog variant="stage" /> : null}
       </div>

@@ -120,7 +120,7 @@ _PROTECTED_EXACT = {
     ("PUT", "/api/tcp/auto"),  # legacy
     ("POST", "/api/tcp/test"),
     ("POST", "/api/dbc/vehicles"),
-    ("POST", "/api/events/decode-csv"),
+    ("POST", "/api/events/delete"),
     ("POST", "/api/influx/buckets"),
 )
 

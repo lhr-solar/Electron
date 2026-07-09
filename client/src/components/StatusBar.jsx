@@ -217,50 +217,44 @@ function adapterDetailLabel(mode) {
 function SessionInfoButton({ active, vehicle, adapterInfo }) {
   const [open, setOpen] = useState(false);
 
-  if (!active) {
-    return (
+  return (
+    <Popover open={open} onOpenChange={(next) => active && setOpen(next)}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            type="button"
-            disabled
-            aria-label="Session info unavailable"
-            className="flex h-full items-center px-2 text-muted-foreground/40 outline-none"
-          >
-            <Info size={14} strokeWidth={1.75} />
-          </button>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="Session info"
+              disabled={!active}
+              className={cn(
+                'flex h-full shrink-0 items-center px-2.5 outline-none transition-colors',
+                'focus-visible:ring-2 focus-visible:ring-ring/50',
+                active
+                  ? cn('text-muted-foreground hover:text-foreground', open && 'text-foreground')
+                  : 'cursor-not-allowed text-muted-foreground/45'
+              )}
+            >
+              <Info size={15} strokeWidth={2} className="shrink-0" />
+            </button>
+          </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Start the service to view session info</TooltipContent>
+        <TooltipContent side="bottom">
+          {active ? 'Session info' : 'Start the service to view session info'}
+        </TooltipContent>
       </Tooltip>
-    );
-  }
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label="Session info"
-          className={cn(
-            'flex h-full items-center px-2 text-muted-foreground outline-none transition-colors',
-            'hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
-            open && 'text-foreground'
-          )}
-        >
-          <Info size={14} strokeWidth={1.75} />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent side="bottom" align="end" className="w-64 space-y-2.5">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          Session
-        </div>
-        <InfoRow label="Vehicle" value={vehicle} />
-        <InfoRow label="Adapter" value={adapterInfo?.label} />
-        <InfoRow
-          label={adapterDetailLabel(adapterInfo?.mode)}
-          value={adapterInfo?.detail}
-        />
-      </PopoverContent>
+      {active && (
+        <PopoverContent side="bottom" align="end" className="w-64 space-y-2.5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+            Session
+          </div>
+          <InfoRow label="Vehicle" value={vehicle} />
+          <InfoRow label="Adapter" value={adapterInfo?.label} />
+          <InfoRow
+            label={adapterDetailLabel(adapterInfo?.mode)}
+            value={adapterInfo?.detail}
+          />
+        </PopoverContent>
+      )}
     </Popover>
   );
 }
@@ -309,10 +303,12 @@ export function StatusBar() {
         backendConnected ? 'border-border' : 'border-signal-red/40'
       )}
     >
-      <div className="flex h-full min-w-0 items-center divide-x divide-border overflow-x-auto overflow-y-visible">
+      <div className="flex h-full min-w-0 flex-1 items-center divide-x divide-border overflow-x-auto overflow-y-visible">
         {segments.map((seg) => (
           <StatusSegment key={seg.label} {...seg} />
         ))}
+      </div>
+      <div className="flex h-full shrink-0 items-center border-l border-border">
         <SessionInfoButton
           active={infoActive}
           vehicle={status.vehicle}

@@ -97,10 +97,11 @@ async def _replay_to_client(
             break
 
 
-async def _wait_until_stream_start(ready_at: float) -> None:
-    wait = ready_at - asyncio.get_running_loop().time()
+async def _wait_after_connect(start_delay: float) -> None:
+    """Delay starts only after a client connects (not from server listen time)."""
+    wait = max(0.0, float(start_delay or 0))
     if wait > 0:
-        print(f"[server] stream starts in {wait:.0f}s — connect and start telemetry now", file=sys.stderr, flush=True)
+        print(f"[server] stream starts in {wait:.0f}s after connect", file=sys.stderr, flush=True)
         await asyncio.sleep(wait)
 
 
@@ -109,12 +110,11 @@ async def _handle_client(
     writer: asyncio.StreamWriter,
     chunks: list[CaptureChunk],
     options: argparse.Namespace,
-    ready_at: float,
 ) -> None:
     peer = writer.get_extra_info("peername")
     print(f"[server] client connected: {peer}", file=sys.stderr, flush=True)
     try:
-        await _wait_until_stream_start(ready_at)
+        await _wait_after_connect(options.start_delay)
         await _replay_to_client(
             writer,
             chunks,
@@ -147,22 +147,16 @@ async def _run_server(options: argparse.Namespace) -> None:
     print(f"[load] {capture_path.name}", file=sys.stderr)
     print(f"[load] {len(chunks):,} tcp chunks, {wire_bytes:,} wire bytes, span {span_sec:.1f}s", file=sys.stderr)
 
-    loop = asyncio.get_running_loop()
-    ready_at = loop.time() + max(0.0, float(options.start_delay or 0))
-    if options.start_delay > 0:
-        print(
-            f"[server] {options.start_delay:.0f}s connect window — point CANP at {options.host}:{options.port}",
-            file=sys.stderr,
-            flush=True,
-        )
-
     async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        await _handle_client(reader, writer, chunks, options, ready_at)
+        await _handle_client(reader, writer, chunks, options)
 
     server = await asyncio.start_server(handler, options.host, options.port)
     addrs = ", ".join(str(sock.getsockname()) for sock in server.sockets or [])
     print(f"[server] listening on {addrs}", file=sys.stderr)
-    print("[server] time-accurate replay at 1x speed after start delay", file=sys.stderr)
+    print(
+        f"[server] after each connect, wait {options.start_delay:.0f}s then replay at {options.speed}x",
+        file=sys.stderr,
+    )
 
     async with server:
         await server.serve_forever()
@@ -176,8 +170,8 @@ def main() -> int:
     parser.add_argument(
         "--start-delay",
         type=float,
-        default=15.0,
-        help="seconds to wait after client connects before sending data (default: 15)",
+        default=5.0,
+        help="seconds to wait after client connects before sending data (default: 5)",
     )
     parser.add_argument("--speed", type=float, default=1.0, help="playback speed multiplier")
     parser.add_argument(

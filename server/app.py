@@ -150,6 +150,10 @@ class DecodeCsvRequest(BaseModel):
     dbc_files: list[str] | None = None
 
 
+class DeleteEventsRequest(BaseModel):
+    event_ids: list[str]
+
+
 class AnalyticsValidateRequest(BaseModel):
     version: int = 1
     views: list[dict] = Field(default_factory=list)
@@ -906,6 +910,7 @@ async def list_events():
 
 @app.post("/api/events/decode-csv")
 async def decode_events_csv(body: DecodeCsvRequest):
+    """Public in server mode so viewers can select runs and download CSVs."""
     from server.util.decode_capture import generate_decoded_csv_zip
     from server.util.event_recorder import EventRecorder
 
@@ -943,6 +948,18 @@ async def decode_events_csv(body: DecodeCsvRequest):
             "X-Decode-Csv-Count": str(meta.get("csv_count", 0)),
         },
     )
+
+
+@app.post("/api/events/delete")
+async def delete_events(body: DeleteEventsRequest):
+    """Delete local runs. Client mode always allowed; server mode requires manage auth."""
+    from server.util.event_recorder import EventRecorder
+
+    if not body.event_ids:
+        raise HTTPException(status_code=400, detail="event_ids required.")
+    recorder = EventRecorder(settings.LOG_DIR, settings.INPUT_MODE, settings.COMMON_CONFIG.get("DBC_VEHICLE", ""))
+    deleted = await asyncio.to_thread(recorder.delete_events, body.event_ids)
+    return {"deleted": deleted, "count": len(deleted)}
 
 
 @app.get("/api/influx/buckets")
