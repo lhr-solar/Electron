@@ -36,10 +36,18 @@ services:
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       # Auto configure Grafana InfluxDB datasource
       GF_PROVISIONING_ENABLED: "true"
+      # Realtime dashboards: allow 0.5s auto-refresh
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: "500ms"
+      # Anonymous read-only viewing (no login required); admin login still edits
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_NAME: "Main Org."
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_AUTH_BASIC_ENABLED: "true"
 
     volumes:
       - grafana_data:/var/lib/grafana
       - ./provisions:/etc/grafana/provisioning/
+      - ./dashboards:/etc/grafana/dashboards
       - ./grafana-init-users.sh:/usr/local/bin/grafana-init-users.sh:ro
     restart: unless-stopped
     entrypoint: [ "/bin/sh", "-c" ]

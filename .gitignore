@@ -22,6 +22,9 @@ grafana/**/
 !grafana/*
 grafana/provisions/datasources
 !grafana/provisions
+# Track provisioned HighNoon dashboards + dashboard provider (secrets stay ignored above)
+!grafana/dashboards/HighNoon/
+!grafana/provisions/dashboards/
 
 test_data
 .test_data

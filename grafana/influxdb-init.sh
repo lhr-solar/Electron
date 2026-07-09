@@ -45,8 +45,10 @@ apiVersion: 1
 datasources:
   - name: InfluxDB
     type: influxdb
+    uid: influxdb_main
     access: proxy
     url: http://influxdb:8086
+    isDefault: true
     jsonData:
       version: Flux
       organization: "$ORG"
