@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDisclosure, useLocalStorage } from '@/lib/hooks';
 import { notifications } from '@/lib/notify';
-import { ChevronDown, ChevronUp, Pencil, Plus, Trash2, Upload, Download } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Pencil, Plus, Trash2, Upload, Download } from 'lucide-react';
 import { mergePivotByFrameSignal } from '../analytics/mergeByFrame';
 import { SimpleLineChart } from './SimpleLineChart';
 import { socket } from '../socket';
@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Dialog,
   DialogContent,
@@ -193,6 +194,108 @@ function FieldSelect({ label, description, value, onValueChange, disabled, place
   );
 }
 
+/** Searchable dropdown that keeps its own open/filter state (safe inside a live-updating dialog). */
+function SearchableSelect({
+  label,
+  description,
+  value,
+  onValueChange,
+  disabled,
+  placeholder = 'Select…',
+  options,
+  emptyText = 'No matches',
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selected = options.find((o) => o.value === value);
+  const q = query.trim().toLowerCase();
+  const filtered = !q
+    ? options
+    : options.filter(
+        (o) =>
+          String(o.label).toLowerCase().includes(q) ||
+          String(o.value).toLowerCase().includes(q) ||
+          String(o.searchText || '')
+            .toLowerCase()
+            .includes(q)
+      );
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {label ? <Label className="text-xs">{label}</Label> : null}
+      {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) setQuery('');
+        }}
+      >
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            className={cn(
+              'h-8 w-full justify-between px-3 font-normal',
+              !selected && 'text-muted-foreground'
+            )}
+          >
+            <span className="truncate">{selected ? selected.label : placeholder}</span>
+            <ChevronDown className="size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-[var(--radix-popover-trigger-width)] p-0"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <div className="border-b border-border p-2">
+            <Input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search…"
+              className="h-8"
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
+          <ScrollArea className="h-56">
+            <div className="flex flex-col p-1">
+              {filtered.length === 0 ? (
+                <p className="px-2 py-3 text-xs text-muted-foreground">{emptyText}</p>
+              ) : (
+                filtered.map((o) => {
+                  const active = o.value === value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground',
+                        active && 'bg-accent/60'
+                      )}
+                      onClick={() => {
+                        onValueChange(o.value);
+                        setOpen(false);
+                        setQuery('');
+                      }}
+                    >
+                      <Check className={cn('size-3.5 shrink-0', active ? 'opacity-100' : 'opacity-0')} />
+                      <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 function FieldNumber({ label, description, min, value, onChange }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -303,9 +406,16 @@ export function Analytics() {
   const [liveTick, setLiveTick] = useState(0);
   const liveThrottleUntilRef = useRef(0);
 
+  // Pause live refreshes while the editor is open so Select/Popover lists don't remount mid-scroll.
+  const editorOpenRef = useRef(false);
+  useEffect(() => {
+    editorOpenRef.current = opened;
+  }, [opened]);
+
   useEffect(() => {
     const THROTTLE_MS = 280;
     const onBatch = () => {
+      if (editorOpenRef.current) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       const now = Date.now();
       if (now < liveThrottleUntilRef.current) return;
@@ -394,6 +504,26 @@ export function Analytics() {
     const msg = messages.find((m) => m.id === editing?.messageId);
     return sortSignalsByStartBit(msg?.signals);
   }, [messages, editing?.messageId]);
+
+  const messageSelectOptions = useMemo(
+    () =>
+      messages.map((m) => ({
+        value: String(m.id),
+        label: `${m.name} (${m.id_hex})`,
+        searchText: `${m.name} ${m.id_hex} ${m.id}`,
+      })),
+    [messages]
+  );
+
+  const signalSelectOptions = useMemo(
+    () =>
+      currentMessageSignals.map((s) => ({
+        value: s.name,
+        label: signalSelectLabel(s),
+        searchText: s.name,
+      })),
+    [currentMessageSignals]
+  );
 
   const syncSelectedMessages = useMemo(() => {
     const ids = editing?.syncMessageIds || [];
@@ -820,29 +950,22 @@ export function Analytics() {
                         <div className="flex flex-col gap-1.5">
                           {(editing.syncMessageIds || []).map((mid, idx) => (
                             <div key={idx} className="flex items-start gap-1">
-                              <Select
-                                value={mid != null ? String(mid) : undefined}
-                                disabled={!schema}
-                                onValueChange={(x) => {
-                                  const v = x != null ? parseInt(x, 10) : null;
-                                  setEditing((e) => {
-                                    const next = [...(e.syncMessageIds || [])];
-                                    next[idx] = v;
-                                    return { ...e, syncMessageIds: next };
-                                  });
-                                }}
-                              >
-                                <SelectTrigger className="min-w-0 flex-1" size="sm">
-                                  <SelectValue placeholder="Select CAN message" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {messages.map((m) => (
-                                    <SelectItem key={m.id} value={String(m.id)}>
-                                      {m.name} ({m.id_hex})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <div className="min-w-0 flex-1">
+                                <SearchableSelect
+                                  value={mid != null ? String(mid) : undefined}
+                                  disabled={!schema}
+                                  placeholder="Select CAN message"
+                                  options={messageSelectOptions}
+                                  onValueChange={(x) => {
+                                    const v = x != null ? parseInt(x, 10) : null;
+                                    setEditing((e) => {
+                                      const next = [...(e.syncMessageIds || [])];
+                                      next[idx] = v;
+                                      return { ...e, syncMessageIds: next };
+                                    });
+                                  }}
+                                />
+                              </div>
                               <Button
                                 variant="outline"
                                 size="icon-sm"
@@ -862,20 +985,19 @@ export function Analytics() {
                       )}
                     </CardContent>
                   </Card>
-                  <FieldSelect
+                  <SearchableSelect
                     label="Frame sync signal"
                     description="Exact name from DBC (shared by all messages above), e.g. FrameID_…"
                     value={editing.syncFrameSignalName || undefined}
                     disabled={syncFrameSignalOptions.length === 0}
                     placeholder={syncSelectedMessages.length ? 'Select signal' : 'Add messages first'}
+                    options={syncFrameSignalOptions.map((o) => ({
+                      value: o.value,
+                      label: o.label,
+                      searchText: o.value,
+                    }))}
                     onValueChange={(x) => setEditing((e) => ({ ...e, syncFrameSignalName: x || '' }))}
-                  >
-                    {syncFrameSignalOptions.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </FieldSelect>
+                  />
                   {syncNeedsArrayIndex ? (
                     <FieldNumber
                       label="Array index"
@@ -888,11 +1010,12 @@ export function Analytics() {
                 </>
               ) : (
                 <>
-                  <FieldSelect
+                  <SearchableSelect
                     label="Message"
                     value={editing.messageId != null ? String(editing.messageId) : undefined}
                     disabled={!schema}
                     placeholder={loadingSchema ? 'Loading schema…' : 'Select message'}
+                    options={messageSelectOptions}
                     onValueChange={(x) => {
                       const mid = x != null ? parseInt(x, 10) : null;
                       const msg = messages.find((m) => m.id === mid);
@@ -904,25 +1027,15 @@ export function Analytics() {
                         arrayMode: isArr ? e.arrayMode || 'single_index' : null,
                       }));
                     }}
-                  >
-                    {messages.map((m) => (
-                      <SelectItem key={m.id} value={String(m.id)}>
-                        {m.name} ({m.id_hex})
-                      </SelectItem>
-                    ))}
-                  </FieldSelect>
-                  <FieldSelect
+                  />
+                  <SearchableSelect
                     label="Signal"
                     value={editing.signalName || undefined}
                     disabled={editing.messageId == null}
+                    placeholder="Select signal"
+                    options={signalSelectOptions}
                     onValueChange={(x) => setEditing((e) => ({ ...e, signalName: x || '' }))}
-                  >
-                    {currentMessageSignals.map((s) => (
-                      <SelectItem key={s.name} value={s.name}>
-                        {signalSelectLabel(s)}
-                      </SelectItem>
-                    ))}
-                  </FieldSelect>
+                  />
                   {messages.find((m) => m.id === editing.messageId)?.array_index_signal ? (
                     <>
                       {(editing.viewType === 'min' || editing.viewType === 'max') && (
