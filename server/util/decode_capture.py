@@ -44,7 +44,8 @@ def load_dbc_index(dbc_paths: list[str]) -> dict[int, list[tuple[str, cantools.d
         path = Path(dbc_path)
         if not path.is_file():
             continue
-        db = cantools.database.load_file(str(path))
+        from server.util.dbc_load import load_dbc_file
+        db = load_dbc_file(path)
         net = path.stem
         for msg in db.messages:
             index[msg.frame_id].append((net, msg))

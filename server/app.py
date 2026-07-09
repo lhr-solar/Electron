@@ -780,8 +780,8 @@ async def get_dbc_schema(vehicle: str, filename: str):
     if not os.path.isfile(dbc_path):
         raise HTTPException(status_code=404, detail="DBC not found.")
     try:
-        import cantools
-        db = cantools.database.load_file(dbc_path)
+        from server.util.dbc_load import load_dbc_file, normalize_unit
+        db = load_dbc_file(dbc_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load DBC: {e!s}")
 
@@ -844,7 +844,7 @@ async def get_dbc_schema(vehicle: str, filename: str):
                     "start_bit": start_bit,
                     "length": length,
                     "bit_range": bit_range,
-                    "unit": sig.unit or None,
+                    "unit": normalize_unit(sig.unit) or None,
                     "scale": getattr(sig, "scale", None),
                     "offset": getattr(sig, "offset", None),
                     "min": getattr(sig, "minimum", None),

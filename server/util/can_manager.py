@@ -4,6 +4,8 @@ import can
 import time
 import logging
 
+from server.util.dbc_load import add_dbc_file, normalize_unit
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,7 +48,7 @@ class CANManager:
             # Resolve which frame_ids this DBC defines so we tag them with this network.
             # Cantools merges when we add to main db; later file overwrites same frame_id.
             temp_db = cantools.database.Database()
-            temp_db.add_dbc_file(dbc_file)
+            add_dbc_file(temp_db, dbc_file)
             frame_ids = set()
             for msg in temp_db.messages:
                 self.frame_id_to_network[msg.frame_id] = network_name
@@ -54,7 +56,7 @@ class CANManager:
             if frame_ids:
                 ids_hex = ", ".join(f"0x{fid:X}" for fid in sorted(frame_ids))
                 logger.info(f"DBC IDs for {os.path.basename(dbc_file)} (network '{network_name}'): {ids_hex}")
-            self.db.add_dbc_file(dbc_file)
+            add_dbc_file(self.db, dbc_file)
             logger.info(f"Loaded DBC: {dbc_file} (network: {network_name})")
         except Exception as e:
             msg = f"{dbc_file}: {e!s}"
@@ -142,8 +144,9 @@ class CANManager:
             units = {}
             if message_def:
                 for sig in message_def.signals:
-                    if sig.unit:
-                        units[sig.name] = sig.unit
+                    unit = normalize_unit(sig.unit)
+                    if unit:
+                        units[sig.name] = unit
             result = {
                 "can_id_hex": can_id_hex,
                 "message_name": message_def.name if message_def else None,

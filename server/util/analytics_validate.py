@@ -22,7 +22,8 @@ def _load_db(vehicle: str, dbc_filename: str, dbc_dir: str) -> tuple[cantools.da
     if not paths or not os.path.isfile(paths[0]):
         return None, f"DBC file not found for vehicle '{vehicle}': {dbc_filename}"
     try:
-        return cantools.database.load_file(paths[0]), None
+        from server.util.dbc_load import load_dbc_file
+        return load_dbc_file(paths[0]), None
     except Exception as e:
         return None, f"Failed to load DBC: {e!s}"
 
