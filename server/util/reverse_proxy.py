@@ -11,6 +11,25 @@ from server.config import settings
 
 logger = logging.getLogger(__name__)
 
+# One shared client per upstream — opening AsyncClient per panel query
+# exhausts connections under Grafana's 500ms multi-panel refresh and
+# Cloudflare returns 502 before the origin can answer.
+_proxy_clients: dict[str, httpx.AsyncClient] = {}
+_PROXY_LIMITS = httpx.Limits(max_connections=100, max_keepalive_connections=40)
+_PROXY_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
+
+
+def _client_for(upstream_base: str) -> httpx.AsyncClient:
+    client = _proxy_clients.get(upstream_base)
+    if client is None or client.is_closed:
+        client = httpx.AsyncClient(
+            follow_redirects=False,
+            timeout=_PROXY_TIMEOUT,
+            limits=_PROXY_LIMITS,
+        )
+        _proxy_clients[upstream_base] = client
+    return client
+
 HOP_BY_HOP_HEADERS = {
     "connection",
     "keep-alive",
@@ -303,13 +322,13 @@ async def proxy_to_upstream(
         headers.pop("if-modified-since", None)
 
     try:
-        async with httpx.AsyncClient(follow_redirects=False, timeout=30.0) as client:
-            upstream_response = await client.request(
-                request.method,
-                upstream_url,
-                headers=headers,
-                content=body if body else None,
-            )
+        client = _client_for(upstream_base)
+        upstream_response = await client.request(
+            request.method,
+            upstream_url,
+            headers=headers,
+            content=body if body else None,
+        )
     except httpx.RequestError as exc:
         logger.warning("Proxy request failed for %s: %s", upstream_url, exc)
         raise

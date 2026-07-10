@@ -12,14 +12,13 @@
   "editable": true,
   "graphTooltip": 1,
   "timezone": "browser",
-  "refresh": "500ms",
+  "refresh": "1s",
   "time": {
     "from": "now-5m",
     "to": "now"
   },
   "timepicker": {
     "refresh_intervals": [
-      "500ms",
       "1s",
       "2s",
       "5s",
@@ -73,8 +72,8 @@
         "y": 1
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -85,7 +84,8 @@
             "mode": "continuous-GrYlRd"
           },
           "min": 2.5,
-          "max": 4.2
+          "max": 4.2,
+          "noValue": "\u2014"
         },
         "overrides": []
       },
@@ -99,18 +99,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Data",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -125,8 +132,8 @@
         "y": 9
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -158,18 +165,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Data",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> min()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -184,8 +198,8 @@
         "y": 9
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -217,18 +231,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Data",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> max()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -243,8 +264,8 @@
         "y": 9
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -276,18 +297,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Data",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> mean()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -302,8 +330,8 @@
         "y": 9
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -335,18 +363,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Data",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> spread()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -377,7 +412,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "M${__field.labels.idx}"
         },
         "overrides": []
       },
@@ -385,7 +421,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -399,7 +436,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\", \"idx\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\", \"idx\"])"
         }
       ]
     },
@@ -414,8 +451,8 @@
         "y": 13
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -563,16 +600,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Voltage_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -600,8 +647,8 @@
         "y": 22
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -612,7 +659,8 @@
             "mode": "continuous-GrYlRd"
           },
           "min": 0,
-          "max": 60
+          "max": 60,
+          "noValue": "\u2014"
         },
         "overrides": []
       },
@@ -626,18 +674,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Data",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -652,8 +707,8 @@
         "y": 30
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -685,18 +740,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Data",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> min()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -711,8 +773,8 @@
         "y": 30
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -744,18 +806,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Data",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> max()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -770,8 +839,8 @@
         "y": 30
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -803,18 +872,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Data",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> mean()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -829,8 +905,8 @@
         "y": 30
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -862,18 +938,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Data",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> spread()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -904,7 +987,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "M${__field.labels.idx}"
         },
         "overrides": []
       },
@@ -912,7 +996,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -926,7 +1011,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\", \"idx\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\", \"idx\"])"
         }
       ]
     },
@@ -941,8 +1026,8 @@
         "y": 34
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1105,16 +1190,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Temperature_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -1142,8 +1237,8 @@
         "y": 43
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1164,7 +1259,7 @@
                 },
                 "2": {
                   "text": "Out-of-Bounds",
-                  "color": "red",
+                  "color": "orange",
                   "index": 2
                 },
                 "3": {
@@ -1179,7 +1274,7 @@
                 },
                 "5": {
                   "text": "Message Watchdog",
-                  "color": "red",
+                  "color": "orange",
                   "index": 5
                 }
               }
@@ -1196,7 +1291,8 @@
                 "value": null
               }
             ]
-          }
+          },
+          "noValue": "\u2014"
         },
         "overrides": []
       },
@@ -1210,18 +1306,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Fault",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Fault"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -1236,8 +1339,8 @@
         "y": 51
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1253,17 +1356,17 @@
                 },
                 "1": {
                   "text": "Out-of-Bounds (Short to GND)",
-                  "color": "red",
+                  "color": "orange",
                   "index": 1
                 },
                 "2": {
                   "text": "Out-of-Bounds (Short to VCC)",
-                  "color": "red",
+                  "color": "orange",
                   "index": 2
                 },
                 "3": {
                   "text": "Disconnected",
-                  "color": "red",
+                  "color": "orange",
                   "index": 3
                 },
                 "4": {
@@ -1288,7 +1391,7 @@
                 },
                 "8": {
                   "text": "Message Watchdog",
-                  "color": "red",
+                  "color": "orange",
                   "index": 8
                 }
               }
@@ -1305,7 +1408,8 @@
                 "value": null
               }
             ]
-          }
+          },
+          "noValue": "\u2014"
         },
         "overrides": []
       },
@@ -1319,18 +1423,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Fault",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Fault"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -1358,8 +1469,8 @@
         "y": 60
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1507,16 +1618,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Voltage_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"2\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"2\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/2",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -1531,8 +1652,8 @@
         "y": 60
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1680,16 +1801,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Voltage_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"3\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"3\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/3",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -1704,8 +1835,8 @@
         "y": 68
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1853,16 +1984,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Voltage_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"4\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"4\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/4",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -1877,8 +2018,8 @@
         "y": 68
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2026,16 +2167,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Voltage_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"5\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"5\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/5",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2050,8 +2201,8 @@
         "y": 76
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2199,16 +2350,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Voltage_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"6\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"6\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/6",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2223,8 +2384,8 @@
         "y": 76
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2372,16 +2533,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Voltage_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"7\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"7\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/7",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2396,8 +2567,8 @@
         "y": 84
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2545,16 +2716,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Voltage_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"8\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"8\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/8",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2569,8 +2750,8 @@
         "y": 84
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2718,16 +2899,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Voltage_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"9\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"9\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/9",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2755,8 +2946,8 @@
         "y": 93
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2919,16 +3110,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Temperature_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"10\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"10\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/10",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2943,8 +3144,8 @@
         "y": 93
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3107,16 +3308,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Temperature_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"11\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"11\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/11",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3131,8 +3342,8 @@
         "y": 101
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3295,16 +3506,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Temperature_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"12\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"12\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/12",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3319,8 +3540,8 @@
         "y": 101
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3483,16 +3704,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Temperature_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"13\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"13\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/13",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3507,8 +3738,8 @@
         "y": 109
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3671,16 +3902,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Temperature_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"14\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"14\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/14",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3695,8 +3936,8 @@
         "y": 109
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3859,16 +4100,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Temperature_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"15\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"15\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/15",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3883,8 +4134,8 @@
         "y": 117
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -4047,16 +4298,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Temperature_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"16\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"16\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/16",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -4071,8 +4332,8 @@
         "y": 117
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -4235,16 +4496,26 @@
         "cellHeight": "sm",
         "footer": {
           "show": false
+        },
+        "reduceOptions": {
+          "fields": "/BPS_Temperature_Tap_Data/"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "volt = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"17\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"value\"})\nfault = from(bucket: \"telemetry_main\")\n  |> range(start: -60s)\n  |> filter(fn: (r) => r._measurement == \"17\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> keep(columns: [\"idx\", \"_value\"])\n  |> rename(columns: {_value: \"fault\"})\njoin(tables: {v: volt, f: fault}, on: [\"idx\"])\n  |> group()\n  |> sort(columns: [\"idx\"])"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/17",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -4277,7 +4548,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "noValue": "\u2014",
+          "noValue": "stale",
           "decimals": 1,
           "unit": "s",
           "color": {
@@ -4308,7 +4579,7 @@
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
-        "textMode": "auto",
+        "textMode": "value",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -4324,7 +4595,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> max(column: \"_time\")\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     },
@@ -4344,7 +4615,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "noValue": "\u2014",
+          "noValue": "stale",
           "decimals": 1,
           "unit": "s",
           "color": {
@@ -4375,7 +4646,7 @@
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
-        "textMode": "auto",
+        "textMode": "value",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -4391,7 +4662,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> max(column: \"_time\")\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     }

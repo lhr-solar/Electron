@@ -11,14 +11,13 @@
   "editable": true,
   "graphTooltip": 1,
   "timezone": "browser",
-  "refresh": "500ms",
+  "refresh": "1s",
   "time": {
     "from": "now-5m",
     "to": "now"
   },
   "timepicker": {
     "refresh_intervals": [
-      "500ms",
       "1s",
       "2s",
       "5s",
@@ -72,8 +71,8 @@
         "y": 1
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -112,19 +111,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "Main_Battery_Voltage",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "Main_Battery_Voltage"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -155,7 +161,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -163,7 +170,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -177,19 +185,74 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
     {
-      "id": 4,
-      "type": "stat",
+      "id": 5,
+      "type": "timeseries",
       "title": "Pack Current",
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 4,
+        "y": 9
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb_main"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "amp",
+          "decimals": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "displayName": "${__field.name}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb_main"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Pack Power",
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 0,
-        "y": 6
+        "x": 12,
+        "y": 9
       },
       "datasource": {
         "type": "influxdb",
@@ -198,8 +261,8 @@
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
-          "unit": "amp",
-          "decimals": 1,
+          "unit": "watt",
+          "decimals": 0,
           "color": {
             "mode": "palette-classic"
           }
@@ -218,59 +281,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 5,
-      "type": "timeseries",
-      "title": "Pack Current",
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 4,
-        "y": 6
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "amp",
-          "decimals": 1,
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 22
         }
       },
       "targets": [
@@ -280,57 +294,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
-        }
-      ]
-    },
-    {
-      "id": 6,
-      "type": "stat",
-      "title": "Pack Power",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 12,
-        "y": 6
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "unit": "watt",
-          "decimals": 0,
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "voltage = from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\ncurrent = from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\njoin(tables: {v: voltage, c: current}, on: [\"vehicle\"])\n  |> map(fn: (r) => ({_value: r._value_v * r._value_c, _time: r._time_v, _field: \"Pack_Power\"}))"
+          "query": "v = from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: \"v\"}))\ni = from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: \"i\"}))\nunion(tables: [v, i])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({_time: r._time, _value: r.v * r.i, _field: \"Power\"}))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -342,7 +306,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 6
+        "y": 9
       },
       "datasource": {
         "type": "influxdb",
@@ -361,7 +325,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -369,7 +334,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -383,7 +349,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "import \"join\"\nvoltage = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> rename(columns: {_value: \"v\"})\ncurrent = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\njoin.time(method: \"inner\", tables: {v: voltage, c: current})\n  |> map(fn: (r) => ({_time: r._time, _value: r.v * r._value, _field: \"Pack_Power\"}))"
+          "query": "v = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"v\"}))\n  |> group()\ni = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"i\"}))\n  |> group()\nunion(tables: [v, i])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.v and exists r.i)\n  |> map(fn: (r) => ({_time: r._time, _value: r.v * r.i, _field: \"Pack_Power\"}))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -396,32 +362,31 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 15
       },
       "panels": []
     },
     {
       "id": 9,
       "type": "stat",
-      "title": "MC Bus Voltage",
+      "title": "Electrical",
       "gridPos": {
-        "h": 5,
-        "w": 6,
+        "h": 3,
+        "w": 24,
         "x": 0,
-        "y": 13
+        "y": 6
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
-          "unit": "volt",
-          "decimals": 1,
           "color": {
             "mode": "thresholds"
           },
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -438,32 +403,118 @@
                 "value": 100
               }
             ]
-          }
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MC_BusVoltage"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MC Bus Voltage"
+              },
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MC_BusCurrent"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MC Bus Current"
+              },
+              {
+                "id": "unit",
+                "value": "amp"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Main_Battery_Current"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Pack Current"
+              },
+              {
+                "id": "unit",
+                "value": "amp"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
+        "graphMode": "none",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusVoltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/422",
+          "filter": {
+            "fields": [
+              "MC_BusVoltage",
+              "MC_BusCurrent"
+            ]
+          },
+          "buffer": 1
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/A",
+          "filter": {
+            "fields": [
+              "Main_Battery_Current"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -475,7 +526,7 @@
         "h": 5,
         "w": 18,
         "x": 6,
-        "y": 13
+        "y": 16
       },
       "datasource": {
         "type": "influxdb",
@@ -494,7 +545,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -502,7 +554,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -516,7 +569,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusVoltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusVoltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -524,19 +577,19 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusCurrent\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusCurrent\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
     {
-      "id": 11,
+      "id": 12,
       "type": "stat",
-      "title": "MC Bus Current",
+      "title": "MC Bus Power",
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 0,
-        "y": 18
+        "x": 4,
+        "y": 21
       },
       "datasource": {
         "type": "influxdb",
@@ -545,8 +598,8 @@
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
-          "unit": "amp",
-          "decimals": 1,
+          "unit": "watt",
+          "decimals": 0,
           "color": {
             "mode": "palette-classic"
           }
@@ -565,57 +618,11 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusCurrent\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 22
         }
-      ]
-    },
-    {
-      "id": 12,
-      "type": "stat",
-      "title": "MC Bus Power",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 18
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "unit": "watt",
-          "decimals": 0,
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
@@ -624,7 +631,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "voltage = from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusVoltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\ncurrent = from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusCurrent\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\njoin(tables: {v: voltage, c: current}, on: [\"vehicle\"])\n  |> map(fn: (r) => ({_value: r._value_v * r._value_c, _time: r._time_v, _field: \"MC_Bus_Power\"}))"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusVoltage\" or r._field == \"MC_BusCurrent\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> last()\n  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: r._field}))\n  |> group()\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({_time: r._time, _value: r.MC_BusVoltage * r.MC_BusCurrent, _field: \"Power\"}))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -636,7 +643,7 @@
         "h": 6,
         "w": 16,
         "x": 8,
-        "y": 18
+        "y": 21
       },
       "datasource": {
         "type": "influxdb",
@@ -655,7 +662,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -663,7 +671,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -677,7 +686,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "import \"join\"\nvoltage = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusVoltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> rename(columns: {_value: \"v\"})\ncurrent = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusCurrent\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\njoin.time(method: \"inner\", tables: {v: voltage, c: current})\n  |> map(fn: (r) => ({_time: r._time, _value: r.v * r._value, _field: \"MC_Bus_Power\"}))"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusVoltage\" or r._field == \"MC_BusCurrent\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.MC_BusVoltage and exists r.MC_BusCurrent)\n  |> map(fn: (r) => ({_time: r._time, _value: r.MC_BusVoltage * r.MC_BusCurrent, _field: \"MC_Bus_Power\"}))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -690,207 +699,225 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 27
       },
       "panels": []
     },
     {
       "id": 15,
       "type": "stat",
-      "title": "BPS Pchg Battery V",
+      "title": "Electrical",
       "gridPos": {
-        "h": 4,
-        "w": 6,
+        "h": 3,
+        "w": 24,
         "x": 0,
-        "y": 25
+        "y": 28
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
-          "unit": "volt",
-          "decimals": 1,
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Precharge_Battery_Voltage"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Pchg Battery V"
+              },
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Precharge_Array_Voltage"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Pchg Array V"
+              },
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 16,
-      "type": "stat",
-      "title": "BPS Pchg Array V",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 25
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "unit": "volt",
-          "decimals": 1,
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Array_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/20",
+          "filter": {
+            "fields": [
+              "BPS_Precharge_Battery_Voltage",
+              "BPS_Precharge_Array_Voltage"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
     {
       "id": 17,
       "type": "stat",
-      "title": "VCU Pchg Battery V",
+      "title": "VCU Status",
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 25
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 31
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
-          "unit": "volt",
-          "decimals": 1,
           "color": {
-            "mode": "palette-classic"
-          }
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "VCU_Precharge_Battery_Voltage"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "VCU Pchg Battery V"
+              },
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "VCU_Precharge_Motor_Voltage"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "VCU Pchg Motor V"
+              },
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 18,
-      "type": "stat",
-      "title": "VCU Pchg Motor V",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 25
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "unit": "volt",
-          "decimals": 1,
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Motor_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/21",
+          "filter": {
+            "fields": [
+              "VCU_Precharge_Battery_Voltage",
+              "VCU_Precharge_Motor_Voltage"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -902,7 +929,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 34
       },
       "datasource": {
         "type": "influxdb",
@@ -921,7 +948,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -929,7 +957,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -943,7 +972,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -951,7 +980,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Array_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Array_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -959,7 +988,7 @@
             "uid": "influxdb_main"
           },
           "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -967,7 +996,7 @@
             "uid": "influxdb_main"
           },
           "refId": "D",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Motor_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Motor_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -979,7 +1008,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 36
+        "y": 41
       },
       "datasource": {
         "type": "influxdb",
@@ -998,7 +1027,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -1006,7 +1036,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1020,7 +1051,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "import \"join\"\nbattery = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> rename(columns: {_value: \"bat\"})\nmotor = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Motor_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\njoin.time(method: \"inner\", tables: {bat: battery, m: motor})\n  |> map(fn: (r) => ({_time: r._time, _value: r.bat - r._value, _field: \"PCHG_Delta_Battery_Motor\"}))"
+          "query": "bat = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"bat\"}))\n  |> group()\nmot = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Motor_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"mot\"}))\n  |> group()\nunion(tables: [bat, mot])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.bat and exists r.mot)\n  |> map(fn: (r) => ({_time: r._time, _value: r.bat - r.mot, _field: \"Precharge_Delta\"}))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -1033,27 +1064,30 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 42
+        "y": 47
       },
       "panels": []
     },
     {
       "id": 22,
       "type": "stat",
-      "title": "HV+",
+      "title": "Contactors",
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 24,
         "x": 0,
-        "y": 43
+        "y": 48
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
+          "color": {
+            "mode": "thresholds"
+          },
           "mappings": [
             {
               "type": "value",
@@ -1071,9 +1105,6 @@
               }
             }
           ],
-          "color": {
-            "mode": "thresholds"
-          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1082,402 +1113,133 @@
                 "value": null
               }
             ]
-          }
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HV_Plus_Contactor_State"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "HV+"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HV_Minus_Contactor_State"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "HV\u2212"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Array_Contactor_State"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Array"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Array_Precharge_Contactor_State"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Array Pchg"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Motor_Contactor_State"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Motor"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Motor_Precharge_Contactor_State"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Motor Pchg"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"HV_Plus_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 23,
-      "type": "stat",
-      "title": "HV\u2212",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 43
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Open",
-                  "color": "red",
-                  "index": 0
-                },
-                "1": {
-                  "text": "Closed",
-                  "color": "green",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"HV_Minus_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 24,
-      "type": "stat",
-      "title": "Array",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 8,
-        "y": 43
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Open",
-                  "color": "red",
-                  "index": 0
-                },
-                "1": {
-                  "text": "Closed",
-                  "color": "green",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "HV_Plus_Contactor_State",
+              "HV_Minus_Contactor_State",
+              "Array_Contactor_State",
+              "Array_Precharge_Contactor_State"
             ]
-          }
+          },
+          "buffer": 1
         },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
         {
+          "refId": "B",
           "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
+            "type": "datasource",
+            "uid": "-- Grafana --"
           },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Array_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 25,
-      "type": "stat",
-      "title": "Array Pchg",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 12,
-        "y": 43
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Open",
-                  "color": "red",
-                  "index": 0
-                },
-                "1": {
-                  "text": "Closed",
-                  "color": "green",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
+          "queryType": "measurements",
+          "channel": "stream/telemetry/18",
+          "filter": {
+            "fields": [
+              "Motor_Contactor_State",
+              "Motor_Precharge_Contactor_State"
             ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
           },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Array_Precharge_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 26,
-      "type": "stat",
-      "title": "Motor",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 16,
-        "y": 43
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Open",
-                  "color": "red",
-                  "index": 0
-                },
-                "1": {
-                  "text": "Closed",
-                  "color": "green",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"Motor_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 27,
-      "type": "stat",
-      "title": "Motor Pchg",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 20,
-        "y": 43
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Open",
-                  "color": "red",
-                  "index": 0
-                },
-                "1": {
-                  "text": "Closed",
-                  "color": "green",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"Motor_Precharge_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "buffer": 1
         }
       ]
     },
@@ -1486,10 +1248,10 @@
       "type": "state-timeline",
       "title": "HV Contactor States",
       "gridPos": {
-        "h": 6,
+        "h": 9,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 52
       },
       "datasource": {
         "type": "influxdb",
@@ -1522,14 +1284,35 @@
                   "color": "red",
                   "index": 0
                 },
+                "Open": {
+                  "text": "Open",
+                  "color": "red",
+                  "index": 0
+                },
+                "OPEN": {
+                  "text": "Open",
+                  "color": "red",
+                  "index": 0
+                },
                 "1": {
+                  "text": "Closed",
+                  "color": "green",
+                  "index": 1
+                },
+                "Closed": {
+                  "text": "Closed",
+                  "color": "green",
+                  "index": 1
+                },
+                "CLOSED": {
                   "text": "Closed",
                   "color": "green",
                   "index": 1
                 }
               }
             }
-          ]
+          ],
+          "displayName": "${__field.name}"
         },
         "overrides": [
           {
@@ -1549,7 +1332,27 @@
                         "color": "red",
                         "index": 0
                       },
+                      "Open": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "OPEN": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
                       "1": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "Closed": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "CLOSED": {
                         "text": "Closed",
                         "color": "green",
                         "index": 1
@@ -1557,6 +1360,10 @@
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "HV_Plus_Contactor_State"
               }
             ]
           },
@@ -1577,7 +1384,27 @@
                         "color": "red",
                         "index": 0
                       },
+                      "Open": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "OPEN": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
                       "1": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "Closed": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "CLOSED": {
                         "text": "Closed",
                         "color": "green",
                         "index": 1
@@ -1585,6 +1412,10 @@
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "HV_Minus_Contactor_State"
               }
             ]
           },
@@ -1605,7 +1436,27 @@
                         "color": "red",
                         "index": 0
                       },
+                      "Open": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "OPEN": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
                       "1": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "Closed": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "CLOSED": {
                         "text": "Closed",
                         "color": "green",
                         "index": 1
@@ -1613,6 +1464,10 @@
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "Array_Contactor_State"
               }
             ]
           },
@@ -1633,7 +1488,27 @@
                         "color": "red",
                         "index": 0
                       },
+                      "Open": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "OPEN": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
                       "1": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "Closed": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "CLOSED": {
                         "text": "Closed",
                         "color": "green",
                         "index": 1
@@ -1641,6 +1516,10 @@
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "Array_Precharge_Contactor_State"
               }
             ]
           },
@@ -1661,7 +1540,27 @@
                         "color": "red",
                         "index": 0
                       },
+                      "Open": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "OPEN": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
                       "1": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "Closed": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "CLOSED": {
                         "text": "Closed",
                         "color": "green",
                         "index": 1
@@ -1669,6 +1568,10 @@
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "Motor_Contactor_State"
               }
             ]
           },
@@ -1689,7 +1592,27 @@
                         "color": "red",
                         "index": 0
                       },
+                      "Open": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "OPEN": {
+                        "text": "Open",
+                        "color": "red",
+                        "index": 0
+                      },
                       "1": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "Closed": {
+                        "text": "Closed",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "CLOSED": {
                         "text": "Closed",
                         "color": "green",
                         "index": 1
@@ -1697,6 +1620,10 @@
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "Motor_Precharge_Contactor_State"
               }
             ]
           }
@@ -1704,14 +1631,16 @@
       },
       "options": {
         "mergeValues": true,
-        "showValue": "auto",
-        "alignValue": "left",
-        "rowHeight": 0.9,
+        "showValue": "never",
+        "alignValue": "right",
+        "rowHeight": 0.6,
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
-        }
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {}
       },
       "targets": [
         {
@@ -1720,7 +1649,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"HV_Plus_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"HV_Plus_Contactor_State\" or r._field == \"HV_Minus_Contactor_State\" or r._field == \"Array_Contactor_State\" or r._field == \"Array_Precharge_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1728,39 +1657,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"HV_Minus_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Array_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "D",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Array_Precharge_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "E",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"Motor_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "F",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"Motor_Precharge_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"Motor_Contactor_State\" or r._field == \"Motor_Precharge_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -1773,207 +1670,225 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 61
       },
       "panels": []
     },
     {
       "id": 30,
       "type": "stat",
-      "title": "Elcon V Out (IF)",
+      "title": "Elcon / Charger",
       "gridPos": {
-        "h": 4,
-        "w": 6,
+        "h": 3,
+        "w": 24,
         "x": 0,
-        "y": 54
+        "y": 62
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
-          "unit": "volt",
-          "decimals": 1,
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Elcon_VOL_OUT"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Elcon V Out (IF)"
+              },
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Elcon_CUR_OUT"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Elcon I Out (IF)"
+              },
+              {
+                "id": "unit",
+                "value": "amp"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"E\")\n  |> filter(fn: (r) => r._field == \"Elcon_VOL_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 31,
-      "type": "stat",
-      "title": "Elcon I Out (IF)",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 54
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "unit": "amp",
-          "decimals": 1,
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"E\")\n  |> filter(fn: (r) => r._field == \"Elcon_CUR_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/E",
+          "filter": {
+            "fields": [
+              "Elcon_VOL_OUT",
+              "Elcon_CUR_OUT"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
     {
       "id": 32,
       "type": "stat",
-      "title": "Elcon V Out (CCS)",
+      "title": "Elcon / Charger",
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 54
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 65
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
-          "unit": "volt",
-          "decimals": 1,
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Elcon_VOL_OUT"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Elcon V Out (CCS)"
+              },
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Elcon_CUR_OUT"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Elcon I Out (CCS)"
+              },
+              {
+                "id": "unit",
+                "value": "amp"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"18FF50E5\")\n  |> filter(fn: (r) => r._field == \"Elcon_VOL_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 33,
-      "type": "stat",
-      "title": "Elcon I Out (CCS)",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 54
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "unit": "amp",
-          "decimals": 1,
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"18FF50E5\")\n  |> filter(fn: (r) => r._field == \"Elcon_CUR_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/18FF50E5",
+          "filter": {
+            "fields": [
+              "Elcon_VOL_OUT",
+              "Elcon_CUR_OUT"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -1985,7 +1900,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 58
+        "y": 68
       },
       "datasource": {
         "type": "influxdb",
@@ -2004,7 +1919,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -2012,7 +1928,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -2026,7 +1943,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"E\")\n  |> filter(fn: (r) => r._field == \"Elcon_VOL_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"E\")\n  |> filter(fn: (r) => r._field == \"Elcon_VOL_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -2034,7 +1951,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"E\")\n  |> filter(fn: (r) => r._field == \"Elcon_CUR_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"E\")\n  |> filter(fn: (r) => r._field == \"Elcon_CUR_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -2046,7 +1963,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 58
+        "y": 68
       },
       "datasource": {
         "type": "influxdb",
@@ -2065,7 +1982,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -2073,7 +1991,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -2087,7 +2006,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18FF50E5\")\n  |> filter(fn: (r) => r._field == \"Elcon_VOL_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18FF50E5\")\n  |> filter(fn: (r) => r._field == \"Elcon_VOL_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -2095,7 +2014,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18FF50E5\")\n  |> filter(fn: (r) => r._field == \"Elcon_CUR_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18FF50E5\")\n  |> filter(fn: (r) => r._field == \"Elcon_CUR_OUT\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -2108,7 +2027,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 65
+        "y": 75
       },
       "panels": []
     },
@@ -2120,11 +2039,11 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 66
+        "y": 76
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2146,19 +2065,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "/MC_DCBusAh/",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"42E\")\n  |> filter(fn: (r) => r._field == \"MC_DCBusAh\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/42E",
+          "filter": {
+            "fields": [
+              "MC_DCBusAh"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2170,11 +2096,11 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 66
+        "y": 86
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2196,19 +2122,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "MC_TripOdometer",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"42E\")\n  |> filter(fn: (r) => r._field == \"MC_TripOdometer\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/42E",
+          "filter": {
+            "fields": [
+              "MC_TripOdometer"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2220,7 +2153,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 80
       },
       "datasource": {
         "type": "influxdb",
@@ -2239,7 +2172,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -2247,7 +2181,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -2261,7 +2196,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"42E\")\n  |> filter(fn: (r) => r._field == \"MC_DCBusAh\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"42E\")\n  |> filter(fn: (r) => r._field == \"MC_DCBusAh\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -2269,7 +2204,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"42E\")\n  |> filter(fn: (r) => r._field == \"MC_TripOdometer\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"42E\")\n  |> filter(fn: (r) => r._field == \"MC_TripOdometer\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -2282,27 +2217,30 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 72
+        "y": 90
       },
       "panels": []
     },
     {
       "id": 41,
       "type": "stat",
-      "title": "BPS Fault",
+      "title": "Faults",
       "gridPos": {
-        "h": 4,
-        "w": 4,
+        "h": 3,
+        "w": 24,
         "x": 0,
-        "y": 73
+        "y": 91
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
+          "color": {
+            "mode": "thresholds"
+          },
           "mappings": [
             {
               "type": "value",
@@ -2324,7 +2262,7 @@
                 },
                 "3": {
                   "text": "Regen",
-                  "color": "red",
+                  "color": "orange",
                   "index": 3
                 },
                 "4": {
@@ -2334,57 +2272,57 @@
                 },
                 "5": {
                   "text": "Elcon",
-                  "color": "red",
+                  "color": "orange",
                   "index": 5
                 },
                 "6": {
                   "text": "Array Precharge Timeout",
-                  "color": "red",
+                  "color": "orange",
                   "index": 6
                 },
                 "7": {
                   "text": "Internal Watchdog",
-                  "color": "red",
+                  "color": "orange",
                   "index": 7
                 },
                 "8": {
                   "text": "Segment Watchdog",
-                  "color": "red",
+                  "color": "orange",
                   "index": 8
                 },
                 "9": {
                   "text": "HV Plus Contactor Sense",
-                  "color": "red",
+                  "color": "orange",
                   "index": 9
                 },
                 "10": {
                   "text": "HV Minus Contactor Sense",
-                  "color": "red",
+                  "color": "orange",
                   "index": 10
                 },
                 "11": {
                   "text": "Array Contactor Sense",
-                  "color": "red",
+                  "color": "orange",
                   "index": 11
                 },
                 "12": {
                   "text": "Array Pchg Contactor Sense",
-                  "color": "red",
+                  "color": "orange",
                   "index": 12
                 },
                 "13": {
                   "text": "Estop 1",
-                  "color": "red",
+                  "color": "orange",
                   "index": 13
                 },
                 "14": {
                   "text": "Estop 2",
-                  "color": "red",
+                  "color": "orange",
                   "index": 14
                 },
                 "15": {
                   "text": "Estop 3",
-                  "color": "red",
+                  "color": "orange",
                   "index": 15
                 },
                 "16": {
@@ -2399,15 +2337,12 @@
                 },
                 "18": {
                   "text": "Amperes Watchdog",
-                  "color": "red",
+                  "color": "orange",
                   "index": 18
                 }
               }
             }
           ],
-          "color": {
-            "mode": "thresholds"
-          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2416,52 +2351,104 @@
                 "value": null
               }
             ]
-          }
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Fault"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Fault"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MC_FAULT_DcBusOverVoltage"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MC DcBus OV"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "BPS_Fault"
+            ]
+          },
+          "buffer": 1
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/421",
+          "filter": {
+            "fields": [
+              "MC_FAULT_DcBusOverVoltage"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
     {
       "id": 42,
       "type": "stat",
-      "title": "VCU PCHG OV",
+      "title": "VCU Status",
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 73
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 94
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
+          "color": {
+            "mode": "thresholds"
+          },
           "mappings": [
             {
               "type": "value",
@@ -2472,16 +2459,13 @@
                   "index": 0
                 },
                 "1": {
-                  "text": "FAULT",
+                  "text": "NOK",
                   "color": "red",
                   "index": 1
                 }
               }
             }
           ],
-          "color": {
-            "mode": "thresholds"
-          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2490,348 +2474,116 @@
                 "value": null
               }
             ]
-          }
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "VCU_PCHG_OV"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "VCU PCHG OV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "VCU_PCHG_UV"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "VCU PCHG UV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "VCU_MTR_OV"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "VCU MTR OV"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "VCU_MTR_UV"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "VCU MTR UV"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"VCU_PCHG_OV\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 43,
-      "type": "stat",
-      "title": "VCU PCHG UV",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 8,
-        "y": 73
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"VCU_PCHG_UV\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 44,
-      "type": "stat",
-      "title": "VCU MTR OV",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 12,
-        "y": 73
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
+          "queryType": "measurements",
+          "channel": "stream/telemetry/18",
+          "filter": {
+            "fields": [
+              "VCU_PCHG_OV",
+              "VCU_PCHG_UV",
+              "VCU_MTR_OV",
+              "VCU_MTR_UV"
             ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
           },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"VCU_MTR_OV\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 45,
-      "type": "stat",
-      "title": "VCU MTR UV",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 16,
-        "y": 73
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"VCU_MTR_UV\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 46,
-      "type": "stat",
-      "title": "MC DcBus OV",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 20,
-        "y": 73
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"421\")\n  |> filter(fn: (r) => r._field == \"MC_FAULT_DcBusOverVoltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "buffer": 1
         }
       ]
     },
     {
       "id": 47,
       "type": "stat",
-      "title": "MC Bus V Upper",
+      "title": "MC Limits",
       "gridPos": {
-        "h": 4,
-        "w": 4,
+        "h": 3,
+        "w": 24,
         "x": 0,
-        "y": 77
+        "y": 97
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
+          "color": {
+            "mode": "thresholds"
+          },
           "mappings": [
             {
               "type": "value",
@@ -2842,16 +2594,13 @@
                   "index": 0
                 },
                 "1": {
-                  "text": "LIMIT",
+                  "text": "NOK",
                   "color": "red",
                   "index": 1
                 }
               }
             }
           ],
-          "color": {
-            "mode": "thresholds"
-          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2860,180 +2609,80 @@
                 "value": null
               }
             ]
-          }
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MC_LIMIT_BusVoltageUpper"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MC Bus V Upper"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MC_LIMIT_BusVoltageLower"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MC Bus V Lower"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MC_LIMIT_BusCurrent"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "MC Bus I Limit"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"421\")\n  |> filter(fn: (r) => r._field == \"MC_LIMIT_BusVoltageUpper\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 48,
-      "type": "stat",
-      "title": "MC Bus V Lower",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 77
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "LIMIT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"421\")\n  |> filter(fn: (r) => r._field == \"MC_LIMIT_BusVoltageLower\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 49,
-      "type": "stat",
-      "title": "MC Bus I Limit",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 8,
-        "y": 77
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "LIMIT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
+          "queryType": "measurements",
+          "channel": "stream/telemetry/421",
+          "filter": {
+            "fields": [
+              "MC_LIMIT_BusVoltageUpper",
+              "MC_LIMIT_BusVoltageLower",
+              "MC_LIMIT_BusCurrent"
             ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
           },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"421\")\n  |> filter(fn: (r) => r._field == \"MC_LIMIT_BusCurrent\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "buffer": 1
         }
       ]
     },
@@ -3042,10 +2691,10 @@
       "type": "state-timeline",
       "title": "HV Faults Timeline",
       "gridPos": {
-        "h": 7,
+        "h": 12,
         "w": 24,
         "x": 0,
-        "y": 81
+        "y": 100
       },
       "datasource": {
         "type": "influxdb",
@@ -3078,7 +2727,22 @@
                   "color": "green",
                   "index": 0
                 },
+                "OK": {
+                  "text": "OK",
+                  "color": "green",
+                  "index": 0
+                },
                 "1": {
+                  "text": "Overvoltage",
+                  "color": "red",
+                  "index": 1
+                },
+                "Overvoltage": {
+                  "text": "Overvoltage",
+                  "color": "red",
+                  "index": 1
+                },
+                "OVERVOLTAGE": {
                   "text": "Overvoltage",
                   "color": "red",
                   "index": 1
@@ -3088,7 +2752,27 @@
                   "color": "red",
                   "index": 2
                 },
+                "Undervoltage": {
+                  "text": "Undervoltage",
+                  "color": "red",
+                  "index": 2
+                },
+                "UNDERVOLTAGE": {
+                  "text": "Undervoltage",
+                  "color": "red",
+                  "index": 2
+                },
                 "3": {
+                  "text": "Regen",
+                  "color": "red",
+                  "index": 3
+                },
+                "Regen": {
+                  "text": "Regen",
+                  "color": "red",
+                  "index": 3
+                },
+                "REGEN": {
                   "text": "Regen",
                   "color": "red",
                   "index": 3
@@ -3098,7 +2782,27 @@
                   "color": "red",
                   "index": 4
                 },
+                "Overtemperature": {
+                  "text": "Overtemperature",
+                  "color": "red",
+                  "index": 4
+                },
+                "OVERTEMPERATURE": {
+                  "text": "Overtemperature",
+                  "color": "red",
+                  "index": 4
+                },
                 "5": {
+                  "text": "Elcon",
+                  "color": "red",
+                  "index": 5
+                },
+                "Elcon": {
+                  "text": "Elcon",
+                  "color": "red",
+                  "index": 5
+                },
+                "ELCON": {
                   "text": "Elcon",
                   "color": "red",
                   "index": 5
@@ -3108,7 +2812,27 @@
                   "color": "red",
                   "index": 6
                 },
+                "Array Precharge Timeout": {
+                  "text": "Array Precharge Timeout",
+                  "color": "red",
+                  "index": 6
+                },
+                "ARRAY PRECHARGE TIMEOUT": {
+                  "text": "Array Precharge Timeout",
+                  "color": "red",
+                  "index": 6
+                },
                 "7": {
+                  "text": "Internal Watchdog",
+                  "color": "red",
+                  "index": 7
+                },
+                "Internal Watchdog": {
+                  "text": "Internal Watchdog",
+                  "color": "red",
+                  "index": 7
+                },
+                "INTERNAL WATCHDOG": {
                   "text": "Internal Watchdog",
                   "color": "red",
                   "index": 7
@@ -3118,7 +2842,27 @@
                   "color": "red",
                   "index": 8
                 },
+                "Segment Watchdog": {
+                  "text": "Segment Watchdog",
+                  "color": "red",
+                  "index": 8
+                },
+                "SEGMENT WATCHDOG": {
+                  "text": "Segment Watchdog",
+                  "color": "red",
+                  "index": 8
+                },
                 "9": {
+                  "text": "HV Plus Contactor Sense",
+                  "color": "red",
+                  "index": 9
+                },
+                "HV Plus Contactor Sense": {
+                  "text": "HV Plus Contactor Sense",
+                  "color": "red",
+                  "index": 9
+                },
+                "HV PLUS CONTACTOR SENSE": {
                   "text": "HV Plus Contactor Sense",
                   "color": "red",
                   "index": 9
@@ -3128,7 +2872,27 @@
                   "color": "red",
                   "index": 10
                 },
+                "HV Minus Contactor Sense": {
+                  "text": "HV Minus Contactor Sense",
+                  "color": "red",
+                  "index": 10
+                },
+                "HV MINUS CONTACTOR SENSE": {
+                  "text": "HV Minus Contactor Sense",
+                  "color": "red",
+                  "index": 10
+                },
                 "11": {
+                  "text": "Array Contactor Sense",
+                  "color": "red",
+                  "index": 11
+                },
+                "Array Contactor Sense": {
+                  "text": "Array Contactor Sense",
+                  "color": "red",
+                  "index": 11
+                },
+                "ARRAY CONTACTOR SENSE": {
                   "text": "Array Contactor Sense",
                   "color": "red",
                   "index": 11
@@ -3138,7 +2902,27 @@
                   "color": "red",
                   "index": 12
                 },
+                "Array Pchg Contactor Sense": {
+                  "text": "Array Pchg Contactor Sense",
+                  "color": "red",
+                  "index": 12
+                },
+                "ARRAY PCHG CONTACTOR SENSE": {
+                  "text": "Array Pchg Contactor Sense",
+                  "color": "red",
+                  "index": 12
+                },
                 "13": {
+                  "text": "Estop 1",
+                  "color": "red",
+                  "index": 13
+                },
+                "Estop 1": {
+                  "text": "Estop 1",
+                  "color": "red",
+                  "index": 13
+                },
+                "ESTOP 1": {
                   "text": "Estop 1",
                   "color": "red",
                   "index": 13
@@ -3148,7 +2932,27 @@
                   "color": "red",
                   "index": 14
                 },
+                "Estop 2": {
+                  "text": "Estop 2",
+                  "color": "red",
+                  "index": 14
+                },
+                "ESTOP 2": {
+                  "text": "Estop 2",
+                  "color": "red",
+                  "index": 14
+                },
                 "15": {
+                  "text": "Estop 3",
+                  "color": "red",
+                  "index": 15
+                },
+                "Estop 3": {
+                  "text": "Estop 3",
+                  "color": "red",
+                  "index": 15
+                },
+                "ESTOP 3": {
                   "text": "Estop 3",
                   "color": "red",
                   "index": 15
@@ -3158,7 +2962,27 @@
                   "color": "red",
                   "index": 16
                 },
+                "Charging Overcurrent": {
+                  "text": "Charging Overcurrent",
+                  "color": "red",
+                  "index": 16
+                },
+                "CHARGING OVERCURRENT": {
+                  "text": "Charging Overcurrent",
+                  "color": "red",
+                  "index": 16
+                },
                 "17": {
+                  "text": "Discharging Overcurrent",
+                  "color": "red",
+                  "index": 17
+                },
+                "Discharging Overcurrent": {
+                  "text": "Discharging Overcurrent",
+                  "color": "red",
+                  "index": 17
+                },
+                "DISCHARGING OVERCURRENT": {
                   "text": "Discharging Overcurrent",
                   "color": "red",
                   "index": 17
@@ -3167,10 +2991,21 @@
                   "text": "Amperes Watchdog",
                   "color": "red",
                   "index": 18
+                },
+                "Amperes Watchdog": {
+                  "text": "Amperes Watchdog",
+                  "color": "red",
+                  "index": 18
+                },
+                "AMPERES WATCHDOG": {
+                  "text": "Amperes Watchdog",
+                  "color": "red",
+                  "index": 18
                 }
               }
             }
-          ]
+          ],
+          "displayName": "${__field.name}"
         },
         "overrides": [
           {
@@ -3190,7 +3025,22 @@
                         "color": "green",
                         "index": 0
                       },
+                      "OK": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
                       "1": {
+                        "text": "Overvoltage",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "Overvoltage": {
+                        "text": "Overvoltage",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "OVERVOLTAGE": {
                         "text": "Overvoltage",
                         "color": "red",
                         "index": 1
@@ -3200,7 +3050,27 @@
                         "color": "red",
                         "index": 2
                       },
+                      "Undervoltage": {
+                        "text": "Undervoltage",
+                        "color": "red",
+                        "index": 2
+                      },
+                      "UNDERVOLTAGE": {
+                        "text": "Undervoltage",
+                        "color": "red",
+                        "index": 2
+                      },
                       "3": {
+                        "text": "Regen",
+                        "color": "red",
+                        "index": 3
+                      },
+                      "Regen": {
+                        "text": "Regen",
+                        "color": "red",
+                        "index": 3
+                      },
+                      "REGEN": {
                         "text": "Regen",
                         "color": "red",
                         "index": 3
@@ -3210,7 +3080,27 @@
                         "color": "red",
                         "index": 4
                       },
+                      "Overtemperature": {
+                        "text": "Overtemperature",
+                        "color": "red",
+                        "index": 4
+                      },
+                      "OVERTEMPERATURE": {
+                        "text": "Overtemperature",
+                        "color": "red",
+                        "index": 4
+                      },
                       "5": {
+                        "text": "Elcon",
+                        "color": "red",
+                        "index": 5
+                      },
+                      "Elcon": {
+                        "text": "Elcon",
+                        "color": "red",
+                        "index": 5
+                      },
+                      "ELCON": {
                         "text": "Elcon",
                         "color": "red",
                         "index": 5
@@ -3220,7 +3110,27 @@
                         "color": "red",
                         "index": 6
                       },
+                      "Array Precharge Timeout": {
+                        "text": "Array Precharge Timeout",
+                        "color": "red",
+                        "index": 6
+                      },
+                      "ARRAY PRECHARGE TIMEOUT": {
+                        "text": "Array Precharge Timeout",
+                        "color": "red",
+                        "index": 6
+                      },
                       "7": {
+                        "text": "Internal Watchdog",
+                        "color": "red",
+                        "index": 7
+                      },
+                      "Internal Watchdog": {
+                        "text": "Internal Watchdog",
+                        "color": "red",
+                        "index": 7
+                      },
+                      "INTERNAL WATCHDOG": {
                         "text": "Internal Watchdog",
                         "color": "red",
                         "index": 7
@@ -3230,7 +3140,27 @@
                         "color": "red",
                         "index": 8
                       },
+                      "Segment Watchdog": {
+                        "text": "Segment Watchdog",
+                        "color": "red",
+                        "index": 8
+                      },
+                      "SEGMENT WATCHDOG": {
+                        "text": "Segment Watchdog",
+                        "color": "red",
+                        "index": 8
+                      },
                       "9": {
+                        "text": "HV Plus Contactor Sense",
+                        "color": "red",
+                        "index": 9
+                      },
+                      "HV Plus Contactor Sense": {
+                        "text": "HV Plus Contactor Sense",
+                        "color": "red",
+                        "index": 9
+                      },
+                      "HV PLUS CONTACTOR SENSE": {
                         "text": "HV Plus Contactor Sense",
                         "color": "red",
                         "index": 9
@@ -3240,7 +3170,27 @@
                         "color": "red",
                         "index": 10
                       },
+                      "HV Minus Contactor Sense": {
+                        "text": "HV Minus Contactor Sense",
+                        "color": "red",
+                        "index": 10
+                      },
+                      "HV MINUS CONTACTOR SENSE": {
+                        "text": "HV Minus Contactor Sense",
+                        "color": "red",
+                        "index": 10
+                      },
                       "11": {
+                        "text": "Array Contactor Sense",
+                        "color": "red",
+                        "index": 11
+                      },
+                      "Array Contactor Sense": {
+                        "text": "Array Contactor Sense",
+                        "color": "red",
+                        "index": 11
+                      },
+                      "ARRAY CONTACTOR SENSE": {
                         "text": "Array Contactor Sense",
                         "color": "red",
                         "index": 11
@@ -3250,7 +3200,27 @@
                         "color": "red",
                         "index": 12
                       },
+                      "Array Pchg Contactor Sense": {
+                        "text": "Array Pchg Contactor Sense",
+                        "color": "red",
+                        "index": 12
+                      },
+                      "ARRAY PCHG CONTACTOR SENSE": {
+                        "text": "Array Pchg Contactor Sense",
+                        "color": "red",
+                        "index": 12
+                      },
                       "13": {
+                        "text": "Estop 1",
+                        "color": "red",
+                        "index": 13
+                      },
+                      "Estop 1": {
+                        "text": "Estop 1",
+                        "color": "red",
+                        "index": 13
+                      },
+                      "ESTOP 1": {
                         "text": "Estop 1",
                         "color": "red",
                         "index": 13
@@ -3260,7 +3230,27 @@
                         "color": "red",
                         "index": 14
                       },
+                      "Estop 2": {
+                        "text": "Estop 2",
+                        "color": "red",
+                        "index": 14
+                      },
+                      "ESTOP 2": {
+                        "text": "Estop 2",
+                        "color": "red",
+                        "index": 14
+                      },
                       "15": {
+                        "text": "Estop 3",
+                        "color": "red",
+                        "index": 15
+                      },
+                      "Estop 3": {
+                        "text": "Estop 3",
+                        "color": "red",
+                        "index": 15
+                      },
+                      "ESTOP 3": {
                         "text": "Estop 3",
                         "color": "red",
                         "index": 15
@@ -3270,7 +3260,27 @@
                         "color": "red",
                         "index": 16
                       },
+                      "Charging Overcurrent": {
+                        "text": "Charging Overcurrent",
+                        "color": "red",
+                        "index": 16
+                      },
+                      "CHARGING OVERCURRENT": {
+                        "text": "Charging Overcurrent",
+                        "color": "red",
+                        "index": 16
+                      },
                       "17": {
+                        "text": "Discharging Overcurrent",
+                        "color": "red",
+                        "index": 17
+                      },
+                      "Discharging Overcurrent": {
+                        "text": "Discharging Overcurrent",
+                        "color": "red",
+                        "index": 17
+                      },
+                      "DISCHARGING OVERCURRENT": {
                         "text": "Discharging Overcurrent",
                         "color": "red",
                         "index": 17
@@ -3279,10 +3289,24 @@
                         "text": "Amperes Watchdog",
                         "color": "red",
                         "index": 18
+                      },
+                      "Amperes Watchdog": {
+                        "text": "Amperes Watchdog",
+                        "color": "red",
+                        "index": 18
+                      },
+                      "AMPERES WATCHDOG": {
+                        "text": "Amperes Watchdog",
+                        "color": "red",
+                        "index": 18
                       }
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "BPS_Fault"
               }
             ]
           },
@@ -3303,7 +3327,17 @@
                         "color": "green",
                         "index": 0
                       },
+                      "OK": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
                       "1": {
+                        "text": "FAULT",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "FAULT": {
                         "text": "FAULT",
                         "color": "red",
                         "index": 1
@@ -3311,6 +3345,10 @@
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "VCU_PCHG_OV"
               }
             ]
           },
@@ -3331,7 +3369,17 @@
                         "color": "green",
                         "index": 0
                       },
+                      "OK": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
                       "1": {
+                        "text": "FAULT",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "FAULT": {
                         "text": "FAULT",
                         "color": "red",
                         "index": 1
@@ -3339,6 +3387,10 @@
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "VCU_PCHG_UV"
               }
             ]
           },
@@ -3359,7 +3411,17 @@
                         "color": "green",
                         "index": 0
                       },
+                      "OK": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
                       "1": {
+                        "text": "FAULT",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "FAULT": {
                         "text": "FAULT",
                         "color": "red",
                         "index": 1
@@ -3367,6 +3429,10 @@
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "VCU_MTR_OV"
               }
             ]
           },
@@ -3387,7 +3453,17 @@
                         "color": "green",
                         "index": 0
                       },
+                      "OK": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
                       "1": {
+                        "text": "FAULT",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "FAULT": {
                         "text": "FAULT",
                         "color": "red",
                         "index": 1
@@ -3395,6 +3471,10 @@
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "VCU_MTR_UV"
               }
             ]
           },
@@ -3415,14 +3495,33 @@
                         "color": "green",
                         "index": 0
                       },
+                      "OK": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
                       "1": {
-                        "text": "FAULT",
+                        "text": "Fault",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "Fault": {
+                        "text": "Fault",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "FAULT": {
+                        "text": "Fault",
                         "color": "red",
                         "index": 1
                       }
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "MC_FAULT_DcBusOverVoltage"
               }
             ]
           },
@@ -3443,14 +3542,28 @@
                         "color": "green",
                         "index": 0
                       },
+                      "OK": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
                       "1": {
                         "text": "LIMIT",
-                        "color": "red",
+                        "color": "yellow",
+                        "index": 1
+                      },
+                      "LIMIT": {
+                        "text": "LIMIT",
+                        "color": "yellow",
                         "index": 1
                       }
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "MC_LIMIT_BusVoltageUpper"
               }
             ]
           },
@@ -3471,14 +3584,28 @@
                         "color": "green",
                         "index": 0
                       },
+                      "OK": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
                       "1": {
                         "text": "LIMIT",
-                        "color": "red",
+                        "color": "yellow",
+                        "index": 1
+                      },
+                      "LIMIT": {
+                        "text": "LIMIT",
+                        "color": "yellow",
                         "index": 1
                       }
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "MC_LIMIT_BusVoltageLower"
               }
             ]
           },
@@ -3499,14 +3626,28 @@
                         "color": "green",
                         "index": 0
                       },
+                      "OK": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
                       "1": {
                         "text": "LIMIT",
-                        "color": "red",
+                        "color": "yellow",
+                        "index": 1
+                      },
+                      "LIMIT": {
+                        "text": "LIMIT",
+                        "color": "yellow",
                         "index": 1
                       }
                     }
                   }
                 ]
+              },
+              {
+                "id": "displayName",
+                "value": "MC_LIMIT_BusCurrent"
               }
             ]
           }
@@ -3514,14 +3655,16 @@
       },
       "options": {
         "mergeValues": true,
-        "showValue": "auto",
-        "alignValue": "left",
-        "rowHeight": 0.9,
+        "showValue": "never",
+        "alignValue": "right",
+        "rowHeight": 0.6,
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
-        }
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {}
       },
       "targets": [
         {
@@ -3530,7 +3673,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -3538,7 +3681,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"VCU_PCHG_OV\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"VCU_PCHG_OV\" or r._field == \"VCU_PCHG_UV\" or r._field == \"VCU_MTR_OV\" or r._field == \"VCU_MTR_UV\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -3546,55 +3689,7 @@
             "uid": "influxdb_main"
           },
           "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"VCU_PCHG_UV\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "D",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"VCU_MTR_OV\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "E",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"18\")\n  |> filter(fn: (r) => r._field == \"VCU_MTR_UV\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "F",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"421\")\n  |> filter(fn: (r) => r._field == \"MC_FAULT_DcBusOverVoltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "G",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"421\")\n  |> filter(fn: (r) => r._field == \"MC_LIMIT_BusVoltageUpper\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "H",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"421\")\n  |> filter(fn: (r) => r._field == \"MC_LIMIT_BusVoltageLower\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "I",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"421\")\n  |> filter(fn: (r) => r._field == \"MC_LIMIT_BusCurrent\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"421\")\n  |> filter(fn: (r) => r._field == \"MC_FAULT_DcBusOverVoltage\" or r._field == \"MC_LIMIT_BusVoltageUpper\" or r._field == \"MC_LIMIT_BusVoltageLower\" or r._field == \"MC_LIMIT_BusCurrent\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -3607,7 +3702,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 88
+        "y": 112
       },
       "panels": []
     },
@@ -3619,7 +3714,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 89
+        "y": 113
       },
       "datasource": {
         "type": "influxdb",
@@ -3627,7 +3722,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "noValue": "\u2014",
+          "noValue": "stale",
           "unit": "s",
           "decimals": 1,
           "color": {
@@ -3665,7 +3760,7 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "value"
       },
       "targets": [
         {
@@ -3674,7 +3769,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     },
@@ -3686,7 +3781,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 89
+        "y": 113
       },
       "datasource": {
         "type": "influxdb",
@@ -3694,7 +3789,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "noValue": "\u2014",
+          "noValue": "stale",
           "unit": "s",
           "decimals": 1,
           "color": {
@@ -3732,7 +3827,7 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "value"
       },
       "targets": [
         {
@@ -3741,7 +3836,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusVoltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"422\")\n  |> filter(fn: (r) => r._field == \"MC_BusVoltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     },
@@ -3754,7 +3849,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 94
+        "y": 117
       },
       "panels": []
     },
@@ -3766,11 +3861,11 @@
         "h": 3,
         "w": 3,
         "x": 0,
-        "y": 95
+        "y": 118
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3786,7 +3881,7 @@
                 },
                 "1": {
                   "text": "Out-of-Bounds",
-                  "color": "green",
+                  "color": "orange",
                   "index": 1
                 },
                 "2": {
@@ -3801,7 +3896,7 @@
                 },
                 "4": {
                   "text": "Message Watchdog",
-                  "color": "red",
+                  "color": "orange",
                   "index": 4
                 }
               }
@@ -3827,43 +3922,57 @@
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
-        "textMode": "auto",
+        "textMode": "value",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Amperes_Fault",
           "values": false
+        },
+        "text": {
+          "titleSize": 11,
+          "valueSize": 18
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"BPS_Amperes_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/A",
+          "filter": {
+            "fields": [
+              "BPS_Amperes_Fault"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
     {
       "id": 56,
       "type": "stat",
-      "title": "Charge OK",
+      "title": "BPS Status",
       "gridPos": {
         "h": 3,
-        "w": 3,
-        "x": 3,
-        "y": 95
+        "w": 24,
+        "x": 0,
+        "y": 121
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
+          "color": {
+            "mode": "thresholds"
+          },
           "mappings": [
             {
               "type": "value",
@@ -3881,9 +3990,6 @@
               }
             }
           ],
-          "color": {
-            "mode": "thresholds"
-          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -3892,16 +3998,43 @@
                 "value": null
               }
             ]
-          }
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Charge_OK"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Charge OK"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Regen_OK"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Regen OK"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
-        "textMode": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -3912,476 +4045,43 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Charge_OK\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 57,
-      "type": "stat",
-      "title": "Regen OK",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 6,
-        "y": 95
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "NOT OK",
-                  "color": "red",
-                  "index": 0
-                },
-                "1": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "BPS_Charge_OK",
+              "BPS_Regen_OK"
             ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
           },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Regen_OK\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "buffer": 1
         }
       ]
     },
     {
       "id": 58,
       "type": "stat",
-      "title": "Seg0",
+      "title": "BPS Segments",
       "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 9,
-        "y": 95
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment0_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 59,
-      "type": "stat",
-      "title": "Seg1",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 12,
-        "y": 95
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment1_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 60,
-      "type": "stat",
-      "title": "Seg2",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 15,
-        "y": 95
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment2_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 61,
-      "type": "stat",
-      "title": "Seg3",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 18,
-        "y": 95
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment3_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 62,
-      "type": "stat",
-      "title": "Seg4",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 21,
-        "y": 95
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment4_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 63,
-      "type": "stat",
-      "title": "Seg5",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
+        "h": 4,
+        "w": 24,
         "x": 0,
-        "y": 98
+        "y": 124
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
           "noValue": "\u2014",
+          "color": {
+            "mode": "thresholds"
+          },
           "mappings": [
             {
               "type": "value",
@@ -4392,16 +4092,13 @@
                   "index": 0
                 },
                 "1": {
-                  "text": "FAULT",
+                  "text": "NOK",
                   "color": "red",
                   "index": 1
                 }
               }
             }
           ],
-          "color": {
-            "mode": "thresholds"
-          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -4410,16 +4107,115 @@
                 "value": null
               }
             ]
-          }
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment0_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Seg0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment1_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Seg1"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment2_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Seg2"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment3_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Seg3"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment4_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Seg4"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment5_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Seg5"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment6_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Seg6"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment7_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Seg7"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
-        "textMode": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -4430,160 +4226,26 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment5_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 64,
-      "type": "stat",
-      "title": "Seg6",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 3,
-        "y": 98
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "BPS_Segment0_Status",
+              "BPS_Segment1_Status",
+              "BPS_Segment2_Status",
+              "BPS_Segment3_Status",
+              "BPS_Segment4_Status",
+              "BPS_Segment5_Status",
+              "BPS_Segment6_Status",
+              "BPS_Segment7_Status"
             ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
           },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment6_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 65,
-      "type": "stat",
-      "title": "Seg7",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 6,
-        "y": 98
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "textMode": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment7_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "buffer": 1
         }
       ]
     },
@@ -4595,11 +4257,11 @@
         "h": 6,
         "w": 6,
         "x": 0,
-        "y": 101
+        "y": 128
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -4631,18 +4293,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "Main_Battery_Avg_Temperature",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Avg_Temperature\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "Main_Battery_Avg_Temperature"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -4654,7 +4323,7 @@
         "h": 6,
         "w": 12,
         "x": 6,
-        "y": 101
+        "y": 128
       },
       "datasource": {
         "type": "influxdb",
@@ -4673,7 +4342,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -4681,7 +4351,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -4695,7 +4366,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Avg_Temperature\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Avg_Temperature\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -4707,7 +4378,7 @@
         "h": 6,
         "w": 6,
         "x": 18,
-        "y": 101
+        "y": 128
       },
       "datasource": {
         "type": "influxdb",
@@ -4746,7 +4417,7 @@
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
-        "textMode": "auto",
+        "textMode": "value",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -4762,7 +4433,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     },
@@ -4774,7 +4445,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 107
+        "y": 134
       },
       "datasource": {
         "type": "influxdb",
@@ -4813,7 +4484,7 @@
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
-        "textMode": "auto",
+        "textMode": "value",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -4829,7 +4500,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     }

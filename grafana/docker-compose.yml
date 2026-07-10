@@ -32,18 +32,20 @@ services:
       GF_DEFAULT_USER_NAME: Solar
       GF_DEFAULT_USER_EMAIL: solar@localhost
       GF_DEFAULT_USER_ROLE: Viewer
-      # Public URL is set by the Electron reverse proxy Host/Origin; keep a
-      # sensible default for local access and trust tunnel + LAN hosts for CSRF.
-      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-https://electron.lhrsolar.org/grafana/}
-      GF_SERVER_DOMAIN: ${GF_SERVER_DOMAIN:-electron.lhrsolar.org}
-      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
-      # Hostnames only (no scheme). Fixes "origin not allowed" behind Electron proxy.
-      GF_SECURITY_CSRF_TRUSTED_ORIGINS: ${GF_SECURITY_CSRF_TRUSTED_ORIGINS:-electron.lhrsolar.org,192.168.1.137,localhost,127.0.0.1}
+      # Dedicated public hostname (cloudflared → :3000). LAN can still use :3000 directly.
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-https://grafana.lhrsolar.org/}
+      GF_SERVER_DOMAIN: ${GF_SERVER_DOMAIN:-grafana.lhrsolar.org}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "false"
+      # Hostnames only (no scheme).
+      GF_SECURITY_CSRF_TRUSTED_ORIGINS: ${GF_SECURITY_CSRF_TRUSTED_ORIGINS:-grafana.lhrsolar.org,electron.lhrsolar.org,influx.lhrsolar.org,192.168.1.137,localhost,127.0.0.1}
       GF_SECURITY_CSRF_ADDITIONAL_HEADERS: X-Forwarded-Host
       # Auto configure Grafana InfluxDB datasource
       GF_PROVISIONING_ENABLED: "true"
-      # Realtime dashboards: allow 0.5s auto-refresh
-      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: "500ms"
+      # Influx historical panels; Live stats update via WS (refresh still helps graphs).
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: "1s"
+      GF_LIVE_ENABLED: "true"
+      GF_LIVE_MAX_CONNECTIONS: "500"
+      GF_LIVE_ALLOWED_ORIGINS: ${GF_LIVE_ALLOWED_ORIGINS:-https://grafana.lhrsolar.org,https://electron.lhrsolar.org,http://192.168.1.137:3000,http://localhost:3000}
       # Anonymous read-only viewing (no login required); admin login still edits
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_NAME: "Main Org."
@@ -55,13 +57,9 @@ services:
       - ./provisions:/etc/grafana/provisioning/
       - ./dashboards:/etc/grafana/dashboards
       - ./grafana-init-users.sh:/usr/local/bin/grafana-init-users.sh:ro
+      - ./grafana-entrypoint.sh:/usr/local/bin/grafana-entrypoint.sh:ro
     restart: unless-stopped
-    entrypoint: [ "/bin/sh", "-c" ]
-    command: >
-      "echo '>>> Waiting for Grafana provisioning files...'; \
-       while [ ! -f /etc/grafana/provisioning/datasources/influx.yml ]; do sleep 1; done; \
-       /usr/local/bin/grafana-init-users.sh & \
-       exec /run.sh"
+    entrypoint: ["/bin/sh", "/usr/local/bin/grafana-entrypoint.sh"]
 
 volumes:
   grafana_data:

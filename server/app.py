@@ -48,6 +48,7 @@ from server.util.reverse_proxy import (
     GRAFANA_UPSTREAM,
     INFLUX_UPSTREAM,
 )
+from server.util.grafana_live_writer import DualTelemetryWriter, live_writer_from_env
 from server.util.manage_auth import (
     IS_SERVER_MODE,
     MANAGE_PASSWORD,
@@ -79,6 +80,18 @@ TRUTHY_VALUES = {"1", "true", "yes", "on"}
 SERVE_STATIC_CLIENT = os.environ.get("SERVE_STATIC_CLIENT", "1").strip().lower() in TRUTHY_VALUES
 STATUS_HEALTH_TTL_SEC = float(os.environ.get("STATUS_HEALTH_TTL_SEC", "2.0"))
 STATUS_HEALTH_TIMEOUT_SEC = float(os.environ.get("STATUS_HEALTH_TIMEOUT_SEC", "0.4"))
+GRAFANA_PUBLIC_URL = (os.environ.get("GRAFANA_PUBLIC_URL") or "https://grafana.lhrsolar.org/").rstrip("/") + "/"
+INFLUX_PUBLIC_URL = (os.environ.get("INFLUX_PUBLIC_URL") or "https://influx.lhrsolar.org/").rstrip("/") + "/"
+
+
+def _wrap_telemetry_writer(influx_writer: InfluxDBWriter | None):
+    """Attach optional Grafana Live dual-write when GRAFANA_LIVE_TOKEN is set."""
+    if influx_writer is None:
+        return None
+    live = live_writer_from_env()
+    if live is None:
+        return influx_writer
+    return DualTelemetryWriter(influx_writer, live)
 
 def _parse_origins(raw: str):
     raw = (raw or "*").strip()
@@ -209,9 +222,12 @@ def move_to_trash(directory: str, filename: str):
 
 def _check_grafana_health():
     base = os.environ.get("GRAFANA_URL", "http://127.0.0.1:3000").rstrip("/")
-    subpath = os.environ.get("GRAFANA_SUBPATH", "/grafana").rstrip("/")
-    # One fast probe — avoid multi-path 3s timeouts that stall status on connect.
-    for path in (f"{subpath}/api/health", "/api/health"):
+    # Grafana serves at root on its dedicated hostname; keep /grafana for older local setups.
+    subpath = (os.environ.get("GRAFANA_SUBPATH") or "").rstrip("/")
+    paths = ["/api/health"]
+    if subpath:
+        paths.insert(0, f"{subpath}/api/health")
+    for path in paths:
         try:
             req = urllib.request.Request(base + path)
             with urllib.request.urlopen(req, timeout=STATUS_HEALTH_TIMEOUT_SEC) as r:
@@ -317,8 +333,8 @@ async def build_status_payload(force_health_refresh: bool = False):
         "influx_write_configured": write_configured,
         "influx_write_enabled": write_configured and influx_connected,
         "grafana_active": grafana_active,
-        "grafana_url": "/grafana/",
-        "influx_url": "/influx/",
+        "grafana_url": GRAFANA_PUBLIC_URL,
+        "influx_url": INFLUX_PUBLIC_URL,
         "parser_status": parser_status.get("status", "idle") if parser_status else "idle",
         "parser_connection_state": parser_status.get("connection_state") if parser_status else None,
         "data_active": telemetry_service.is_data_active(),
@@ -430,7 +446,7 @@ async def _maybe_server_autostart():
     if influx_write_enabled and influx_client:
         target_bucket = _telemetry_write_bucket(config)
         settings.INFLUX_CONFIG["INFLUX_TELEMETRY_BUCKET"] = target_bucket
-        writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
+        writer = _wrap_telemetry_writer(InfluxDBWriter(client=influx_client, bucket=target_bucket))
         logger.info("Server auto-start: Influx writes enabled → bucket '%s'.", target_bucket)
     try:
         await telemetry_service.start(writer, sio=sio, influx_client=influx_client)
@@ -547,7 +563,7 @@ async def start_service():
     if influx_write_enabled:
         target_bucket = _telemetry_write_bucket(config)
         settings.INFLUX_CONFIG["INFLUX_TELEMETRY_BUCKET"] = target_bucket
-        writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
+        writer = _wrap_telemetry_writer(InfluxDBWriter(client=influx_client, bucket=target_bucket))
     await telemetry_service.start(writer, sio=sio, influx_client=influx_client)
     await emit_status_update(force_health_refresh=True)
     return {"message": "Telemetry service started." if telemetry_service.running else "Telemetry service did not start."}
@@ -574,7 +590,7 @@ async def restart_service():
     if influx_write_enabled:
         target_bucket = _telemetry_write_bucket(config)
         settings.INFLUX_CONFIG["INFLUX_TELEMETRY_BUCKET"] = target_bucket
-        writer = InfluxDBWriter(client=influx_client, bucket=target_bucket)
+        writer = _wrap_telemetry_writer(InfluxDBWriter(client=influx_client, bucket=target_bucket))
     await telemetry_service.start(writer, sio=sio, influx_client=influx_client)
     await emit_status_update(force_health_refresh=True)
     return {"message": "Telemetry service restarted."}
@@ -1368,6 +1384,7 @@ async def grafana_proxy(request: Request, path: str = ""):
         return await proxy_to_upstream(
             request,
             GRAFANA_UPSTREAM,
+            strip_prefix=GRAFANA_PREFIX,
             public_prefix=GRAFANA_PREFIX,
         )
     except httpx.RequestError:

@@ -89,8 +89,9 @@ class CANManager:
             logger.exception("Error parsing DBC for ECUs/arrays")
 
     def decode_message(self, arbitration_id, data):
+        # Keep DBC choice labels (strings) for Influx field-type stability.
+        # Grafana Live remaps labels → numeric codes in grafana_live_writer.
         try:
-            # print(f"Decoding message: {arbitration_id}, {data}")
             return self.db.decode_message(arbitration_id, data)
         except Exception:
             pass

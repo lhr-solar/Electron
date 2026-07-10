@@ -11,14 +11,13 @@
   "editable": true,
   "graphTooltip": 1,
   "timezone": "browser",
-  "refresh": "500ms",
+  "refresh": "1s",
   "time": {
     "from": "now-5m",
     "to": "now"
   },
   "timepicker": {
     "refresh_intervals": [
-      "500ms",
       "1s",
       "2s",
       "5s",
@@ -62,127 +61,6 @@
       "panels": []
     },
     {
-      "id": 2,
-      "type": "stat",
-      "title": "Vehicle Velocity",
-      "gridPos": {
-        "h": 5,
-        "w": 8,
-        "x": 0,
-        "y": 1
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 2,
-          "unit": "velocityms",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 5
-              },
-              {
-                "color": "yellow",
-                "value": 20
-              },
-              {
-                "color": "red",
-                "value": 30
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"423\")\n  |> filter(fn: (r) => r._field == \"MC_VehicleVelocity\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 3,
-      "type": "stat",
-      "title": "Motor Velocity",
-      "gridPos": {
-        "h": 5,
-        "w": 4,
-        "x": 8,
-        "y": 1
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "\u2014",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "decimals": 0,
-          "unit": "rotrpm"
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"423\")\n  |> filter(fn: (r) => r._field == \"MC_MotorVelocity\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
       "id": 4,
       "type": "stat",
       "title": "Wheel RPM FR",
@@ -190,11 +68,11 @@
         "h": 5,
         "w": 4,
         "x": 12,
-        "y": 1
+        "y": 4
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -209,42 +87,53 @@
       },
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "RPM",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 22
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"14A0\")\n  |> filter(fn: (r) => r._field == \"RPM\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/14A0",
+          "filter": {
+            "fields": [
+              "RPM"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
     {
       "id": 5,
       "type": "stat",
-      "title": "Wheel RPM FL",
+      "title": "Velocity",
       "gridPos": {
-        "h": 5,
-        "w": 4,
-        "x": 16,
+        "h": 3,
+        "w": 24,
+        "x": 0,
         "y": 1
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -252,33 +141,127 @@
           "color": {
             "mode": "palette-classic"
           },
-          "decimals": 0,
-          "unit": "rotrpm"
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RPM"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Wheel RPM FL"
+              },
+              {
+                "id": "unit",
+                "value": "rotrpm"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MC_VehicleVelocity"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Vehicle Velocity"
+              },
+              {
+                "id": "unit",
+                "value": "velocitymph"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MC_MotorVelocity"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Motor Velocity"
+              },
+              {
+                "id": "unit",
+                "value": "rotrpm"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
+        "graphMode": "none",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"14D0\")\n  |> filter(fn: (r) => r._field == \"RPM\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/14D0",
+          "filter": {
+            "fields": [
+              "RPM"
+            ]
+          },
+          "buffer": 1
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/423",
+          "filter": {
+            "fields": [
+              "MC_VehicleVelocity",
+              "MC_MotorVelocity"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -290,7 +273,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 6
+        "y": 9
       },
       "datasource": {
         "type": "influxdb",
@@ -309,7 +292,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -317,7 +301,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -331,7 +316,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"14D0\" or r._measurement == \"14A0\")\n  |> filter(fn: (r) => r._field == \"RPM\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"14D0\" then \"FL\" else \"FR\" }))"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"14D0\" or r._measurement == \"14A0\")\n  |> filter(fn: (r) => r._field == \"RPM\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"14D0\" then \"FL\" else \"FR\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -344,7 +329,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 15
       },
       "panels": []
     },
@@ -356,7 +341,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 13
+        "y": 16
       },
       "datasource": {
         "type": "influxdb",
@@ -375,7 +360,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -383,7 +369,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -397,7 +384,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A0\" or r._measurement == \"11B0\" or r._measurement == \"11D0\")\n  |> filter(fn: (r) => r._field == \"Accel_X\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A0\" then \"FR\" else if r._measurement == \"11B0\" then \"Back\" else if r._measurement == \"11D0\" then \"FL\" else \"unknown\" }))"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A0\" or r._measurement == \"11B0\" or r._measurement == \"11D0\")\n  |> filter(fn: (r) => r._field == \"Accel_X\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A0\" then \"FR\" else if r._measurement == \"11B0\" then \"Back\" else if r._measurement == \"11D0\" then \"FL\" else \"unknown\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -409,7 +396,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 13
+        "y": 16
       },
       "datasource": {
         "type": "influxdb",
@@ -428,7 +415,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -436,7 +424,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -450,7 +439,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A0\" or r._measurement == \"11B0\" or r._measurement == \"11D0\")\n  |> filter(fn: (r) => r._field == \"Accel_Y\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A0\" then \"FR\" else if r._measurement == \"11B0\" then \"Back\" else if r._measurement == \"11D0\" then \"FL\" else \"unknown\" }))"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A0\" or r._measurement == \"11B0\" or r._measurement == \"11D0\")\n  |> filter(fn: (r) => r._field == \"Accel_Y\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A0\" then \"FR\" else if r._measurement == \"11B0\" then \"Back\" else if r._measurement == \"11D0\" then \"FL\" else \"unknown\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -462,7 +451,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 13
+        "y": 16
       },
       "datasource": {
         "type": "influxdb",
@@ -481,7 +470,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -489,7 +479,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -503,7 +494,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A0\" or r._measurement == \"11B0\" or r._measurement == \"11D0\")\n  |> filter(fn: (r) => r._field == \"Accel_Z\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A0\" then \"FR\" else if r._measurement == \"11B0\" then \"Back\" else if r._measurement == \"11D0\" then \"FL\" else \"unknown\" }))"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A0\" or r._measurement == \"11B0\" or r._measurement == \"11D0\")\n  |> filter(fn: (r) => r._field == \"Accel_Z\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A0\" then \"FR\" else if r._measurement == \"11B0\" then \"Back\" else if r._measurement == \"11D0\" then \"FL\" else \"unknown\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -516,7 +507,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 22
       },
       "panels": []
     },
@@ -528,7 +519,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 20
+        "y": 23
       },
       "datasource": {
         "type": "influxdb",
@@ -547,7 +538,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -555,7 +547,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -569,7 +562,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A1\" or r._measurement == \"11B1\" or r._measurement == \"11D1\")\n  |> filter(fn: (r) => r._field == \"Gyro_X\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A1\" then \"FR\" else if r._measurement == \"11B1\" then \"Back\" else if r._measurement == \"11D1\" then \"FL\" else \"unknown\" }))"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A1\" or r._measurement == \"11B1\" or r._measurement == \"11D1\")\n  |> filter(fn: (r) => r._field == \"Gyro_X\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A1\" then \"FR\" else if r._measurement == \"11B1\" then \"Back\" else if r._measurement == \"11D1\" then \"FL\" else \"unknown\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -581,7 +574,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 20
+        "y": 23
       },
       "datasource": {
         "type": "influxdb",
@@ -600,7 +593,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -608,7 +602,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -622,7 +617,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A1\" or r._measurement == \"11B1\" or r._measurement == \"11D1\")\n  |> filter(fn: (r) => r._field == \"Gyro_Y\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A1\" then \"FR\" else if r._measurement == \"11B1\" then \"Back\" else if r._measurement == \"11D1\" then \"FL\" else \"unknown\" }))"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A1\" or r._measurement == \"11B1\" or r._measurement == \"11D1\")\n  |> filter(fn: (r) => r._field == \"Gyro_Y\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A1\" then \"FR\" else if r._measurement == \"11B1\" then \"Back\" else if r._measurement == \"11D1\" then \"FL\" else \"unknown\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -634,7 +629,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 20
+        "y": 23
       },
       "datasource": {
         "type": "influxdb",
@@ -653,7 +648,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -661,7 +657,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -675,7 +672,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A1\" or r._measurement == \"11B1\" or r._measurement == \"11D1\")\n  |> filter(fn: (r) => r._field == \"Gyro_Z\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A1\" then \"FR\" else if r._measurement == \"11B1\" then \"Back\" else if r._measurement == \"11D1\" then \"FL\" else \"unknown\" }))"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"11A1\" or r._measurement == \"11B1\" or r._measurement == \"11D1\")\n  |> filter(fn: (r) => r._field == \"Gyro_Z\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"11A1\" then \"FR\" else if r._measurement == \"11B1\" then \"Back\" else if r._measurement == \"11D1\" then \"FL\" else \"unknown\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -688,7 +685,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 29
       },
       "panels": []
     },
@@ -700,7 +697,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 27
+        "y": 30
       },
       "datasource": {
         "type": "influxdb",
@@ -719,7 +716,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -727,7 +725,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -741,7 +740,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12A0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12A0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -749,7 +748,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12A0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12A0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -757,7 +756,7 @@
             "uid": "influxdb_main"
           },
           "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12A0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12A0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -765,7 +764,7 @@
             "uid": "influxdb_main"
           },
           "refId": "D",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12A0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data4\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12A0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data4\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -777,7 +776,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 27
+        "y": 30
       },
       "datasource": {
         "type": "influxdb",
@@ -796,7 +795,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -804,7 +804,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -818,7 +819,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12B0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12B0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -826,7 +827,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12B0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12B0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -834,7 +835,7 @@
             "uid": "influxdb_main"
           },
           "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12B0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12B0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -842,7 +843,7 @@
             "uid": "influxdb_main"
           },
           "refId": "D",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12B0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data4\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12B0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data4\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -854,7 +855,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 27
+        "y": 30
       },
       "datasource": {
         "type": "influxdb",
@@ -873,7 +874,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -881,7 +883,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -895,7 +898,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12D0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12D0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -903,7 +906,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12D0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12D0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -911,7 +914,7 @@
             "uid": "influxdb_main"
           },
           "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12D0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12D0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -919,7 +922,7 @@
             "uid": "influxdb_main"
           },
           "refId": "D",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12D0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data4\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"12D0\")\n  |> filter(fn: (r) => r._field == \"SUS_Data4\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -932,7 +935,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 36
       },
       "panels": []
     },
@@ -944,7 +947,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 34
+        "y": 37
       },
       "datasource": {
         "type": "influxdb",
@@ -963,7 +966,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -971,7 +975,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -985,7 +990,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15A0\")\n  |> filter(fn: (r) => r._field == \"RH_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15A0\")\n  |> filter(fn: (r) => r._field == \"RH_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -993,7 +998,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15A0\")\n  |> filter(fn: (r) => r._field == \"RH_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15A0\")\n  |> filter(fn: (r) => r._field == \"RH_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1001,7 +1006,7 @@
             "uid": "influxdb_main"
           },
           "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15A0\")\n  |> filter(fn: (r) => r._field == \"RH_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15A0\")\n  |> filter(fn: (r) => r._field == \"RH_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -1013,7 +1018,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 34
+        "y": 37
       },
       "datasource": {
         "type": "influxdb",
@@ -1032,7 +1037,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -1040,7 +1046,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1054,7 +1061,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15B0\")\n  |> filter(fn: (r) => r._field == \"RH_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15B0\")\n  |> filter(fn: (r) => r._field == \"RH_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1062,7 +1069,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15B0\")\n  |> filter(fn: (r) => r._field == \"RH_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15B0\")\n  |> filter(fn: (r) => r._field == \"RH_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1070,7 +1077,7 @@
             "uid": "influxdb_main"
           },
           "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15B0\")\n  |> filter(fn: (r) => r._field == \"RH_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15B0\")\n  |> filter(fn: (r) => r._field == \"RH_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -1082,7 +1089,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 34
+        "y": 37
       },
       "datasource": {
         "type": "influxdb",
@@ -1101,7 +1108,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -1109,7 +1117,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1123,7 +1132,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15D0\")\n  |> filter(fn: (r) => r._field == \"RH_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15D0\")\n  |> filter(fn: (r) => r._field == \"RH_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1131,7 +1140,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15D0\")\n  |> filter(fn: (r) => r._field == \"RH_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15D0\")\n  |> filter(fn: (r) => r._field == \"RH_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1139,7 +1148,7 @@
             "uid": "influxdb_main"
           },
           "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15D0\")\n  |> filter(fn: (r) => r._field == \"RH_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"15D0\")\n  |> filter(fn: (r) => r._field == \"RH_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -1152,7 +1161,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 43
       },
       "panels": []
     },
@@ -1164,7 +1173,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 41
+        "y": 44
       },
       "datasource": {
         "type": "influxdb",
@@ -1183,7 +1192,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -1191,7 +1201,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1205,7 +1216,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13A0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13A0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1213,7 +1224,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13A0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13A0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1221,7 +1232,7 @@
             "uid": "influxdb_main"
           },
           "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13A0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13A0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1229,7 +1240,7 @@
             "uid": "influxdb_main"
           },
           "refId": "D",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13A0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data4\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13A0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data4\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -1241,7 +1252,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 41
+        "y": 44
       },
       "datasource": {
         "type": "influxdb",
@@ -1260,7 +1271,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -1268,7 +1280,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1282,7 +1295,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13D0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13D0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data1\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1290,7 +1303,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13D0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13D0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data2\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1298,7 +1311,7 @@
             "uid": "influxdb_main"
           },
           "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13D0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13D0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data3\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1306,7 +1319,7 @@
             "uid": "influxdb_main"
           },
           "refId": "D",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13D0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data4\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"13D0\")\n  |> filter(fn: (r) => r._field == \"Pitot_Data4\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -1319,7 +1332,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 50
       },
       "panels": []
     },
@@ -1331,11 +1344,11 @@
         "h": 5,
         "w": 6,
         "x": 0,
-        "y": 48
+        "y": 51
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1357,19 +1370,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "LWS_Angle",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"2B0\")\n  |> filter(fn: (r) => r._field == \"LWS_Angle\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/2B0",
+          "filter": {
+            "fields": [
+              "LWS_Angle"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -1381,7 +1401,7 @@
         "h": 6,
         "w": 12,
         "x": 6,
-        "y": 48
+        "y": 51
       },
       "datasource": {
         "type": "influxdb",
@@ -1401,7 +1421,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -1409,7 +1430,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1423,7 +1445,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"2B0\")\n  |> filter(fn: (r) => r._field == \"LWS_Angle\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"2B0\")\n  |> filter(fn: (r) => r._field == \"LWS_Angle\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -1435,7 +1457,7 @@
         "h": 6,
         "w": 6,
         "x": 18,
-        "y": 48
+        "y": 51
       },
       "datasource": {
         "type": "influxdb",
@@ -1454,7 +1476,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -1462,7 +1485,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1476,7 +1500,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"2B0\")\n  |> filter(fn: (r) => r._field == \"LWS_Speed\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"2B0\")\n  |> filter(fn: (r) => r._field == \"LWS_Speed\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -1489,7 +1513,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 57
       },
       "panels": []
     },
@@ -1501,7 +1525,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 55
+        "y": 58
       },
       "datasource": {
         "type": "influxdb",
@@ -1520,7 +1544,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -1528,7 +1553,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1542,7 +1568,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"50\")\n  |> filter(fn: (r) => r._field == \"AccelPedal_Main_Pos\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"50\")\n  |> filter(fn: (r) => r._field == \"AccelPedal_Main_Pos\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1550,7 +1576,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"50\")\n  |> filter(fn: (r) => r._field == \"AccelPedal_Redundant_Pos\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"50\")\n  |> filter(fn: (r) => r._field == \"AccelPedal_Redundant_Pos\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1558,7 +1584,7 @@
             "uid": "influxdb_main"
           },
           "refId": "C",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"50\")\n  |> filter(fn: (r) => r._field == \"BrakePedal_Main_Pos\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"50\")\n  |> filter(fn: (r) => r._field == \"BrakePedal_Main_Pos\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -1566,7 +1592,7 @@
             "uid": "influxdb_main"
           },
           "refId": "D",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"50\")\n  |> filter(fn: (r) => r._field == \"BrakePedal_Redundant_Pos\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"50\")\n  |> filter(fn: (r) => r._field == \"BrakePedal_Redundant_Pos\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -1578,7 +1604,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 55
+        "y": 58
       },
       "datasource": {
         "type": "influxdb",
@@ -1597,7 +1623,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -1605,7 +1632,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1619,7 +1647,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"650\" or r._measurement == \"651\")\n  |> filter(fn: (r) => r._field == \"Brake_Pressure\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"650\" then \"Brake 1\" else \"Brake 2\" }))"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"650\" or r._measurement == \"651\")\n  |> filter(fn: (r) => r._field == \"Brake_Pressure\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _field: if r._measurement == \"650\" then \"Brake 1\" else \"Brake 2\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -1632,7 +1660,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 61
+        "y": 64
       },
       "panels": []
     },
@@ -1644,7 +1672,7 @@
         "h": 4,
         "w": 8,
         "x": 0,
-        "y": 62
+        "y": 65
       },
       "datasource": {
         "type": "influxdb",
@@ -1652,7 +1680,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "noValue": "\u2014",
+          "noValue": "stale",
           "color": {
             "mode": "thresholds"
           },
@@ -1690,7 +1718,7 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "value"
       },
       "targets": [
         {
@@ -1699,7 +1727,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"423\")\n  |> filter(fn: (r) => r._field == \"MC_VehicleVelocity\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"423\")\n  |> filter(fn: (r) => r._field == \"MC_VehicleVelocity\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     },
@@ -1711,7 +1739,7 @@
         "h": 4,
         "w": 8,
         "x": 8,
-        "y": 62
+        "y": 65
       },
       "datasource": {
         "type": "influxdb",
@@ -1719,7 +1747,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "noValue": "\u2014",
+          "noValue": "stale",
           "color": {
             "mode": "thresholds"
           },
@@ -1757,7 +1785,7 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "value"
       },
       "targets": [
         {
@@ -1766,7 +1794,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"11A0\")\n  |> filter(fn: (r) => r._field == \"Accel_X\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"11A0\")\n  |> filter(fn: (r) => r._field == \"Accel_X\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     },
@@ -1778,7 +1806,7 @@
         "h": 4,
         "w": 8,
         "x": 16,
-        "y": 62
+        "y": 65
       },
       "datasource": {
         "type": "influxdb",
@@ -1786,7 +1814,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "noValue": "\u2014",
+          "noValue": "stale",
           "color": {
             "mode": "thresholds"
           },
@@ -1824,7 +1852,7 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "value"
       },
       "targets": [
         {
@@ -1833,7 +1861,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"2B0\")\n  |> filter(fn: (r) => r._field == \"LWS_Angle\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"2B0\")\n  |> filter(fn: (r) => r._field == \"LWS_Angle\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     }

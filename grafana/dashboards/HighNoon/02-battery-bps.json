@@ -12,14 +12,13 @@
   "editable": true,
   "graphTooltip": 1,
   "timezone": "browser",
-  "refresh": "500ms",
+  "refresh": "1s",
   "time": {
     "from": "now-5m",
     "to": "now"
   },
   "timepicker": {
     "refresh_intervals": [
-      "500ms",
       "1s",
       "2s",
       "5s",
@@ -73,8 +72,8 @@
         "y": 1
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -98,26 +97,37 @@
       },
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "Main_Battery_Voltage",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 22
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "Main_Battery_Voltage"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -148,7 +158,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -156,7 +167,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -170,7 +182,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -185,8 +197,8 @@
         "y": 1
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -210,26 +222,37 @@
       },
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "Main_Battery_Avg_Temperature",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 22
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Avg_Temperature\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "Main_Battery_Avg_Temperature"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -260,7 +283,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -268,7 +292,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -282,7 +307,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Avg_Temperature\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Avg_Temperature\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -297,8 +322,8 @@
         "y": 5
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -322,26 +347,37 @@
       },
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "Main_Battery_Current",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 22
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/A",
+          "filter": {
+            "fields": [
+              "Main_Battery_Current"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -353,7 +389,7 @@
         "h": 4,
         "w": 8,
         "x": 4,
-        "y": 5
+        "y": 12
       },
       "datasource": {
         "type": "influxdb",
@@ -372,7 +408,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -380,7 +417,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -394,98 +432,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
-        }
-      ]
-    },
-    {
-      "id": 8,
-      "type": "stat",
-      "title": "BPS Amperes Fault",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 12,
-        "y": 5
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "Out-of-Bounds",
-                  "color": "red",
-                  "index": 1
-                },
-                "2": {
-                  "text": "Over-Current (Discharge)",
-                  "color": "red",
-                  "index": 2
-                },
-                "3": {
-                  "text": "Over-Current (Charge)",
-                  "color": "red",
-                  "index": 3
-                },
-                "4": {
-                  "text": "Message Watchdog",
-                  "color": "red",
-                  "index": 4
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"BPS_Amperes_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -497,7 +444,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 5
+        "y": 12
       },
       "datasource": {
         "type": "influxdb",
@@ -525,7 +472,7 @@
       },
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -535,7 +482,11 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 22
+        }
       },
       "targets": [
         {
@@ -544,7 +495,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "voltage = from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> rename(columns: {_value: \"voltage\"})\ncurrent = from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> rename(columns: {_value: \"current\"})\njoin(tables: {v: voltage, i: current}, on: [\"vehicle\"])\n  |> map(fn: (r) => ({ r with _value: r.voltage * r.current, _field: \"Pack_Power\" }))"
+          "query": "v = from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: \"v\"}))\ni = from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: \"i\"}))\nunion(tables: [v, i])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({_time: r._time, _value: r.v * r.i, _field: \"Power\"}))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -556,7 +507,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 5
+        "y": 12
       },
       "datasource": {
         "type": "influxdb",
@@ -575,7 +526,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -583,7 +535,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -597,7 +550,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "voltage = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> rename(columns: {_value: \"voltage\"})\ncurrent = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> rename(columns: {_value: \"current\"})\njoin(tables: {v: voltage, i: current}, on: [\"_time\"])\n  |> map(fn: (r) => ({ r with _value: r.voltage * r.current, _field: \"Pack_Power\" }))"
+          "query": "v = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"v\"}))\n  |> group()\ni = from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"i\"}))\n  |> group()\nunion(tables: [v, i])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.v and exists r.i)\n  |> map(fn: (r) => ({_time: r._time, _value: r.v * r.i, _field: \"Pack_Power\"}))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -610,40 +563,29 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 16
       },
       "panels": []
     },
     {
       "id": 12,
       "type": "stat",
-      "title": "BPS Fault",
+      "title": "Faults",
       "gridPos": {
         "h": 3,
-        "w": 3,
+        "w": 24,
         "x": 0,
-        "y": 10
+        "y": 9
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "none",
-          "decimals": 0,
           "noValue": "\u2014",
           "color": {
             "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
           },
           "mappings": [
             {
@@ -666,7 +608,7 @@
                 },
                 "3": {
                   "text": "Regen",
-                  "color": "red",
+                  "color": "orange",
                   "index": 3
                 },
                 "4": {
@@ -676,57 +618,57 @@
                 },
                 "5": {
                   "text": "Elcon",
-                  "color": "red",
+                  "color": "orange",
                   "index": 5
                 },
                 "6": {
                   "text": "Array Precharge Timeout",
-                  "color": "red",
+                  "color": "orange",
                   "index": 6
                 },
                 "7": {
                   "text": "Internal Watchdog",
-                  "color": "red",
+                  "color": "orange",
                   "index": 7
                 },
                 "8": {
                   "text": "Segment Watchdog",
-                  "color": "red",
+                  "color": "orange",
                   "index": 8
                 },
                 "9": {
                   "text": "HV Plus Contactor Sense",
-                  "color": "red",
+                  "color": "orange",
                   "index": 9
                 },
                 "10": {
                   "text": "HV Minus Contactor Sense",
-                  "color": "red",
+                  "color": "orange",
                   "index": 10
                 },
                 "11": {
                   "text": "Array Contactor Sense",
-                  "color": "red",
+                  "color": "orange",
                   "index": 11
                 },
                 "12": {
                   "text": "Array Pchg Contactor Sense",
-                  "color": "red",
+                  "color": "orange",
                   "index": 12
                 },
                 "13": {
                   "text": "Estop 1",
-                  "color": "red",
+                  "color": "orange",
                   "index": 13
                 },
                 "14": {
                   "text": "Estop 2",
-                  "color": "red",
+                  "color": "orange",
                   "index": 14
                 },
                 "15": {
                   "text": "Estop 3",
-                  "color": "red",
+                  "color": "orange",
                   "index": 15
                 },
                 "16": {
@@ -741,70 +683,133 @@
                 },
                 "18": {
                   "text": "Amperes Watchdog",
-                  "color": "red",
+                  "color": "orange",
                   "index": 18
                 }
               }
             }
-          ]
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Fault"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Fault"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Amperes_Fault"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Amperes Fault"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "BPS_Fault"
+            ]
+          },
+          "buffer": 1
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/A",
+          "filter": {
+            "fields": [
+              "BPS_Amperes_Fault"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
     {
       "id": 13,
       "type": "stat",
-      "title": "BPS Charge OK",
+      "title": "BPS Status",
       "gridPos": {
         "h": 3,
-        "w": 3,
-        "x": 3,
-        "y": 10
+        "w": 24,
+        "x": 0,
+        "y": 17
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "none",
-          "decimals": 0,
           "noValue": "\u2014",
           "color": {
             "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
           },
           "mappings": [
             {
@@ -822,141 +827,114 @@
                 }
               }
             }
-          ]
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Charge_OK"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Charge OK"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Regen_OK"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Regen OK"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Charge_OK\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 14,
-      "type": "stat",
-      "title": "BPS Regen OK",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 6,
-        "y": 10
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "NOT OK",
-                  "color": "red",
-                  "index": 0
-                },
-                "1": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Regen_OK\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "BPS_Charge_OK",
+              "BPS_Regen_OK"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
     {
       "id": 15,
       "type": "stat",
-      "title": "HV+ Contactor",
+      "title": "Contactors",
       "gridPos": {
         "h": 3,
-        "w": 3,
-        "x": 9,
-        "y": 10
+        "w": 24,
+        "x": 0,
+        "y": 20
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "none",
-          "decimals": 0,
           "noValue": "\u2014",
           "color": {
             "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
           },
           "mappings": [
             {
@@ -974,293 +952,156 @@
                 }
               }
             }
-          ]
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HV_Plus_Contactor_State"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "HV+ Contactor"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HV_Minus_Contactor_State"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "HV- Contactor"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Array_Contactor_State"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Array Contactor"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Array_Precharge_Contactor_State"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Array Pchg Contactor"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"HV_Plus_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 16,
-      "type": "stat",
-      "title": "HV- Contactor",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 12,
-        "y": 10
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Open",
-                  "color": "red",
-                  "index": 0
-                },
-                "1": {
-                  "text": "Closed",
-                  "color": "green",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"HV_Minus_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 17,
-      "type": "stat",
-      "title": "Array Contactor",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 15,
-        "y": 10
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "HV_Plus_Contactor_State",
+              "HV_Minus_Contactor_State",
+              "Array_Contactor_State",
+              "Array_Precharge_Contactor_State"
             ]
           },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Open",
-                  "color": "red",
-                  "index": 0
-                },
-                "1": {
-                  "text": "Closed",
-                  "color": "green",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Array_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 18,
-      "type": "stat",
-      "title": "Array Pchg Contactor",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 18,
-        "y": 10
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Open",
-                  "color": "red",
-                  "index": 0
-                },
-                "1": {
-                  "text": "Closed",
-                  "color": "green",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Array_Precharge_Contactor_State\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "buffer": 1
         }
       ]
     },
     {
       "id": 19,
       "type": "stat",
-      "title": "BPS Segment0 Status",
+      "title": "BPS Segments",
       "gridPos": {
-        "h": 3,
-        "w": 3,
+        "h": 4,
+        "w": 24,
         "x": 0,
-        "y": 13
+        "y": 23
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "none",
-          "decimals": 0,
           "noValue": "\u2014",
           "color": {
             "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
           },
           "mappings": [
             {
@@ -1272,570 +1113,224 @@
                   "index": 0
                 },
                 "1": {
-                  "text": "FAULT",
+                  "text": "NOK",
                   "color": "red",
                   "index": 1
                 }
               }
             }
-          ]
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment0_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Segment0 Status"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment1_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Segment1 Status"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment2_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Segment2 Status"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment3_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Segment3 Status"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment4_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Segment4 Status"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment5_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Segment5 Status"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment6_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Segment6 Status"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Segment7_Status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Segment7 Status"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment0_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 20,
-      "type": "stat",
-      "title": "BPS Segment1 Status",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 3,
-        "y": 13
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment1_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 21,
-      "type": "stat",
-      "title": "BPS Segment2 Status",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 6,
-        "y": 13
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
+          "queryType": "measurements",
+          "channel": "stream/telemetry/1",
+          "filter": {
+            "fields": [
+              "BPS_Segment0_Status",
+              "BPS_Segment1_Status",
+              "BPS_Segment2_Status",
+              "BPS_Segment3_Status",
+              "BPS_Segment4_Status",
+              "BPS_Segment5_Status",
+              "BPS_Segment6_Status",
+              "BPS_Segment7_Status"
             ]
           },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment2_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 22,
-      "type": "stat",
-      "title": "BPS Segment3 Status",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 9,
-        "y": 13
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment3_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 23,
-      "type": "stat",
-      "title": "BPS Segment4 Status",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 12,
-        "y": 13
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment4_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 24,
-      "type": "stat",
-      "title": "BPS Segment5 Status",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 15,
-        "y": 13
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment5_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 25,
-      "type": "stat",
-      "title": "BPS Segment6 Status",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 18,
-        "y": 13
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment6_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
-        }
-      ]
-    },
-    {
-      "id": 26,
-      "type": "stat",
-      "title": "BPS Segment7 Status",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 21,
-        "y": 13
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "OK",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Segment7_Status\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "buffer": 1
         }
       ]
     },
@@ -1848,32 +1343,31 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 27
       },
       "panels": []
     },
     {
       "id": 28,
       "type": "stat",
-      "title": "BPS Precharge Battery Voltage",
+      "title": "Electrical",
       "gridPos": {
-        "h": 4,
-        "w": 4,
+        "h": 3,
+        "w": 24,
         "x": 0,
-        "y": 17
+        "y": 28
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "volt",
-          "decimals": 2,
           "noValue": "\u2014",
           "color": {
             "mode": "thresholds"
           },
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1882,91 +1376,83 @@
                 "value": null
               }
             ]
-          }
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Precharge_Battery_Voltage"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Precharge Battery Voltage"
+              },
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "BPS_Precharge_Array_Voltage"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "BPS Precharge Array Voltage"
+              },
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
+        "graphMode": "none",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 29,
-      "type": "stat",
-      "title": "BPS Precharge Array Voltage",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 17
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "volt",
-          "decimals": 2,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Array_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/20",
+          "filter": {
+            "fields": [
+              "BPS_Precharge_Battery_Voltage",
+              "BPS_Precharge_Array_Voltage"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -1978,7 +1464,7 @@
         "h": 4,
         "w": 16,
         "x": 8,
-        "y": 17
+        "y": 31
       },
       "datasource": {
         "type": "influxdb",
@@ -1997,7 +1483,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -2005,7 +1492,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -2019,7 +1507,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -2027,32 +1515,31 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Array_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"20\")\n  |> filter(fn: (r) => r._field == \"BPS_Precharge_Array_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
     {
       "id": 31,
       "type": "stat",
-      "title": "VCU Precharge Battery Voltage",
+      "title": "VCU Status",
       "gridPos": {
-        "h": 4,
-        "w": 4,
+        "h": 3,
+        "w": 24,
         "x": 0,
-        "y": 21
+        "y": 35
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "volt",
-          "decimals": 2,
           "noValue": "\u2014",
           "color": {
             "mode": "thresholds"
           },
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2061,91 +1548,83 @@
                 "value": null
               }
             ]
-          }
+          },
+          "displayName": "${__field.name}"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "VCU_Precharge_Battery_Voltage"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Precharge Battery Voltage"
+              },
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "VCU_Precharge_Motor_Voltage"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "VCU Precharge Motor Voltage"
+              },
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
         "orientation": "auto",
+        "textMode": "value_and_name",
+        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
           "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
-          "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
         }
-      ]
-    },
-    {
-      "id": 32,
-      "type": "stat",
-      "title": "VCU Precharge Motor Voltage",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 21
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "volt",
-          "decimals": 2,
-          "noValue": "\u2014",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Motor_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/21",
+          "filter": {
+            "fields": [
+              "VCU_Precharge_Battery_Voltage",
+              "VCU_Precharge_Motor_Voltage"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2157,7 +1636,7 @@
         "h": 4,
         "w": 16,
         "x": 8,
-        "y": 21
+        "y": 38
       },
       "datasource": {
         "type": "influxdb",
@@ -2176,7 +1655,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -2184,7 +1664,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -2198,7 +1679,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -2206,7 +1687,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Motor_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"21\")\n  |> filter(fn: (r) => r._field == \"VCU_Precharge_Motor_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -2219,7 +1700,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 42
       },
       "panels": []
     },
@@ -2231,11 +1712,11 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 26
+        "y": 43
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2266,19 +1747,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Data",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> min(column: \"_value\")"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2290,11 +1778,11 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 26
+        "y": 43
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2325,19 +1813,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Data",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> max(column: \"_value\")"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2349,11 +1844,11 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 26
+        "y": 43
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2384,19 +1879,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Data",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> mean(column: \"_value\")"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2408,11 +1910,11 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 26
+        "y": 43
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2443,19 +1945,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Data",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> spread(column: \"_value\")"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2467,7 +1976,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 47
       },
       "datasource": {
         "type": "influxdb",
@@ -2486,7 +1995,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -2494,7 +2004,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -2508,7 +2019,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> min(column: \"_value\")\n  |> set(key: \"_field\", value: \"pack_min\")"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> min(column: \"_value\")\n  |> set(key: \"_field\", value: \"pack_min\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -2516,7 +2027,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> max(column: \"_value\")\n  |> set(key: \"_field\", value: \"pack_max\")"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> max(column: \"_value\")\n  |> set(key: \"_field\", value: \"pack_max\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -2529,7 +2040,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 53
       },
       "panels": []
     },
@@ -2541,11 +2052,11 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 37
+        "y": 54
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2576,19 +2087,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Data",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> min(column: \"_value\")"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2600,11 +2118,11 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 37
+        "y": 54
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2635,19 +2153,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Data",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> max(column: \"_value\")"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2659,11 +2184,11 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 37
+        "y": 54
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2694,19 +2219,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Data",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> mean(column: \"_value\")"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2718,11 +2250,11 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 37
+        "y": 54
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2753,19 +2285,26 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Data",
           "values": false
         },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> spread(column: \"_value\")"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Data"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2777,7 +2316,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 41
+        "y": 58
       },
       "datasource": {
         "type": "influxdb",
@@ -2796,7 +2335,8 @@
           },
           "color": {
             "mode": "palette-classic"
-          }
+          },
+          "displayName": "${__field.name}"
         },
         "overrides": []
       },
@@ -2804,7 +2344,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -2818,7 +2359,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> min(column: \"_value\")\n  |> set(key: \"_field\", value: \"pack_min\")"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> min(column: \"_value\")\n  |> set(key: \"_field\", value: \"pack_min\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         },
         {
           "datasource": {
@@ -2826,7 +2367,7 @@
             "uid": "influxdb_main"
           },
           "refId": "B",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> max(column: \"_value\")\n  |> set(key: \"_field\", value: \"pack_max\")"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Data\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> max(column: \"_value\")\n  |> set(key: \"_field\", value: \"pack_max\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
         }
       ]
     },
@@ -2839,7 +2380,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 64
       },
       "panels": []
     },
@@ -2851,11 +2392,11 @@
         "h": 6,
         "w": 9,
         "x": 0,
-        "y": 48
+        "y": 65
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2866,7 +2407,8 @@
             "mode": "continuous-BlYlRd"
           },
           "min": 0,
-          "max": 31
+          "max": 31,
+          "noValue": "\u2014"
         },
         "overrides": []
       },
@@ -2880,18 +2422,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Tap_idx",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"7A0\")\n  |> filter(fn: (r) => r._field == \"BPS_Tap_idx\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/7A0",
+          "filter": {
+            "fields": [
+              "BPS_Tap_idx"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2903,11 +2452,11 @@
         "h": 6,
         "w": 3,
         "x": 9,
-        "y": 48
+        "y": 65
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2932,7 +2481,7 @@
               "options": {
                 "0": {
                   "text": "Disabled",
-                  "color": "red",
+                  "color": "text",
                   "index": 0
                 },
                 "1": {
@@ -2955,19 +2504,31 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Drive_Profile_Enable_Master",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 22
+        },
+        "wideLayout": false
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"67\")\n  |> filter(fn: (r) => r._field == \"BPS_Drive_Profile_Enable_Master\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/67",
+          "filter": {
+            "fields": [
+              "BPS_Drive_Profile_Enable_Master"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -2979,11 +2540,11 @@
         "h": 6,
         "w": 3,
         "x": 12,
-        "y": 48
+        "y": 65
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3008,12 +2569,12 @@
               "options": {
                 "0": {
                   "text": "False",
-                  "color": "red",
+                  "color": "green",
                   "index": 0
                 },
                 "1": {
                   "text": "True",
-                  "color": "green",
+                  "color": "orange",
                   "index": 1
                 }
               }
@@ -3031,19 +2592,31 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Regen_Allow",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 22
+        },
+        "wideLayout": false
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"67\")\n  |> filter(fn: (r) => r._field == \"BPS_Regen_Allow\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/67",
+          "filter": {
+            "fields": [
+              "BPS_Regen_Allow"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3055,11 +2628,11 @@
         "h": 6,
         "w": 3,
         "x": 15,
-        "y": 48
+        "y": 65
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3084,7 +2657,7 @@
               "options": {
                 "0": {
                   "text": "Disabled",
-                  "color": "red",
+                  "color": "text",
                   "index": 0
                 },
                 "1": {
@@ -3107,19 +2680,31 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Adv_MPPT_Control",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 22
+        },
+        "wideLayout": false
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"67\")\n  |> filter(fn: (r) => r._field == \"BPS_Adv_MPPT_Control\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/67",
+          "filter": {
+            "fields": [
+              "BPS_Adv_MPPT_Control"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3131,11 +2716,11 @@
         "h": 6,
         "w": 3,
         "x": 18,
-        "y": 48
+        "y": 65
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3160,7 +2745,7 @@
               "options": {
                 "0": {
                   "text": "Disabled",
-                  "color": "red",
+                  "color": "text",
                   "index": 0
                 },
                 "1": {
@@ -3183,19 +2768,31 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Soft_Shdn",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 22
+        },
+        "wideLayout": false
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"67\")\n  |> filter(fn: (r) => r._field == \"BPS_Soft_Shdn\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/67",
+          "filter": {
+            "fields": [
+              "BPS_Soft_Shdn"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3207,11 +2804,11 @@
         "h": 6,
         "w": 3,
         "x": 21,
-        "y": 48
+        "y": 65
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3236,7 +2833,7 @@
               "options": {
                 "0": {
                   "text": "Disabled",
-                  "color": "red",
+                  "color": "text",
                   "index": 0
                 },
                 "1": {
@@ -3259,19 +2856,31 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Vsag_Compensation",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 22
+        },
+        "wideLayout": false
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"67\")\n  |> filter(fn: (r) => r._field == \"BPS_Vsag_Compensation\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/67",
+          "filter": {
+            "fields": [
+              "BPS_Vsag_Compensation"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3284,7 +2893,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 71
       },
       "panels": []
     },
@@ -3296,11 +2905,11 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 55
+        "y": 72
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3324,7 +2933,7 @@
                 },
                 "2": {
                   "text": "Out-of-Bounds",
-                  "color": "red",
+                  "color": "orange",
                   "index": 2
                 },
                 "3": {
@@ -3339,7 +2948,7 @@
                 },
                 "5": {
                   "text": "Message Watchdog",
-                  "color": "red",
+                  "color": "orange",
                   "index": 5
                 }
               }
@@ -3370,18 +2979,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Fault",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Fault"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3393,11 +3009,11 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 59
+        "y": 76
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3416,17 +3032,17 @@
                 },
                 "1": {
                   "text": "Out-of-Bounds (Short to GND)",
-                  "color": "red",
+                  "color": "orange",
                   "index": 1
                 },
                 "2": {
                   "text": "Out-of-Bounds (Short to VCC)",
-                  "color": "red",
+                  "color": "orange",
                   "index": 2
                 },
                 "3": {
                   "text": "Disconnected",
-                  "color": "red",
+                  "color": "orange",
                   "index": 3
                 },
                 "4": {
@@ -3451,7 +3067,7 @@
                 },
                 "8": {
                   "text": "Message Watchdog",
-                  "color": "red",
+                  "color": "orange",
                   "index": 8
                 }
               }
@@ -3482,18 +3098,25 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Fault",
           "values": false
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Fault"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3505,11 +3128,11 @@
         "h": 3,
         "w": 4,
         "x": 0,
-        "y": 63
+        "y": 80
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3548,19 +3171,30 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Voltage_Tap_Age",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 18
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"B\")\n  |> filter(fn: (r) => r._field == \"BPS_Voltage_Tap_Age\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> max(column: \"_value\")"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/B",
+          "filter": {
+            "fields": [
+              "BPS_Voltage_Tap_Age"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3572,11 +3206,11 @@
         "h": 3,
         "w": 4,
         "x": 4,
-        "y": 63
+        "y": 80
       },
       "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb_main"
+        "type": "datasource",
+        "uid": "-- Grafana --"
       },
       "fieldConfig": {
         "defaults": {
@@ -3615,19 +3249,30 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "BPS_Temperature_Tap_Age",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "text": {
+          "titleSize": 11,
+          "valueSize": 18
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb_main"
-          },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -30s)\n  |> filter(fn: (r) => r._measurement == \"C\")\n  |> filter(fn: (r) => r._field == \"BPS_Temperature_Tap_Age\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group(columns: [\"idx\"])\n  |> last()\n  |> group()\n  |> max(column: \"_value\")"
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Grafana --"
+          },
+          "queryType": "measurements",
+          "channel": "stream/telemetry/C",
+          "filter": {
+            "fields": [
+              "BPS_Temperature_Tap_Age"
+            ]
+          },
+          "buffer": 1
         }
       ]
     },
@@ -3640,7 +3285,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 83
       },
       "panels": []
     },
@@ -3652,7 +3297,7 @@
         "h": 4,
         "w": 8,
         "x": 0,
-        "y": 67
+        "y": 84
       },
       "datasource": {
         "type": "influxdb",
@@ -3662,7 +3307,7 @@
         "defaults": {
           "unit": "s",
           "decimals": 1,
-          "noValue": "\u2014",
+          "noValue": "stale",
           "color": {
             "mode": "thresholds"
           },
@@ -3682,12 +3327,13 @@
                 "value": 5
               }
             ]
-          }
+          },
+          "mappings": []
         },
         "overrides": []
       },
       "options": {
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
@@ -3698,7 +3344,7 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "value"
       },
       "targets": [
         {
@@ -3707,7 +3353,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"BPS_Fault\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     },
@@ -3719,7 +3365,7 @@
         "h": 4,
         "w": 8,
         "x": 8,
-        "y": 67
+        "y": 84
       },
       "datasource": {
         "type": "influxdb",
@@ -3729,7 +3375,7 @@
         "defaults": {
           "unit": "s",
           "decimals": 1,
-          "noValue": "\u2014",
+          "noValue": "stale",
           "color": {
             "mode": "thresholds"
           },
@@ -3765,7 +3411,7 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "value"
       },
       "targets": [
         {
@@ -3774,7 +3420,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"A\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Current\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     },
@@ -3786,7 +3432,7 @@
         "h": 4,
         "w": 8,
         "x": 16,
-        "y": 67
+        "y": 84
       },
       "datasource": {
         "type": "influxdb",
@@ -3796,7 +3442,7 @@
         "defaults": {
           "unit": "s",
           "decimals": 1,
-          "noValue": "\u2014",
+          "noValue": "stale",
           "color": {
             "mode": "thresholds"
           },
@@ -3832,7 +3478,7 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "value"
       },
       "targets": [
         {
@@ -3841,7 +3487,7 @@
             "uid": "influxdb_main"
           },
           "refId": "A",
-          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
+          "query": "from(bucket: \"telemetry_main\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"1\")\n  |> filter(fn: (r) => r._field == \"Main_Battery_Voltage\")\n  |> filter(fn: (r) => r.vehicle == \"HighNoon\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({ _value: (float(v: uint(v: now())) - float(v: uint(v: r._time))) / 1000000000.0 }))\n  |> keep(columns: [\"_value\"])"
         }
       ]
     }

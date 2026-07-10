@@ -211,6 +211,7 @@ class EventRecorder:
         self._last_packet_at: float | None = None
         self._canp_event_start_device_ms: int | None = None
         self._canp_event_host_start_ns: int | None = None
+        self._last_emit_ns: int | None = None
         self._capture_enabled = capture_raw_enabled(input_mode)
 
     @staticmethod
@@ -394,6 +395,7 @@ class EventRecorder:
         self._current = None
         self._canp_event_start_device_ms = None
         self._canp_event_host_start_ns = None
+        self._last_emit_ns = None
 
     def close_all(self) -> None:
         with self._lock:
@@ -449,10 +451,39 @@ class EventRecorder:
         line = slcan if slcan.endswith("\r") else slcan + "\r"
         self._current_file.write(line + "\n")
 
+    def _reanchor_device_clock(self, device_batch_ms: int) -> int:
+        """Map the next device sample to wall clock (host now).
+
+        Used on first sample and whenever the Photon/replay device clock jumps
+        backward (capture loop). Without this, Influx points rewrite past times
+        and Grafana graphs look stuck / 'editing' old x-coordinates.
+        """
+        now_ns = time.time_ns()
+        # Never emit earlier than the last point (fast rewind / clock skew).
+        if self._last_emit_ns is not None and now_ns <= self._last_emit_ns:
+            now_ns = self._last_emit_ns + 1_000_000
+        self._canp_event_start_device_ms = device_batch_ms
+        self._canp_event_host_start_ns = now_ns
+        self._last_emit_ns = now_ns
+        if self._current is not None:
+            self._current["device_start_ms"] = device_batch_ms
+        return now_ns
+
     def _device_time_ns(self, device_batch_ms: int | None) -> int | None:
         if self.input_mode != "canp_tcp" or device_batch_ms is None:
             return None
         if self._canp_event_start_device_ms is None or self._canp_event_host_start_ns is None:
-            return int(device_batch_ms * 1_000_000)
+            return self._reanchor_device_clock(device_batch_ms)
         delta_ms = device_batch_ms - self._canp_event_start_device_ms
-        return int(self._canp_event_host_start_ns + delta_ms * 1_000_000)
+        # Replay --loop (or device reboot) rewinds batch timestamps; re-anchor
+        # so telemetry keeps appending at "now" instead of overwriting history.
+        if delta_ms < 0:
+            logger.info(
+                "CANP device clock rewound (%s → %s ms); re-anchoring Influx timestamps to wall clock",
+                self._canp_event_start_device_ms,
+                device_batch_ms,
+            )
+            return self._reanchor_device_clock(device_batch_ms)
+        ts = int(self._canp_event_host_start_ns + delta_ms * 1_000_000)
+        self._last_emit_ns = ts
+        return ts
