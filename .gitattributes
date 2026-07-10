@@ -1,0 +1,2 @@
+grafana/*.sh text eol=lf
+grafana/**/*.sh text eol=lf
