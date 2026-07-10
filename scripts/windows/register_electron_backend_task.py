@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BAT = ROOT / "scripts" / "windows" / "start-electron-boot.bat"
+DETACHED = ROOT / "scripts" / "windows" / "start-electron-boot-detached.bat"
 XML_SRC = ROOT / "scripts" / "windows" / "ElectronBackend.task.xml"
 TASK = "ElectronBackend"
 
@@ -23,6 +24,12 @@ def main() -> int:
     if not BAT.is_file():
         print("missing", BAT, file=sys.stderr)
         return 1
+    if not DETACHED.is_file():
+        DETACHED.write_text(
+            "@echo off\r\n"
+            f'start "" /MIN cmd /c "%~dp0start-electron-boot.bat"\r\n',
+            encoding="utf-8",
+        )
 
     xml = XML_SRC.read_text(encoding="utf-8")
     # Ensure absolute paths match this checkout
@@ -54,7 +61,7 @@ def main() -> int:
             "/TN",
             TASK,
             "/TR",
-            f'"{BAT}"',
+            f'"{DETACHED}"',
             "/SC",
             "ONSTART",
             "/RL",
