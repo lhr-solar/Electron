@@ -86,12 +86,9 @@ def _ensure_defaults(configs: list[dict], auto: str | None) -> tuple[list[dict],
         configs.append(dict(default))
         added = True
     file_exists = os.path.isfile(CANP_CONFIGS_FILE)
-    # Fresh install / migrate from legacy tcp_configs → default auto to DAQ Server.
-    # If canp_configs.json already exists with auto:null, respect an explicit clear.
-    if not file_exists and not auto:
-        auto = DEFAULT_AUTO_ID
-        added = True
-    elif auto and not any(c.get("id") == auto for c in configs):
+    # Always keep a valid auto preset (DAQ Server). Explicit clear is not supported —
+    # server mode must autoconnect on boot.
+    if not auto or not any(c.get("id") == auto for c in configs):
         auto = DEFAULT_AUTO_ID
         added = True
     if added or not file_exists:
@@ -115,14 +112,13 @@ def list_configs() -> list[dict]:
 
 
 def get_auto_id() -> str | None:
-    """Return the server auto-start config id, or None if cleared."""
+    """Return the server auto-start config id (defaults to DAQ Server)."""
     configs, auto = _load()
     configs = _ensure_ids(configs)
     configs, auto = _ensure_defaults(configs, auto)
     if auto and any(c.get("id") == auto for c in configs):
         return auto
-    return None
-
+    return DEFAULT_AUTO_ID
 
 def get_config(config_id: str) -> dict | None:
     for c in list_configs():
@@ -132,12 +128,14 @@ def get_config(config_id: str) -> dict | None:
 
 
 def set_auto_id(config_id: str | None) -> str | None:
-    """Set (or clear) the auto-start config id. Returns the stored value."""
+    """Set the auto-start config id. None / empty resets to DAQ Server."""
     configs, existing_auto = _load()
     configs = _ensure_ids(configs)
     configs, _ = _ensure_defaults(configs, existing_auto)
     auto = (str(config_id).strip() or None) if config_id is not None else None
-    if auto is not None and not any(c.get("id") == auto for c in configs):
+    if auto is None:
+        auto = DEFAULT_AUTO_ID
+    if not any(c.get("id") == auto for c in configs):
         raise ValueError(f"CANP config id not found: {auto}")
     _save(configs, auto)
     return auto
@@ -178,7 +176,7 @@ def delete_config(config_id: str) -> bool:
         if c.get("id") == config_id:
             configs.pop(i)
             if auto == config_id:
-                auto = DEFAULT_AUTO_ID if any(x.get("id") == DEFAULT_AUTO_ID for x in configs) else None
+                auto = DEFAULT_AUTO_ID
             _save(configs, auto)
             return True
     return False

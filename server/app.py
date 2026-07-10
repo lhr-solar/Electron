@@ -391,19 +391,53 @@ def _list_vehicle_dbc_names(vehicle: str) -> list[str]:
     return [names[k] for k in sorted(names.keys())]
 
 
+async def _wait_for_influx(timeout_sec: float = 90.0) -> bool:
+    """Retry Influx connect briefly so boot can wait for Docker."""
+    global influx_client
+    deadline = time.monotonic() + timeout_sec
+    attempt = 0
+    while time.monotonic() < deadline:
+        attempt += 1
+        try:
+            if influx_client is None:
+                cfg = settings.get_effective_config() or settings.INFLUX_CONFIG
+                influx_client = InfluxDBClient(
+                    url=cfg["INFLUX_URL"],
+                    token=cfg["INFLUX_TOKEN"],
+                    org=cfg["INFLUX_ORG"],
+                    timeout=2000,
+                )
+            if influx_client.ping():
+                if attempt > 1:
+                    logger.info("InfluxDB ready after %d attempt(s).", attempt)
+                return True
+        except Exception as e:
+            logger.debug("Influx wait attempt %d: %s", attempt, e)
+            try:
+                if influx_client is not None:
+                    influx_client.close()
+            except Exception:
+                pass
+            influx_client = None
+        await asyncio.sleep(2.0)
+    logger.warning("InfluxDB not reachable after %.0fs; continuing without it.", timeout_sec)
+    return False
+
+
 async def _maybe_server_autostart():
-    """Server mode: auto-start CANP with DAQ (or configured) preset, HighNoon, all DBCs."""
+    """Server mode: auto-start CANP → DAQ Server, HighNoon DBCs, Influx writes on."""
     if not IS_SERVER_MODE:
         return
-    from server.util.canp_configs import get_auto_id, get_config
+    from server.util.canp_configs import DEFAULT_AUTO_ID, get_auto_id, get_config
 
-    auto_id = await asyncio.to_thread(get_auto_id)
-    if not auto_id:
-        logger.info("Server auto-start: no auto CANP config set; skipping.")
-        return
+    # Prefer configured auto preset; never skip — fall back to DAQ Server.
+    auto_id = await asyncio.to_thread(get_auto_id) or DEFAULT_AUTO_ID
     preset = await asyncio.to_thread(get_config, auto_id)
+    if not preset and auto_id != DEFAULT_AUTO_ID:
+        auto_id = DEFAULT_AUTO_ID
+        preset = await asyncio.to_thread(get_config, auto_id)
     if not preset:
-        logger.warning("Server auto-start: auto id '%s' not found; skipping.", auto_id)
+        logger.warning("Server auto-start: DAQ preset missing; skipping.")
         return
 
     vehicle = settings.DEFAULT_DBC_VEHICLE or "HighNoon"
@@ -431,6 +465,9 @@ async def _maybe_server_autostart():
     except HTTPException as e:
         logger.error("Server auto-start validation failed: %s", e.detail)
         return
+
+    if influx_client is None:
+        await _wait_for_influx()
 
     config = settings.get_effective_config()
     if not config:
