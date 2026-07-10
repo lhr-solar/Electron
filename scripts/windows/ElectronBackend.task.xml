@@ -42,7 +42,7 @@
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>C:\Users\Parthiv\Electron-v2\scripts\windows\start-electron-boot-detached.bat</Command>
+      <Command>C:\Users\Parthiv\Electron-v2\scripts\windows\start-electron-boot.bat</Command>
       <WorkingDirectory>C:\Users\Parthiv\Electron-v2</WorkingDirectory>
     </Exec>
   </Actions>

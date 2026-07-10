@@ -11,7 +11,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BAT = ROOT / "scripts" / "windows" / "start-electron-boot.bat"
-DETACHED = ROOT / "scripts" / "windows" / "start-electron-boot-detached.bat"
 XML_SRC = ROOT / "scripts" / "windows" / "ElectronBackend.task.xml"
 TASK = "ElectronBackend"
 
@@ -24,24 +23,15 @@ def main() -> int:
     if not BAT.is_file():
         print("missing", BAT, file=sys.stderr)
         return 1
-    if not DETACHED.is_file():
-        DETACHED.write_text(
-            "@echo off\r\n"
-            f'start "" /MIN cmd /c "%~dp0start-electron-boot.bat"\r\n',
-            encoding="utf-8",
-        )
 
     xml = XML_SRC.read_text(encoding="utf-8")
-    # Ensure absolute paths match this checkout
     xml = xml.replace("C:\\Users\\Parthiv\\Electron-v2", str(ROOT))
-    # Write UTF-16 LE with BOM for schtasks
     with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as tmp:
         tmp_path = Path(tmp.name)
     tmp_path.write_text(xml, encoding="utf-16")
 
-    subprocess.call(["schtasks", "/Delete", "/TN", TASK, "/F"], shell=False)
-    # Also remove one-shot log wrapper if present
-    subprocess.call(["schtasks", "/Delete", "/TN", "ElectronBackendLog", "/F"], shell=False)
+    for name in (TASK, "ElectronBackendLog", "ElectronBackendBoot"):
+        subprocess.call(["schtasks", "/Delete", "/TN", name, "/F"], shell=False)
 
     r = subprocess.run(
         ["schtasks", "/Create", "/TN", TASK, "/XML", str(tmp_path), "/F"],
@@ -54,28 +44,40 @@ def main() -> int:
     print(r.stderr, file=sys.stderr)
     tmp_path.unlink(missing_ok=True)
     if r.returncode != 0:
-        # Fallback without XML (InteractiveToken may need /RU)
-        cmd = [
-            "schtasks",
-            "/Create",
-            "/TN",
-            TASK,
-            "/TR",
-            f'"{DETACHED}"',
-            "/SC",
-            "ONSTART",
-            "/RL",
-            "HIGHEST",
-            "/F",
-        ]
-        r2 = subprocess.run(cmd, shell=False, capture_output=True, text=True, errors="ignore")
+        print("XML create failed; trying ONLOGON fallback", file=sys.stderr)
+        r2 = subprocess.run(
+            [
+                "schtasks",
+                "/Create",
+                "/TN",
+                TASK,
+                "/TR",
+                str(BAT),
+                "/SC",
+                "ONLOGON",
+                "/RL",
+                "HIGHEST",
+                "/F",
+            ],
+            shell=False,
+            capture_output=True,
+            text=True,
+            errors="ignore",
+        )
         print(r2.stdout)
         print(r2.stderr, file=sys.stderr)
         if r2.returncode != 0:
             return r2.returncode
 
     if args.run_now:
-        subprocess.call(["schtasks", "/Run", "/TN", TASK], shell=False)
+        # Don't /Run the blocking boot bat from here (would hang). Use start-backend-log.bat.
+        log_bat = ROOT / "start-backend-log.bat"
+        if log_bat.is_file():
+            subprocess.call(
+                ["schtasks", "/Create", "/TN", "ElectronBackendLog", "/TR", str(log_bat), "/SC", "ONCE", "/ST", "00:00", "/F"],
+                shell=False,
+            )
+            subprocess.call(["schtasks", "/Run", "/TN", "ElectronBackendLog"], shell=False)
     subprocess.call(["schtasks", "/Query", "/TN", TASK, "/V", "/FO", "LIST"], shell=False)
     return 0
 

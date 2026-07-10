@@ -1,7 +1,5 @@
 @echo off
-REM Boot Electron stack: Docker (Influx+Grafana) then telemetry backend.
-REM Registered as scheduled task ElectronBackend (boot + logon).
-
+REM Boot: ensure Docker (Influx/Grafana), then run backend (blocking so the task stays alive).
 setlocal EnableExtensions
 cd /d "%~dp0.."
 
@@ -48,8 +46,8 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":4000" ^| findstr LISTENING'
   taskkill /F /PID %%p >nul 2>&1
 )
 
+echo Starting backend (blocking)...>> "%LOG%"
+set PYTHONUNBUFFERED=1
 set "PYTHON=%CD%\.venv\Scripts\python.exe"
 if not exist "%PYTHON%" set "PYTHON=python"
-
-echo Starting backend...>> "%LOG%"
-"%PYTHON%" "%CD%\scripts\run_backend.py" --host 0.0.0.0 --port 4000 >> "%LOG%" 2>&1
+"%PYTHON%" "%CD%\scripts\run_backend.py" --host 0.0.0.0 --port 4000 >> "%LOGDIR%\backend.out" 2>&1
