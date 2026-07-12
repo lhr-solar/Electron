@@ -92,6 +92,27 @@ class CanpStreamParser:
         return packets
 
 
+def pack_batch(seq: int, timestamp_ms: int, packets: list[tuple[int, int, bytes]]) -> bytes:
+    """Serialize one CANP batch (big-endian header + packets)."""
+    count = len(packets)
+    if count <= 0 or count > CANP_MAX_BATCH:
+        raise ValueError(f"invalid CANP packet count: {count}")
+    # Mirror canp_ntoh64: store timestamp as two little-endian 32-bit halves swapped.
+    def htonl(x: int) -> int:
+        return int.from_bytes((x & 0xFFFFFFFF).to_bytes(4, "little"), "big")
+
+    lo = timestamp_ms & 0xFFFFFFFF
+    hi = (timestamp_ms >> 32) & 0xFFFFFFFF
+    wire_ts = ((htonl(lo) & 0xFFFFFFFF) << 32) | (htonl(hi) & 0xFFFFFFFF)
+    out = bytearray()
+    out += struct.pack(HEADER_FMT, CANP_MAGIC, CANP_VERSION, count, seq & 0xFFFFFFFF)
+    out += struct.pack("<Q", wire_ts)
+    for can_id, dlc, data in packets:
+        d = bytes(data[:8]).ljust(8, b"\x00")
+        out += struct.pack(PACKET_FMT, int(can_id) & 0xFFFFFFFF, int(dlc) & 0xFF, d, b"\x00" * 16)
+    return bytes(out)
+
+
 def iter_canp_batches(buf: bytes):
     off = 0
     while off + HEADER_SIZE <= len(buf):

@@ -32,19 +32,26 @@ async def process_packets(packet_queue, stop_event, can_manager, live_message_qu
             from server.services.telemetry import telemetry_service
             telemetry_service.note_packet_received()
 
+            msg = parse_slcan(slcan)
+            ui_only = bool(msg and can_manager.is_ui_only(msg.arbitration_id))
+
             device_time_ns = envelope_ts
             if event_recorder:
-                computed = event_recorder.note_packet(slcan, device_batch_ms=device_batch_ms)
-                if computed is not None:
-                    device_time_ns = computed
-                can_manager.run_id = event_recorder.current_run_id()
+                # TelemetryTest: still need device timestamps for live UI, but do not
+                # write SLCAN capture lines (CANP capture is filtered in the parser).
+                if ui_only and getattr(event_recorder, "input_mode", "") != "canp_tcp":
+                    pass
+                else:
+                    computed = event_recorder.note_packet(slcan, device_batch_ms=device_batch_ms)
+                    if computed is not None:
+                        device_time_ns = computed
+                can_manager.run_id = None if ui_only else event_recorder.current_run_id()
             elif device_batch_ms is not None:
                 device_time_ns = int(device_batch_ms * 1_000_000)
 
             if device_time_ns is None:
                 device_time_ns = time.time_ns()
 
-            msg = parse_slcan(slcan)
             if msg:
                 try:
                     payload = await asyncio.to_thread(

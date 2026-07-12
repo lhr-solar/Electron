@@ -8,6 +8,9 @@ from server.util.dbc_load import add_dbc_file, normalize_unit
 
 logger = logging.getLogger(__name__)
 
+# Decoded for Electron live UI / analytics only — never Influx, Grafana, or run captures.
+UI_ONLY_NETWORKS = frozenset({"TelemetryTest"})
+
 
 class CANManager:
     """Loads one or more DBC files, decodes CAN messages, and writes to Influx. Errors are collected and reported instead of raising."""
@@ -22,6 +25,7 @@ class CANManager:
         self.vehicle_name = self.config.get("DBC_VEHICLE", "unknown")
         self.run_id: str | None = None  # set by processor for tcp/canp tagging
         self.load_errors = []
+        self.ui_only_ids: set[int] = set()
 
         self.db = cantools.database.Database()
         paths = [dbc_file_paths] if not isinstance(dbc_file_paths, (list, tuple)) else dbc_file_paths
@@ -33,8 +37,19 @@ class CANManager:
             if msg.frame_id not in self.frame_id_to_network:
                 self.frame_id_to_network[msg.frame_id] = "unknown"
 
+        self.ui_only_ids = {
+            fid for fid, net in self.frame_id_to_network.items() if net in UI_ONLY_NETWORKS
+        }
+        if self.ui_only_ids:
+            ids_hex = ", ".join(f"0x{fid:X}" for fid in sorted(self.ui_only_ids))
+            logger.info("UI-only DBC IDs (no Influx/Grafana/run capture): %s", ids_hex)
+
         self.array_messages = {}  # frame_id -> index signal name (for array messages)
         self._parse_dbc_for_ecus_and_arrays()
+
+    def is_ui_only(self, arbitration_id: int) -> bool:
+        """True for TelemetryTest (etc.): live UI only, no durable write/capture."""
+        return arbitration_id in self.ui_only_ids
 
     def _add_dbc_file(self, dbc_file):
         if not dbc_file or not os.path.exists(dbc_file):
@@ -111,10 +126,12 @@ class CANManager:
         can_id_hex = f"0x{raw_message.arbitration_id:03X}"
         sender = self.id_map.get(raw_message.arbitration_id, "not_found")
         network = self.frame_id_to_network.get(raw_message.arbitration_id, "not_found")
+        ui_only = self.is_ui_only(raw_message.arbitration_id)
         try:
             index_signal_name = self.array_messages.get(raw_message.arbitration_id)
             if raw_message.arbitration_id not in self.id_map:
-                self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet, ts)
+                if not ui_only:
+                    self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet, ts)
                 return {
                     "can_id_hex": can_id_hex,
                     "message_name": None,
@@ -125,12 +142,14 @@ class CANManager:
                 }
             decoded_msg = self.decode_message(raw_message.arbitration_id, raw_message.data)
             if not decoded_msg:
-                self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet, ts)
+                if not ui_only:
+                    self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet, ts)
                 return {"can_id_hex": can_id_hex, "message_name": None, "sender": sender, "network": network, "vehicle": self.vehicle_name, "signals": {}}
             message_def = self.db.get_message_by_frame_id(raw_message.arbitration_id)
-            if self.print_can_info:
+            if self.print_can_info and not ui_only:
                 self._print_message_info(raw_message, decoded_msg, slcan_packet)
-            self._write_to_influx(raw_message.arbitration_id, decoded_msg, slcan_packet, ts)
+            if not ui_only:
+                self._write_to_influx(raw_message.arbitration_id, decoded_msg, slcan_packet, ts)
             array_index = None
             signals = {}
             for k, v in decoded_msg.items():
@@ -163,7 +182,8 @@ class CANManager:
             return result
         except Exception as e:
             logger.exception("process_message error: %s", e)
-            self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet, ts)
+            if not ui_only:
+                self._write_unknown_to_influx(raw_message.arbitration_id, slcan_packet, ts)
             return {"can_id_hex": can_id_hex, "message_name": None, "sender": "Unknown", "network": "not_found", "vehicle": self.vehicle_name, "signals": {}}
 
     def _base_tags(self, *, network: str, sender: str, message_name: str) -> dict:

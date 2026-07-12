@@ -9,7 +9,7 @@ import can
 
 from server.config import settings
 from server.util.can_to_slcan import message_to_slcan
-from server.util.canp import CanpStreamParser
+from server.util.canp import CanpStreamParser, pack_batch
 from server.util.packet_envelope import PacketEnvelope
 from ._parser_abc import _Parser
 
@@ -25,6 +25,33 @@ class CanpTcpParser(_Parser):
             "CONNECTION_TIMEOUT",
             settings.TCP_CONFIG.get("CONNECTION_TIMEOUT", 5.0),
         )
+
+    @staticmethod
+    def _ui_only_ids() -> set[int]:
+        from server.services.telemetry import telemetry_service
+
+        cm = getattr(telemetry_service, "can_manager", None)
+        return set(getattr(cm, "ui_only_ids", None) or ())
+
+    @classmethod
+    def _capture_bytes(cls, packets: list[tuple[int, int, bytes, int]]) -> tuple[bytes, int | None]:
+        """Rebuild CANP bytes without UI-only frames. Returns (blob, first_batch_ms)."""
+        drop_ids = cls._ui_only_ids()
+        groups: dict[int, list[tuple[int, int, bytes]]] = {}
+        order: list[int] = []
+        for can_id, dlc, data, batch_ts_ms in packets:
+            if can_id in drop_ids:
+                continue
+            if batch_ts_ms not in groups:
+                groups[batch_ts_ms] = []
+                order.append(batch_ts_ms)
+            groups[batch_ts_ms].append((can_id, dlc, data))
+        if not order:
+            return b"", None
+        out = bytearray()
+        for i, ts in enumerate(order):
+            out += pack_batch(i & 0xFFFFFFFF, ts, groups[ts])
+        return bytes(out), order[0]
 
     @staticmethod
     def _packet_to_slcan(can_id: int, dlc: int, data: bytes) -> str | None:
@@ -63,15 +90,15 @@ class CanpTcpParser(_Parser):
                         self.connection_state = False
                         break
                     from server.services.telemetry import telemetry_service
-                    # Log every wire chunk immediately — before decode / Influx.
-                    first_batch_ms = None
+                    # Capture persistable frames only — TelemetryTest must not open/keep
+                    # runs or appear in .canp logs. All frames still go to the live UI queue.
                     packets = list(stream.feed_packets(chunk))
-                    if packets:
-                        first_batch_ms = packets[0][3]
-                    if telemetry_service.event_recorder:
-                        telemetry_service.event_recorder.note_canp_chunk(
-                            chunk, device_batch_ms=first_batch_ms
-                        )
+                    if telemetry_service.event_recorder and packets:
+                        capture, first_batch_ms = self._capture_bytes(packets)
+                        if capture:
+                            telemetry_service.event_recorder.note_canp_chunk(
+                                capture, device_batch_ms=first_batch_ms
+                            )
                     for can_id, dlc, data, batch_ts_ms in packets:
                         line = self._packet_to_slcan(can_id, dlc, data)
                         if line:

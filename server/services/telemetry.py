@@ -25,6 +25,7 @@ class TelemetryService:
         self.last_parser_error: str | None = None
         self.last_packet_at: float | None = None
         self.event_recorder = None
+        self.can_manager = None
 
     def note_packet_received(self):
         self.last_packet_at = time.time()
@@ -175,6 +176,7 @@ class TelemetryService:
         if not dbc_paths:
             self.dbc_errors.append(f"No DBC files selected for vehicle '{vehicle}'.")
         can_manager = CANManager(dbc_paths, config, influx_writer=self.influx_writer)
+        self.can_manager = can_manager
         self.dbc_errors = can_manager.get_errors()
 
         from server.util.event_recorder import EventRecorder
@@ -271,6 +273,7 @@ class TelemetryService:
         
         self.running = False
         self.parser = None
+        self.can_manager = None
         self.last_packet_at = None
         self.dbc_errors = []
         logger.info("Telemetry Service Stopped.")
