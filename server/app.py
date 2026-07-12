@@ -1023,15 +1023,19 @@ async def list_events():
     from server.util.event_recorder import list_manifest_events
 
     influx_connected = bool(influx_client and await asyncio.to_thread(influx_client.ping))
-    events = await asyncio.to_thread(list_manifest_events, settings.LOG_DIR)
 
     live = getattr(telemetry_service, "event_recorder", None)
     current = None
     if live is not None:
         try:
+            # Close idle runs before the UI asks, so "in progress" clears after 30s
+            # even when no new CANP data has arrived yet.
+            await asyncio.to_thread(live.flush_idle)
             current = live.get_current_event()
         except Exception:
             current = None
+
+    events = await asyncio.to_thread(list_manifest_events, settings.LOG_DIR)
     if current and current.get("uuid") and (current.get("input_mode") or "") == "canp_tcp":
         current = dict(current)
         current["in_progress"] = True

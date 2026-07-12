@@ -38,28 +38,38 @@ def demo() -> None:
         cur2 = r.get_current_event()
         assert cur2["uuid"] != cur["uuid"]
         assert r.current_run_id() == cur2["uuid"]
+
+        # Idle close without waiting for the next chunk (UI "in progress" fix).
+        r._last_packet_at = time.time() - 31
+        assert r.flush_idle() is True
+        assert r.get_current_event() is None
+        assert r.current_run_id() is None
+
+        r.note_canp_chunk(b"\x03", device_batch_ms=300)
+        cur3 = r.get_current_event()
+        assert cur3 and cur3["uuid"] != cur2["uuid"]
         r.close_all()
         assert r.current_run_id() is None
 
         listed = list_manifest_events(d)
-        assert len(listed) == 2
+        assert len(listed) == 3
         assert all(e.get("dump_exists") for e in listed)
         names = {e["name"] for e in listed}
-        assert names == {"Run 1", "Run 2"}
+        assert names == {"Run 1", "Run 2", "Run 3"}
 
         r.rename_event(listed[0]["uuid"], "Brake test")
         named = next(e for e in list_manifest_events(d) if e["uuid"] == listed[0]["uuid"])
         assert named["name"] == "Brake test"
 
-        # listed is newest-first: [Run 2, Run 1]; delete Run 2 → leave Run 1 → next is Run 2
+        # listed is newest-first: [Run 3, Run 2, Run 1]; delete Run 3 → leave Run 2,1 → next is Run 3
         deleted = r.delete_events([listed[0]["uuid"]])
         assert deleted == [listed[0]["uuid"]]
-        assert len(list_manifest_events(d)) == 1
+        assert len(list_manifest_events(d)) == 2
         assert not os.path.isfile(resolve_dump_path(d, listed[0]["dump_file"], "canp_tcp"))
 
         r3 = EventRecorder(d, "canp_tcp")
-        r3.note_canp_chunk(b"\x03", device_batch_ms=1)
-        assert r3.get_current_event()["name"] == "Run 2"
+        r3.note_canp_chunk(b"\x04", device_batch_ms=1)
+        assert r3.get_current_event()["name"] == "Run 3"
         r3.close_all()
 
         # non-canp: no run_id / no events

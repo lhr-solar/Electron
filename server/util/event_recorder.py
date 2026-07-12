@@ -213,6 +213,33 @@ class EventRecorder:
         self._canp_event_host_start_ns: int | None = None
         self._last_emit_ns: int | None = None
         self._capture_enabled = capture_raw_enabled(input_mode)
+        self._stop_watchdog = threading.Event()
+        self._watchdog: threading.Thread | None = None
+        if self.input_mode == "canp_tcp":
+            self._watchdog = threading.Thread(
+                target=self._idle_watchdog_loop,
+                name="canp-run-idle-watchdog",
+                daemon=True,
+            )
+            self._watchdog.start()
+
+    def _idle_watchdog_loop(self) -> None:
+        """Close the open run after EVENT_GAP_SEC with no packets (don't wait for next chunk)."""
+        while not self._stop_watchdog.wait(1.0):
+            try:
+                self.flush_idle()
+            except Exception:
+                logger.debug("idle watchdog flush failed", exc_info=True)
+
+    def flush_idle(self) -> bool:
+        """If the current CANP run has been idle ≥ gap_sec, close it now. Returns True if closed."""
+        with self._lock:
+            if self.input_mode != "canp_tcp" or not self._current or self._last_packet_at is None:
+                return False
+            if (time.time() - self._last_packet_at) < self.gap_sec:
+                return False
+            self._close_current_event(self._last_packet_at, reason="gap")
+            return True
 
     @staticmethod
     def _event_matches(evt: dict, identifier: str) -> bool:
@@ -398,6 +425,7 @@ class EventRecorder:
         self._last_emit_ns = None
 
     def close_all(self) -> None:
+        self._stop_watchdog.set()
         with self._lock:
             self._close_current_event(time.time(), reason="stop")
             self._last_packet_at = None

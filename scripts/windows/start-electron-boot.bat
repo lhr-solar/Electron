@@ -18,7 +18,8 @@ if errorlevel 1 (
 
 "%DOCKER%" info >nul 2>&1
 if errorlevel 1 (
-  echo Docker engine not ready; launching Docker Desktop...>> "%LOG%"
+  echo Docker engine not ready; starting service + Desktop...>> "%LOG%"
+  sc start com.docker.service >> "%LOG%" 2>&1
   if exist "%ProgramFiles%\Docker\Docker\Docker Desktop.exe" (
     start "" "%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
   )
